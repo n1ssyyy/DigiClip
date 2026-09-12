@@ -11,8 +11,14 @@
 </p>
 
 <p align="center">
+  Developed by <a href="https://github.com/n1ssyyy"><b>n1ssyyy</b></a> in collaboration with <a href="https://shkolladigjitale.com/"><b>Shkolla Digjitale</b></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/n1ssyyy/DigiClip/actions/workflows/ci.yml"><img src="https://github.com/n1ssyyy/DigiClip/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://github.com/n1ssyyy/DigiClip/releases"><img src="https://img.shields.io/github/v/release/n1ssyyy/DigiClip" alt="Latest release" /></a>
+  <a href="https://github.com/n1ssyyy"><img src="https://img.shields.io/badge/GitHub-n1ssyyy-181717?logo=github&logoColor=white" alt="n1ssyyy on GitHub" /></a>
+  <a href="https://shkolladigjitale.com/"><img src="https://img.shields.io/badge/Shkolla_Digjitale-website-1e40af" alt="Shkolla Digjitale" /></a>
   <img src="https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white" alt="PHP 8.3" />
   <img src="https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white" alt="Laravel 13" />
   <img src="https://img.shields.io/badge/NativePHP-Desktop-000000" alt="NativePHP Desktop" />
