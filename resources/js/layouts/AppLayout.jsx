@@ -1,15 +1,44 @@
 import { Link, usePage } from '@inertiajs/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clapperboard } from 'lucide-react';
 import Sidebar from '../components/digiclip/Sidebar';
+import PageLine from '../components/digiclip/PageLine';
 import WindowControls, { isNativeWindow, sendWindowAction } from '../components/digiclip/Titlebar';
 
 const noDrag = { WebkitAppRegion: 'no-drag' };
 
+// Sidebar order top to bottom: travel direction follows it, so going
+// Home -> Health -> Settings the new page rises from below, and going
+// back up it drops from above.
+const PAGE_ORDER = { Home: 0, Health: 1, Settings: 2 };
+function orderOf(component) {
+    return PAGE_ORDER[component] ?? 99;
+}
+
 export default function AppLayout({ children }) {
-    const { props } = usePage();
+    const { props, component } = usePage();
     const flash = props.flash;
     const [maximized, setMaximized] = useState(false);
+    // Page handoff: the outgoing page fades out first, then the incoming
+    // one fades in from the travel direction. Same-component prop
+    // refreshes (queue polling) swap children with no animation.
+    const childrenRef = useRef(children);
+    childrenRef.current = children;
+    const [stage, setStage] = useState({ component, children, dir: 0, leaving: false });
+
+    useEffect(() => {
+        if (component === stage.component) return;
+        const dir = Math.sign(orderOf(component) - orderOf(stage.component)) || 1;
+        setStage((s) => ({ ...s, dir, leaving: true }));
+        const t = setTimeout(() => {
+            setStage({ component, children: childrenRef.current, dir, leaving: false });
+        }, 160);
+        return () => clearTimeout(t);
+    }, [component, stage.component]);
+    const kids = component === stage.component ? children : stage.children;
+    const motionCls = stage.leaving
+        ? (stage.dir >= 0 ? 'page-leave-down' : 'page-leave-up')
+        : (stage.dir >= 0 ? 'page-enter-down' : 'page-enter-up');
 
     const toggleMaximize = useCallback(() => {
         setMaximized((prev) => {
@@ -60,6 +89,7 @@ export default function AppLayout({ children }) {
 
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
+            <PageLine />
             {/* Custom window chrome: frameless shell, this header is the drag region. */}
             <header
                 className="sticky top-0 z-10 flex h-[53px] items-stretch border-b bg-background/95 pr-0 pl-4 backdrop-blur select-none"
@@ -87,10 +117,14 @@ export default function AppLayout({ children }) {
                 <div className="min-w-0 flex-1">
                     {flash && (
                         <div className="px-4 pt-4 md:px-6">
-                            <p role="status" className="rounded-md border bg-card px-4 py-2 text-sm">{flash}</p>
+                            <p role="status" className="rise rounded-md border bg-card px-4 py-2 text-sm">{flash}</p>
                         </div>
                     )}
-                    <main className="px-4 py-4 md:px-6 md:py-6">{children}</main>
+                    <main className="px-4 py-4 md:px-6 md:py-6">
+                        <div key={stage.component} className={motionCls}>
+                            {kids}
+                        </div>
+                    </main>
                 </div>
             </div>
         </div>

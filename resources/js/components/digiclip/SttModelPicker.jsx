@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { usePanelBeat } from './usePanelBeat';
+import { useFloatingPanel } from './useFloatingPanel';
 
 const inputCls = 'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -11,12 +14,16 @@ const inputCls = 'flex h-9 w-full rounded-md border border-input bg-background p
  */
 export default function SttModelPicker({ value, onChange, options }) {
     const [open, setOpen] = useState(false);
+    const { show: panelShow, leaving: panelLeaving } = usePanelBeat(open);
     const rootRef = useRef(null);
+    const panelRef = useRef(null);
+    const panelPos = useFloatingPanel(panelShow, rootRef);
 
     useEffect(() => {
         const onDown = (e) => {
             if (e.key === 'Escape') setOpen(false);
-            if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+            if (rootRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
+            setOpen(false);
         };
         document.addEventListener('mousedown', onDown);
         document.addEventListener('keydown', onDown);
@@ -51,8 +58,8 @@ export default function SttModelPicker({ value, onChange, options }) {
                 <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>
 
-            {open && (
-                <div className="absolute z-20 mt-1.5 w-full rounded-md border bg-popover text-popover-foreground shadow-md">
+            {panelShow && panelPos && createPortal(
+                <div ref={panelRef} style={panelPos} className={cn('digi-menu fixed z-[100] rounded-md border bg-popover text-popover-foreground shadow-md', panelLeaving ? 'menu-out' : 'pop')}>
                     <ul role="listbox" aria-label="Transcription models" className="digi-scroll max-h-64 overflow-y-auto p-1">
                         {entries.map(([id, m]) => (
                             <li key={id} role="option" aria-selected={id === value}>
@@ -64,24 +71,26 @@ export default function SttModelPicker({ value, onChange, options }) {
                                         id === value && 'bg-accent',
                                     )}
                                 >
-                                    <span className="min-w-0 flex-1 truncate font-mono text-xs">{id}</span>
-                                    <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{m.size_mb}MB</span>
-                                    {tag(id) && (
-                                        <span className={cn(
-                                            'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
-                                            id === 'large-v3-turbo-q5_0'
-                                                ? 'bg-[var(--viral)] text-black'
-                                                : 'bg-secondary text-secondary-foreground',
-                                        )}>
-                                            {tag(id)}
-                                        </span>
-                                    )}
                                     {id === value && <Check className="size-4 shrink-0" aria-hidden />}
+                                    <span className="min-w-0 flex-1 truncate font-mono text-xs">{id}</span>
+                                    <span className="flex shrink-0 items-center gap-1.5">
+                                        {tag(id) && (
+                                            <span className={cn(
+                                                'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
+                                                id === 'large-v3-turbo-q5_0'
+                                                    ? 'bg-[var(--viral)] text-black'
+                                                    : 'bg-secondary text-secondary-foreground',
+                                            )}>
+                                                {tag(id)}
+                                            </span>
+                                        )}
+                                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">{m.size_mb}MB</span>
+                                    </span>
                                 </button>
                             </li>
                         ))}
                     </ul>
-                </div>
+                </div>, document.body,
             )}
         </div>
     );

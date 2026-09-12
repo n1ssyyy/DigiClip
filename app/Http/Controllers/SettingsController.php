@@ -38,7 +38,7 @@ class SettingsController extends Controller
             'openrouter_model' => ['required', 'string', 'max:120'],
             'stt_model' => ['required', 'string', 'max:40'],
             'clips_count' => ['required', 'integer', 'min:1', 'max:10'],
-            'caption_default' => ['required', 'in:tiktok,karaoke,hormozi,minimal'],
+            'caption_default' => ['required', 'in:tiktok,karaoke,hormozi,minimal,beast,neon,highlight,ghost'],
         ]);
 
         // Empty key field = keep existing (never echo the secret back).

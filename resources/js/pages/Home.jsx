@@ -7,6 +7,7 @@ import { Badge } from '../components/ui/badge';
 import { cn } from '../lib/utils';
 import { getEcho } from '../lib/echo';
 import Tip from '../components/digiclip/Tooltip';
+import { FadeImg } from '../components/digiclip/Skeleton';
 
 // Pipeline steps shown as dots joined by lines in the queue.
 const STEPS = [
@@ -133,7 +134,7 @@ function CancelDialog({ project, onClose }) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            className="fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
             onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div
@@ -141,7 +142,7 @@ function CancelDialog({ project, onClose }) {
                 aria-modal="true"
                 aria-labelledby="cancel-title"
                 aria-describedby="cancel-desc"
-                className="w-[min(400px,calc(100vw-3rem))] rounded-lg border bg-card p-5 shadow-2xl"
+                className="pop w-[min(400px,calc(100vw-3rem))] rounded-lg border bg-card p-5 shadow-2xl"
             >
                 <h2 id="cancel-title" className="text-sm font-semibold">Cancel and remove?</h2>
                 <p id="cancel-desc" className="mt-1.5 text-sm text-muted-foreground">
@@ -170,17 +171,10 @@ function QueueRow({ project, onCancel }) {
     const label = LIVE_LABEL[project.status] ?? project.status;
 
     return (
-        <div className="flex items-center gap-3 rounded-lg border bg-card p-2.5">
+        <div className="rise flex items-center gap-3 rounded-lg border bg-card p-2.5">
             <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded-md bg-muted">
                 <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
-                <video
-                    className="absolute inset-0 h-full w-full object-cover"
-                    muted
-                    playsInline
-                    preload="metadata"
-                    poster={`/projects/${project.id}/poster`}
-                    src={`/projects/${project.id}/stream`}
-                />
+                <FadeImg src={`/projects/${project.id}/poster`} />
                 <span className={cn('absolute top-1.5 left-1.5 size-2 rounded-full ring-2 ring-black/50', statusDot(project.status))} aria-hidden />
             </div>
             <div className="flex min-w-0 flex-1 flex-col justify-between gap-2 self-stretch py-0.5">
@@ -260,6 +254,7 @@ function QueueRow({ project, onCancel }) {
 /** In-app video player: same overlay language as the cancel dialog. */
 function PlayerDialog({ title, sub, src, poster, onClose }) {
     const [waiting, setWaiting] = useState(true);
+    const [ready, setReady] = useState(false);
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -269,14 +264,14 @@ function PlayerDialog({ title, sub, src, poster, onClose }) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            className="fade fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
             onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div
                 role="dialog"
                 aria-modal="true"
                 aria-label={title}
-                className="w-[min(760px,100%)] rounded-lg border bg-card p-4 shadow-2xl"
+                className="pop w-[min(760px,100%)] rounded-lg border bg-card p-4 shadow-2xl"
             >
                 <div className="flex items-center gap-2 pb-3">
                     <p className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</p>
@@ -290,22 +285,25 @@ function PlayerDialog({ title, sub, src, poster, onClose }) {
                     </button>
                 </div>
                 <div className="relative">
+                    {!ready && <span aria-hidden className="skel absolute inset-0 rounded-md" />}
                     {waiting && (
-                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+                        <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" aria-hidden>
                             <Loader2 className="size-6 animate-spin text-muted-foreground" />
                         </span>
                     )}
                     <video
                         key={src}
-                        className="aspect-video w-full rounded-md bg-black"
+                        className={cn(
+                            'aspect-video w-full rounded-md bg-black motion-safe:transition-opacity motion-safe:duration-300',
+                            ready ? 'opacity-100' : 'opacity-0',
+                        )}
                         src={src}
                         poster={poster}
                         controls
-                        autoPlay
                         playsInline
                         preload="auto"
-                        onCanPlay={() => setWaiting(false)}
-                        onPlaying={() => setWaiting(false)}
+                        onCanPlay={() => { setWaiting(false); setReady(true); }}
+                        onPlaying={() => { setWaiting(false); setReady(true); }}
                         onWaiting={() => setWaiting(true)}
                     />
                 </div>
@@ -339,7 +337,7 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
                 }
             } : undefined}
             className={cn(
-                'flex min-h-0 flex-col justify-between overflow-hidden rounded-md border bg-card p-2',
+                'rise flex min-h-0 flex-col justify-between overflow-hidden rounded-md border bg-card p-2',
                 tall && 'row-span-2',
                 playable && 'cursor-pointer transition-colors hover:border-muted-foreground/40',
             )}
@@ -350,15 +348,7 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
             </span>
             <span className="relative my-1 min-h-0 flex-1 overflow-hidden rounded bg-muted/50">
                 <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
-                {playable && (
-                    <img
-                        src={`/renders/${render.id}/poster`}
-                        alt=""
-                        loading="lazy"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        className="absolute inset-0 h-full w-full object-cover"
-                    />
-                )}
+                {playable && <FadeImg src={`/renders/${render.id}/poster`} />}
             </span>
             <span className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
                 <span className="truncate">#{clip.rank}{fmtRange(clip.start_s, clip.end_s) ? ` · ${fmtRange(clip.start_s, clip.end_s)}` : ''}</span>
@@ -388,19 +378,28 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
     );
 }
 
-/** Floating project scroller: one roomy container holding all the pills,
- *  project names riding outside it to the left. Current project centered
- *  and full-size; the rest shrink and fade with distance. Scroll the panel
- *  (or tap a name or pill) to rotate. */
+/** Project scroller: the pill strip sits in flow at the panel edge so it
+ *  never covers the grid; project names float over the grid as
+ *  clickthrough labels. Current project centered and full-size; the rest
+ *  shrink and fade with distance. Scroll the panel (or tap a pill) to
+ *  rotate. */
 function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
     const n = projects.length;
     const idx = Math.max(0, projects.findIndex((p) => p.id === activeId));
-    const activeStatus = projects[idx]?.status;
-    // Pill signal: white = done and ready, orange = still working, red = error.
-    const pillCls =
-        activeStatus === 'failed' ? 'bg-red-500'
-        : activeStatus === 'clips_ready' ? 'bg-white ring-1 ring-black/30'
-        : 'bg-orange-500';
+    // Pill signal per project: white = done and selected, green = done,
+    // orange = still working, red = error. Inactive pills keep their own
+    // status color, dimmed with distance.
+    function pillClsFor(status, current, d) {
+        if (current) {
+            if (status === 'failed') return 'h-5 w-2 bg-red-500';
+            if (status === 'clips_ready') return 'h-5 w-2 bg-white ring-1 ring-black/30';
+            return 'h-5 w-2 bg-orange-500';
+        }
+        const size = d === 1 ? 'size-2' : d === 2 ? 'size-1.5' : 'size-1';
+        if (status === 'failed') return `${size} ${d === 1 ? 'bg-red-500/70' : d === 2 ? 'bg-red-500/45' : 'bg-red-500/25'}`;
+        if (status === 'clips_ready') return `${size} ${d === 1 ? 'bg-emerald-500/80' : d === 2 ? 'bg-emerald-500/50' : 'bg-emerald-500/30'}`;
+        return `${size} ${d === 1 ? 'bg-orange-500/70' : d === 2 ? 'bg-orange-500/45' : 'bg-orange-500/25'}`;
+    }
 
     if (n === 0) return null;
     const rowH = 24;
@@ -416,14 +415,15 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
     const mask = '[mask-image:linear-gradient(to_bottom,transparent,black_22%,black_78%,transparent)]';
     return (
         <div
-            className="absolute top-1/2 right-3 z-10 flex -translate-y-1/2 items-center gap-2"
+            className="relative flex shrink-0 items-center self-stretch"
             role="navigation"
             aria-label="Projects"
         >
-            {/* Names live outside the container and fade; pills always stay. */}
+            {/* Names float over the grid as clickthrough labels; only the
+                pills take up space. */}
             <div className={cn(
-                'py-[6px] transition-opacity motion-safe:duration-300',
-                visible ? 'opacity-100' : 'pointer-events-none opacity-0',
+                'pointer-events-none absolute top-1/2 right-full z-10 mr-2 -translate-y-1/2 py-[6px] transition-opacity motion-safe:duration-300',
+                visible ? 'opacity-100' : 'opacity-0',
             )}
             >
             <div className="overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_25%,black_75%,transparent)]" style={{ height: viewH }}>
@@ -438,32 +438,31 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
                                 className="flex shrink-0 origin-right items-center justify-end transition-transform motion-safe:duration-300"
                                 style={{ height: rowH, transform: `scale(${d === 0 ? 1 : d === 1 ? 0.88 : 0.76})` }}
                             >
-                                <button
-                                    type="button"
-                                    aria-label={`Jump to ${p.name}`}
-                                    aria-current={current || undefined}
-                                    onClick={() => onJump(p.id)}
-                                    className="min-w-0"
+                                <span
+                                    style={{ opacity: nameOpacity }}
+                                    className={cn(
+                                        'block max-w-36 truncate text-right text-sm transition-all motion-safe:duration-300',
+                                        current
+                                            ? `font-semibold ${statusText(p.status)}`
+                                            : p.status === 'failed'
+                                                ? 'text-red-500'
+                                                : p.status === 'clips_ready'
+                                                    ? 'text-emerald-500'
+                                                    : 'text-orange-500',
+                                    )}
                                 >
-                                    <span
-                                        style={{ opacity: nameOpacity }}
-                                        className={cn(
-                                            'block max-w-36 truncate text-right text-sm transition-all motion-safe:duration-300',
-                                            current ? `font-semibold ${statusText(p.status)}` : 'text-muted-foreground hover:text-foreground',
-                                        )}
-                                    >
-                                        {p.name}
-                                    </span>
-                                </button>
+                                    {p.name}
+                                </span>
                             </div>
                         );
                     })}
                 </div>
             </div>
             </div>
-            {/* One container, all pills inside. Uniform 8px all around:
-                8px box sides; 6px box + 2px row slack vertically. */}
-            <div className="rounded-full border border-border bg-card/95 px-2 py-[6px] shadow-lg backdrop-blur">
+            {/* One container, all pills inside. Gutters match the panel:
+                8px grid gap + 6px box side = 14px each side, same as the
+                6px box side + 8px panel edge on the right. */}
+            <div className="m-auto rounded-full border border-border bg-card/95 px-1.5 py-1 shadow-lg backdrop-blur">
                 <div className={`overflow-hidden ${mask}`} style={{ height: viewH }}>
                     <div className="flex h-full flex-col" style={slide}>
                         {projects.map((p, i) => {
@@ -475,24 +474,19 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
                                     className="flex shrink-0 items-center justify-center"
                                     style={{ height: rowH }}
                                 >
-                                    <Tip label={p.name} side="left">
                                         <button
                                             type="button"
                                             aria-label={`Jump to ${p.name}`}
                                             aria-current={current || undefined}
                                             onClick={() => onJump(p.id)}
-                                            className="flex h-full w-full items-center justify-center"
+                                            className="flex h-full w-full cursor-pointer items-center justify-center"
                                         >
                                             <span className={cn(
                                                 'block rounded-full transition-all motion-safe:duration-300',
-                                                current ? `h-5 w-2 ${pillCls}`
-                                                : d === 1 ? 'size-2 bg-muted-foreground/70'
-                                                : d === 2 ? 'size-1.5 bg-muted-foreground/45'
-                                                : 'size-1 bg-muted-foreground/25',
+                                                pillClsFor(p.status, current, d),
                                             )}
                                             />
                                         </button>
-                                    </Tip>
                                 </div>
                             );
                         })}
@@ -592,15 +586,18 @@ export default function Home({ projects, limits }) {
     }, [shownId]);
 
     // The scroller is the control: wheel (or swipe) anywhere on the right
-    // panel rotates projects. Accumulated + cooldown so trackpads flip once.
+    // panel rotates projects, one notch one flip with a short 300ms gate
+    // so trackpads don't machine-gun through the list. Fast successive
+    // flips collapse onto the latest target.
     function onWheel(e) {
         const now = Date.now();
         if (now < wheelLock.current) return;
+        if (Math.sign(e.deltaY) !== Math.sign(wheelAcc.current)) wheelAcc.current = 0;
         wheelAcc.current += e.deltaY;
         if (Math.abs(wheelAcc.current) < 40) return;
         const d = wheelAcc.current > 0 ? 1 : -1;
         wheelAcc.current = 0;
-        wheelLock.current = now + 700;
+        wheelLock.current = now + 300;
         step(d);
     }
 
@@ -674,7 +671,7 @@ export default function Home({ projects, limits }) {
         <div className="grid h-[calc(100dvh-101px)] min-h-[480px] grid-cols-2 gap-4">
             {/* LEFT HALF: upload (30%) over queue */}
             <div className="flex min-h-0 min-w-0 flex-col gap-4">
-                <Card className="flex h-[30%] min-h-[148px] shrink-0 flex-col overflow-hidden">
+                <Card className="stagger-1 flex h-[30%] min-h-[148px] shrink-0 flex-col overflow-hidden">
                     <CardContent className="flex min-h-0 flex-1 flex-col p-4">
                         <button
                             type="button"
@@ -705,7 +702,7 @@ export default function Home({ projects, limits }) {
                     </CardContent>
                 </Card>
 
-                <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <Card className="stagger-2 flex min-h-0 flex-1 flex-col overflow-hidden">
                     <CardHeader className="shrink-0 px-4 py-3">
                         <CardTitle className="text-sm">Queue</CardTitle>
                     </CardHeader>
@@ -726,7 +723,7 @@ export default function Home({ projects, limits }) {
             </div>
 
             {/* RIGHT HALF: one project's videos at a time, scroll flips projects */}
-            <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+            <Card className="stagger-3 flex min-h-0 min-w-0 flex-col overflow-hidden">
                 <CardHeader className="shrink-0 px-4 py-3">
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-sm">
                         <span className="font-semibold">Projects</span>
@@ -774,22 +771,24 @@ export default function Home({ projects, limits }) {
                         </p>
                         </div>
                     ) : (
-                        <div
-                            key={shown.id}
-                            className={cn(
-                                'flex h-full flex-col px-4 pt-1 pb-4',
-                                leaving && dir === 'down' && 'proj-leave-down',
-                                leaving && dir === 'up' && 'proj-leave-up',
-                                !leaving && dir === 'down' && 'proj-enter-down',
-                                !leaving && dir === 'up' && 'proj-enter-up',
-                            )}
-                        >
+                        <div className="flex h-full min-h-0 gap-2 pt-1 pr-2 pb-4 pl-4">
                             {/* Dynamic grid: fixed outer height, but the
                                 arrangement follows the clip count, vertical
                                 tiles for a few videos, source strip + grid
-                                once there are more. */}
-                            <div className={cn('grid min-h-0 flex-1 gap-2', gridCls)}>
-                                <Tip label={`Play ${shown.name}`} side="top">
+                                once there are more. Only the grid animates;
+                                the pill strip stays put. */}
+                            <div
+                                key={shown.id}
+                                className={cn(
+                                    'grid min-h-0 min-w-0 flex-1 gap-2',
+                                    gridCls,
+                                    leaving && dir === 'down' && 'proj-leave-down',
+                                    leaving && dir === 'up' && 'proj-leave-up',
+                                    !leaving && dir === 'down' && 'proj-enter-down',
+                                    !leaving && dir === 'up' && 'proj-enter-up',
+                                )}
+                            >
+                                <Tip label={`Play ${shown.name}`} side="top" className={cn('flex min-h-0', sourceCls)}>
                                 <div
                                     role="button"
                                     tabIndex={0}
@@ -811,15 +810,10 @@ export default function Home({ projects, limits }) {
                                             });
                                         }
                                     }}
-                                    className={cn('relative min-h-0 h-full w-full cursor-pointer overflow-hidden rounded-md bg-muted transition-colors hover:ring-1 hover:ring-muted-foreground/40', sourceCls)}
+                                    className={cn('relative min-h-0 w-full flex-1 cursor-pointer overflow-hidden rounded-md bg-muted transition-all motion-safe:duration-200 hover:ring-1 hover:ring-muted-foreground/40')}
                                 >
                                     <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
-                                    <video
-                                        className="absolute inset-0 h-full w-full object-cover"
-                                        muted playsInline preload="metadata"
-                                        poster={`/projects/${shown.id}/poster`}
-                                        src={`/projects/${shown.id}/stream`}
-                                    />
+                                    <FadeImg src={`/projects/${shown.id}/poster`} eager />
                                     <span className="absolute top-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
                                         SOURCE{fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''}
                                     </span>
@@ -843,9 +837,9 @@ export default function Home({ projects, limits }) {
                                     </button>
                                 )}
                             </div>
+                            <ProjectScroller projects={projects} activeId={activeId} onJump={(id) => goTo(id)} snap={snap} visible={namesVisible} />
                         </div>
                     )}
-                    <ProjectScroller projects={projects} activeId={activeId} onJump={(id) => goTo(id)} snap={snap} visible={namesVisible} />
                 </CardContent>
             </Card>
             {confirmTarget && (

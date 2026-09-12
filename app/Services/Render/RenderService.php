@@ -67,8 +67,10 @@ class RenderService
             $this->filterEscape($assPath),
             $this->filterEscape(resource_path('fonts'))
         );
+        // Same deal as transcription: keep two cores free for the UI.
+        $threads = (string) max(1, (int) (shell_exec('nproc') ?: 4) - 2);
         $cmd = array_merge(
-            [$this->binaries->require('ffmpeg'), '-y', '-ss', (string) $clip->start_s, '-t', (string) $dur, '-i', $source,
+            [$this->binaries->require('ffmpeg'), '-y', '-threads', $threads, '-ss', (string) $clip->start_s, '-t', (string) $dur, '-i', $source,
                 '-vf', $vf, '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000',
                 '-c:v', $encoder],
             $encoder === 'libx264' ? ['-preset', 'veryfast'] : [],

@@ -25,14 +25,18 @@ class AssBuilder
         'karaoke' => [3, 14],
         'hormozi' => [3, 16],
         'minimal' => [4, 20],
+        'beast' => [2, 12],
+        'neon' => [3, 14],
+        'highlight' => [3, 16],
+        'ghost' => [4, 22],
     ];
 
-    public const PRESETS = [        // Classic CapCut/TikTok pop: heavy caps, lime sweep, lower third.
+    public const PRESETS = [        // TikTok chromatic: white caps, thin black keyline, pink drop (cyan lives in the UI preview; ASS carries one shadow tone).
         'tiktok' => [
             'font' => 'Archivo Black', 'size' => 84, 'caps' => true,
-            'primary' => '&H0035E6A3', 'secondary' => '&H00FFFFFF',
-            'outline' => '&H00000000', 'back' => '&H80000000',
-            'outline_w' => 3, 'shadow' => 0, 'bold' => 0,
+            'primary' => '&H00FFFFFF', 'secondary' => '&H00FFFFFF',
+            'outline' => '&H00000000', 'back' => '&H00552CFE',
+            'outline_w' => 2, 'shadow' => 2, 'bold' => 0,
             'alignment' => 2, 'margin_v' => 400, 'border' => 1,
         ],
         // Smooth karaoke sweep, centered.
@@ -58,6 +62,38 @@ class AssBuilder
             'outline' => '&H00000000', 'back' => '&H99000000',
             'outline_w' => 2, 'shadow' => 1, 'bold' => 0,
             'alignment' => 2, 'margin_v' => 300, 'border' => 1,
+        ],
+        // Beast: giant white caps sung yellow, thick outline, no box, lower third.
+        'beast' => [
+            'font' => 'Archivo Black', 'size' => 96, 'caps' => true,
+            'primary' => '&H0000FFFF', 'secondary' => '&H00FFFFFF',
+            'outline' => '&H00000000', 'back' => '&H80000000',
+            'outline_w' => 4, 'shadow' => 0, 'bold' => 0,
+            'alignment' => 2, 'margin_v' => 420, 'border' => 1,
+        ],
+        // Neon: tall condensed cyan caps sweeping to white, centered.
+        'neon' => [
+            'font' => 'Anton', 'size' => 88, 'caps' => true,
+            'primary' => '&H00FFFF00', 'secondary' => '&H00FFFFFF',
+            'outline' => '&H00000000', 'back' => '&H80000000',
+            'outline_w' => 3, 'shadow' => 0, 'bold' => 0,
+            'alignment' => 5, 'margin_v' => 0, 'border' => 1,
+        ],
+        // Highlight: inverse hormozi, black caps on a lime box, low.
+        'highlight' => [
+            'font' => 'Anton', 'size' => 100, 'caps' => true,
+            'primary' => '&H00000000', 'secondary' => '&H00000000',
+            'outline' => '&H0035E6A3', 'back' => '&HCC000000',
+            'outline_w' => 2, 'shadow' => 0, 'bold' => 0,
+            'alignment' => 2, 'margin_v' => 450, 'border' => 3,
+        ],
+        // Ghost: quiet sentence case floating near the top.
+        'ghost' => [
+            'font' => 'Inter Medium', 'size' => 60, 'caps' => false,
+            'primary' => '&H00FFFFFF', 'secondary' => '&H00FFFFFF',
+            'outline' => '&H00000000', 'back' => '&H99000000',
+            'outline_w' => 2, 'shadow' => 1, 'bold' => 0,
+            'alignment' => 8, 'margin_v' => 200, 'border' => 1,
         ],
     ];
 

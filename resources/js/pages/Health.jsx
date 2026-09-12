@@ -5,6 +5,7 @@ import { Badge } from '../components/ui/badge';
 import { getEcho, onConnect, onDisconnect } from '../lib/echo';
 import { cn } from '../lib/utils';
 import Tip from '../components/digiclip/Tooltip';
+import { Skeleton, Swap } from '../components/digiclip/Skeleton';
 
 function StatusIcon({ ok }) {
     if (ok === true) return <CheckCircle2 className="size-4 text-[var(--viral)]" aria-label="ok" />;
@@ -15,7 +16,7 @@ function StatusIcon({ ok }) {
 function Row({ label, version, value, hint }) {
     const sub = value?.path ?? hint ?? value?.hint;
     return (
-        <li className="flex items-center gap-3 py-2.5">
+        <li className="rise flex items-center gap-3 py-2.5">
             <span><StatusIcon ok={value?.ok} /></span>
             <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
@@ -141,7 +142,7 @@ export default function Health({ report }) {
 
     return (
         <div className="h-[calc(100dvh-101px)] min-h-[480px]">
-            <Card className="flex h-full flex-col overflow-hidden">
+            <Card className="stagger-1 flex h-full flex-col overflow-hidden">
                 <CardHeader className="shrink-0 px-4 py-3">
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                         <CardTitle className="text-sm">System health</CardTitle>
@@ -158,19 +159,30 @@ export default function Health({ report }) {
                     </div>
                 </CardHeader>
                 <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-0 pb-3">
-                    {snap && (
-                        <>
-                            <div className="flex-1" aria-hidden />
-                            <div className="grid shrink-0 grid-cols-5 divide-x divide-border rounded-md border">
-                                <Stat label="Working" value={working} />
-                                <Stat label="Paused" value={paused} />
-                                <Stat label="Ready" value={readyCount} />
-                                <Stat label="Rendered" value={rendered} />
-                                <Stat label="Failed" value={failed} alert />
+                    <div className="flex-1" aria-hidden />
+                    <Swap
+                        ready={!!snap}
+                        className="w-full shrink-0"
+                        skeleton={(
+                            <div className="grid grid-cols-5 divide-x divide-border rounded-md border">
+                                {['Working', 'Paused', 'Ready', 'Rendered', 'Failed'].map((label) => (
+                                    <div key={label} className="flex flex-col items-center justify-center gap-1.5 px-3 py-2">
+                                        <Skeleton className="h-3 w-14 rounded-sm" />
+                                        <Skeleton className="h-6 w-8 rounded-sm" />
+                                    </div>
+                                ))}
                             </div>
-                            <div className="flex-1" aria-hidden />
-                        </>
-                    )}
+                        )}
+                    >
+                        <div className="grid grid-cols-5 divide-x divide-border rounded-md border">
+                            <Stat label="Working" value={working} />
+                            <Stat label="Paused" value={paused} />
+                            <Stat label="Ready" value={readyCount} />
+                            <Stat label="Rendered" value={rendered} />
+                            <Stat label="Failed" value={failed} alert />
+                        </div>
+                    </Swap>
+                    <div className="flex-1" aria-hidden />
                     <ul className="flex shrink-0 flex-col divide-y divide-border">
                         {checks.map((c) => <Row key={c.label} {...c} />)}
                     </ul>
