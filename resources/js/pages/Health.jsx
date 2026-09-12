@@ -35,6 +35,17 @@ function ago(ms) {
     return `${Math.floor(s / 60)}m ago`;
 }
 
+function Stat({ label, value, alert }) {
+    return (
+        <div className="px-3 py-2 text-center">
+            <p className="font-mono text-[11px] tracking-widest text-muted-foreground uppercase">{label}</p>
+            <p className={cn('text-lg font-semibold tabular-nums', alert && value > 0 && 'text-red-500')}>{value}</p>
+        </div>
+    );
+}
+
+const WORKING = ['queued', 'extracting', 'extracted', 'transcribing', 'transcribed', 'analyzing'];
+
 const CHECKS = (live) => [
     { label: 'PHP', version: live.php.version, value: { ok: live.php.ok } },
     { label: 'Node', version: live.node.version, value: live.node },
@@ -48,11 +59,22 @@ const CHECKS = (live) => [
 
 export default function Health({ report }) {
     const [live, setLive] = useState(report);
+    const [snap, setSnap] = useState(null);
     const [updatedAt, setUpdatedAt] = useState(Date.now());
     const [conn, setConn] = useState('connecting');
     const [, setTick] = useState(0);
 
+    const fetchSnap = useCallback(async () => {
+        try {
+            const res = await fetch('/api/snapshot');
+            if (res.ok) setSnap(await res.json());
+        } catch {
+            // Same story as health: keep last numbers, labels go stale.
+        }
+    }, []);
+
     const refresh = useCallback(async () => {
+        fetchSnap();
         try {
             const res = await fetch('/api/health');
             if (!res.ok) return;
@@ -61,11 +83,13 @@ export default function Health({ report }) {
         } catch {
             // Offline or backend restarting — keep last report, label goes stale.
         }
-    }, []);
+    }, [fetchSnap]);
 
     // Event-based freshness: refetch when the view returns, the machine
-    // reconnects, or the socket does. No button, no polling.
+    // reconnects, or the socket does. Snapshot additionally polls while
+    // the pipeline is hot. No button anywhere.
     useEffect(() => {
+        refresh();
         const onVisible = () => {
             if (document.visibilityState === 'visible') refresh();
         };
@@ -92,6 +116,24 @@ export default function Health({ report }) {
     const exts = Object.entries(live.php.extensions ?? {});
     const missing = exts.filter(([, v]) => !v).map(([k]) => k);
 
+    // Snapshot buckets + adaptive polling: idle board rests on events,
+    // an active pipeline re-reads every few seconds until it drains.
+    const P = snap?.projects ?? {};
+    const R = snap?.renders ?? {};
+    const num = (v) => Number(v) || 0;
+    const working = WORKING.reduce((a, s) => a + num(P[s]), 0);
+    const paused = num(P.paused);
+    const readyCount = num(P.clips_ready);
+    const rendered = num(R.done);
+    const failed = num(P.failed) + num(R.failed);
+    const rendering = num(R.rendering) + num(R.queued);
+
+    useEffect(() => {
+        if (working === 0 && rendering === 0) return;
+        const t = setInterval(fetchSnap, 8000);
+        return () => clearInterval(t);
+    }, [working, rendering, fetchSnap]);
+
     return (
         <div className="h-[calc(100dvh-101px)] min-h-[480px]">
             <Card className="flex h-full flex-col overflow-hidden">
@@ -111,6 +153,15 @@ export default function Health({ report }) {
                     </div>
                 </CardHeader>
                 <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-0 pb-3">
+                    {snap && (
+                        <div className="mb-3 grid shrink-0 grid-cols-5 divide-x divide-border rounded-md border">
+                            <Stat label="Working" value={working} />
+                            <Stat label="Paused" value={paused} />
+                            <Stat label="Ready" value={readyCount} />
+                            <Stat label="Rendered" value={rendered} />
+                            <Stat label="Failed" value={failed} alert />
+                        </div>
+                    )}
                     <ul className="mt-auto flex shrink-0 flex-col divide-y divide-border">
                         {checks.map((c) => <Row key={c.label} {...c} />)}
                     </ul>
