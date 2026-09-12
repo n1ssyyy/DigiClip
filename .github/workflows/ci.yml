@@ -1,0 +1,183 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_NAME: DigiClip
+
+jobs:
+  test:
+    name: Test (PHP + JS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: ctype, curl, dom, fileinfo, mbstring, openssl, pdo, pdo_sqlite, sqlite3, tokenizer, xml, zip
+          tools: composer:v2
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --no-interaction
+          mkdir -p database
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Build assets
+        run: npm run build
+
+      - name: Run tests
+        run: php artisan test --no-interaction
+
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: test
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: windows-latest
+            target: win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Linux build dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libnotify-dev \
+            libnss3 \
+            libxss1 \
+            libasound2t64 \
+            libxtst6 \
+            xvfb
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, fileinfo, pdo_sqlite, sqlite3, zip, gd
+          tools: composer:v2
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Install Electron dependencies
+        working-directory: vendor/nativephp/desktop/resources/electron
+        run: npm ci
+
+      - name: Rebuild stale electron-plugin dist (upstream workaround)
+        working-directory: vendor/nativephp/desktop/resources/electron
+        run: npm run plugin:build
+
+      - name: Prepare environment
+        shell: bash
+        run: |
+          cp .env.example .env
+          php artisan key:generate --no-interaction
+          mkdir -p database
+          touch database/database.sqlite
+          php artisan migrate --force
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Build ${{ matrix.target }} installer
+        run: php artisan native:build ${{ matrix.target }} --no-interaction
+
+      - name: List build output
+        shell: bash
+        run: |
+          ls -la build 2>/dev/null || true
+          find build -maxdepth 4 -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.exe' -o -name '*.msi' -o -name '*.zip' -o -name '*.yml' \) 2>/dev/null || true
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digiclip-${{ matrix.target }}
+          path: |
+            build/**/*.AppImage
+            build/**/*.deb
+            build/**/*.exe
+            build/**/*.msi
+            build/**/*.zip
+            build/**/latest*.yml
+          if-no-files-found: warn
+          retention-days: 14
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: digiclip-linux
+          path: artifacts/linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: digiclip-win
+          path: artifacts/win
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/linux/**/*
+            artifacts/win/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false
