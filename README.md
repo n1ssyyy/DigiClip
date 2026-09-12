@@ -35,14 +35,14 @@
 
 ## 🧭 How it works
 
-```
-Upload ─▶ ExtractAudio ─▶ Transcribe ─▶ AnalyzeClips ─▶ RenderClip(s)
-  │            │               │               │                │
-  │        ffmpeg 16kHz    whisper.cpp    OpenRouter LLM    ffmpeg 9:16
-  │         mono WAV       word timings   or heuristic      + libass burn
-  │                                            fallback
-  └────────────────── queues: transcribe · default · render ──────────────────┘
-                              realtime: Reverb → Echo → React
+```mermaid
+flowchart LR
+    Upload --> ExtractAudio --> Transcribe --> AnalyzeClips --> RenderClips["RenderClip(s)"]
+    ExtractAudio -. "ffmpeg · 16kHz mono WAV" .-> Transcribe
+    Transcribe -. "whisper.cpp · word timings" .-> AnalyzeClips
+    AnalyzeClips -. "OpenRouter LLM or heuristic fallback" .-> RenderClips
+    RenderClips -. "ffmpeg 9:16 + libass burn" .-> Done
+    Transcribe & AnalyzeClips & RenderClips -. "queues: transcribe · default · render<br/>realtime: Reverb → Echo → React" .-> UI["Live UI"]
 ```
 
 1. **Upload** (`POST /projects`) stores the source and chains `ExtractAudio → Transcribe → AnalyzeClips`.
@@ -59,7 +59,7 @@ Upload ─▶ ExtractAudio ─▶ Transcribe ─▶ AnalyzeClips ─▶ RenderCl
 | Desktop    | NativePHP Desktop v2 (Electron), auto-started Reverb + queue workers |
 | Realtime   | Laravel Reverb (localhost) + Laravel Echo / pusher-js |
 | STT        | whisper.cpp sidecar via `BinaryManager` + `ModelManager` |
-| Clip AI    | OpenRouter (BYOK, default `meta/muse-spark-1.3`) with offline heuristic fallback |
+| Clip AI    | OpenRouter (BYOK, default `nvidia/nemotron-3-ultra-550b-a55b:free`) with offline heuristic fallback |
 | Render     | ffmpeg (bundled or system) + libass captions, loudnorm audio |
 | Data       | SQLite, database queue (`default` + `media`), local disk storage |
 
@@ -112,7 +112,7 @@ php artisan native:build win           # NSIS installer (wine needed when cross-
 | Key | Default | What it does |
 |-----|---------|--------------|
 | `OPENROUTER_API_KEY` | — | BYOK key for LLM clip scoring. Unset → offline heuristic scorer. |
-| `OPENROUTER_MODEL` | `meta/muse-spark-1.3` | Scoring model (override per-project in Settings). |
+| `OPENROUTER_MODEL` | `nvidia/nemotron-3-ultra-550b-a55b:free` | Scoring model (override per-project in Settings). |
 | `OPENROUTER_TOKEN_CAP` / `OPENROUTER_TIMEOUT_S` | `120000` / `90` | Prompt budget guard + HTTP timeout. |
 | `DIGICLIP_STT_MODEL` | `base.en` | `tiny.en`, `base.en`, `large-v3-turbo(-q5_0)`, `large-v3`. |
 | `DIGICLIP_UPLOAD_MAX_MB` | `500` | Upload cap (desktop `php.ini` allows 512 MB). |
@@ -121,14 +121,27 @@ php artisan native:build win           # NSIS installer (wine needed when cross-
 
 In-app **Settings** page additionally controls OpenRouter key/model, STT model, clip count and default caption style.
 
-## 📦 Media binaries
+## 📦 Media binaries & models
 
 `App\Services\Stt\BinaryManager` resolves each binary in order:
 
-1. `resources/bin/<platform>/` (`linux-x64`, `linux-arm64`, `mac-x64`, `mac-arm64`, `win-x64`)
+1. `resources/bin/<platform>/` (checked in, ships with the app — see `resources/bin/README.md`)
 2. System `PATH`
 
-Linux ships `ffmpeg`, `ffprobe`, `whisper-cli` today. Whisper models live in `storage/app/digiclip/models/` (`ggml-base.en.bin` ≈ 142 MB). `/api/health` reports exactly what's resolved — check there first when a job fails.
+Linux ships `ffmpeg`, `ffprobe`, `whisper-cli` today; macOS/Windows dirs are
+staged and fall back to `PATH` until binaries are dropped in. Caption fonts
+(Archivo Black, Anton, Inter, JetBrains Mono) are bundled in `resources/fonts/`.
+
+Whisper models (`ggml-*.bin`, 75 MB–3 GB) are **not** bundled — they download
+themselves on first transcribe (Settings shows an "on disk" badge per model).
+To pre-seed (packaging, offline machines, CI):
+
+```bash
+php artisan digiclip:provision-media          # default model only
+php artisan digiclip:provision-media --all    # every known model
+```
+
+`/api/health` reports exactly what's resolved — check there first when a job fails.
 
 ## 🧪 Tests & code style
 

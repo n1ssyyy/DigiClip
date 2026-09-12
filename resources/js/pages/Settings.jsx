@@ -126,11 +126,17 @@ export default function Settings({ settings, model_presets }) {
                                         onChange={(id) => setForm({ ...form, openrouter_model: id })}
                                     />
                                 </Field>
-                                <Field label="Transcription model">
+                                <Field
+                                    label="Transcription model"
+                                    hint={settings.stt_downloaded?.[form.stt_model]
+                                        ? 'On disk, ready to transcribe.'
+                                        : 'Not on disk yet — downloads automatically on first run.'}
+                                >
                                     <SttModelPicker
                                         value={form.stt_model}
                                         onChange={(id) => setForm({ ...form, stt_model: id })}
                                         options={settings.stt_models}
+                                        downloaded={settings.stt_downloaded}
                                     />
                                 </Field>
                             </div>

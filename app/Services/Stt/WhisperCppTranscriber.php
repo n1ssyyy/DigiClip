@@ -34,7 +34,15 @@ class WhisperCppTranscriber implements Transcriber
             throw new RuntimeException("Audio not found: {$wavPath}");
         }
         $whisper = $this->binaries->require('whisper-cli');
-        $modelPath = $this->models->require($options['model'] ?? $this->model);
+        $modelId = $options['model'] ?? $this->model;
+        // First-run self-provisioning: fetch the ggml weights on demand
+        // instead of failing the whole pipeline when they are absent.
+        // Unknown ids still throw (via meta()), network failures bubble up
+        // to the job's failed() handler like any other transcribe error.
+        if (! $this->models->isDownloaded($modelId)) {
+            $this->models->download($modelId);
+        }
+        $modelPath = $this->models->require($modelId);
         $lang = $options['lang'] ?? 'en';
         // Leave two cores for the app server + UI: a fully loaded box
         // makes page loads crawl while transcription runs.

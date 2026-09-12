@@ -12,7 +12,7 @@ const inputCls = 'flex h-9 w-full rounded-md border border-input bg-background p
  * (trigger, popover panel, neutral scrollbar, check mark).
  * Options: [{ id, size_mb }] from config; badges call out the sweet spots.
  */
-export default function SttModelPicker({ value, onChange, options }) {
+export default function SttModelPicker({ value, onChange, options, downloaded = {} }) {
     const [open, setOpen] = useState(false);
     const { show: panelShow, leaving: panelLeaving } = usePanelBeat(open);
     const rootRef = useRef(null);
@@ -74,6 +74,11 @@ export default function SttModelPicker({ value, onChange, options }) {
                                     {id === value && <Check className="size-4 shrink-0" aria-hidden />}
                                     <span className="min-w-0 flex-1 truncate font-mono text-xs">{id}</span>
                                     <span className="flex shrink-0 items-center gap-1.5">
+                                        {downloaded[id] && (
+                                            <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                                on disk
+                                            </span>
+                                        )}
                                         {tag(id) && (
                                             <span className={cn(
                                                 'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
