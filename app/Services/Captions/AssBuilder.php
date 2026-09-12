@@ -61,13 +61,13 @@ class AssBuilder
         ],
     ];
 
-    public function build(array $words, string $preset = 'tiktok'): string
+    public function build(array $words, string $preset = 'tiktok', float $offset = 0.0): string
     {
         $preset = isset(self::PRESETS[$preset]) ? $preset : 'tiktok';
         $style = self::PRESETS[$preset];
         $name = ucfirst($preset);
         [$maxWords, $maxChars] = self::LINE_BUDGETS[$preset];
-        $lines = $this->group($words, $maxWords, $maxChars);
+        $lines = $this->group($this->attachPunctuation($words), $maxWords, $maxChars);
 
         $out = "[Script Info]\nTitle: DigiClip {$name}\nScriptType: v4.00+\nPlayResX: ".self::PLAY_W."\nPlayResY: ".self::PLAY_H."\nScaledBorderAndShadow: yes\nWrapStyle: 0\n\n";
         $out .= "[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n";
@@ -88,8 +88,26 @@ class AssBuilder
             }
             $out .= sprintf(
                 "Dialogue: 0,%s,%s,%s,,0,0,0,,%s\n",
-                self::stamp($line[0]['s']), self::stamp(end($line)['e']), $name, rtrim($text)
+                self::stamp($line[0]['s'] - $offset), self::stamp(end($line)['e'] - $offset), $name, rtrim($text)
             );
+        }
+
+        return $out;
+    }
+
+    /** Fold lone punctuation ("?", "!") onto the previous word so karaoke
+     *  never shows an orphaned mark as its own syllable. */
+    private function attachPunctuation(array $words): array
+    {
+        $out = [];
+        foreach ($words as $w) {
+            if ($out !== [] && isset($w['w']) && preg_match('/^[^\p{L}\p{N}]+$/u', $w['w'])) {
+                $last = count($out) - 1;
+                $out[$last]['w'] .= $w['w'];
+                $out[$last]['e'] = max($out[$last]['e'], $w['e'] ?? $out[$last]['e']);
+            } else {
+                $out[] = $w;
+            }
         }
 
         return $out;
