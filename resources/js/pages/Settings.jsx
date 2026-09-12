@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { KeyRound, ExternalLink } from 'lucide-react';
+import { KeyRound } from 'lucide-react';
+import shkollaLogo from '../assets/shkolla.png';
+import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -106,21 +108,47 @@ export default function Settings({ settings, model_presets }) {
                         </Section>
                     </form>
                     <Section title="About">
-                        <div className="space-y-2 rounded-lg border bg-muted/40 px-4 py-3">
+                        <div className="space-y-2.5 rounded-lg border bg-muted/40 px-4 py-3">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                                <span className="text-sm font-semibold">Made by n1ssyyy</span>
+                                <span className="text-sm text-muted-foreground">
+                                    Developed by{' '}
+                                    <a
+                                        href="https://github.com/n1ssyyy"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-semibold text-foreground hover:underline"
+                                    >
+                                        n1ssyyy
+                                    </a>
+                                </span>
+                                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    in collaboration with
+                                    <a
+                                        href="https://shkolladigjitale.com/"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title="Shkolla Digjitale Prizren"
+                                        aria-label="Shkolla Digjitale Prizren"
+                                        className="inline-flex h-8 items-center rounded-md bg-white px-2 hover:brightness-110"
+                                    >
+                                        <img src={shkollaLogo} alt="" className="h-5 w-auto" />
+                                    </a>
+                                </span>
                                 <a
                                     href="https://github.com/n1ssyyy/DigiClip"
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent"
+                                    title="DigiClip on GitHub"
+                                    aria-label="DigiClip on GitHub"
+                                    className="ml-auto inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent"
                                 >
-                                    <ExternalLink className="size-3.5" aria-hidden />
-                                    GitHub
+                                    <img src={githubMark} alt="" className="size-4" />
                                 </a>
                             </div>
-                            <p className="text-xs text-muted-foreground">In collaboration with Shkolla Digjitale Prizren.</p>
-                            <p className="text-xs text-muted-foreground">Shoutout — Kebir Cesko · Arianit Tershnjaku.</p>
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                <p className="text-xs text-muted-foreground">Reviewed by Kebir Cesko and Arianit Tershnjaku.</p>
+                                <p className="font-mono text-[11px] text-muted-foreground">Local-first · stays on this machine.</p>
+                            </div>
                         </div>
                     </Section>
                     </div>
