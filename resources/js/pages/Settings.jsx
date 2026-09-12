@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/badge';
 import ModelPicker from '../components/digiclip/ModelPicker';
 import SttModelPicker from '../components/digiclip/SttModelPicker';
 import CaptionPicker from '../components/digiclip/CaptionPicker';
+import Tip from '../components/digiclip/Tooltip';
 import { cn } from '../lib/utils';
 
 function Field({ label, aside, hint, children }) {
@@ -131,26 +132,28 @@ export default function Settings({ settings, model_presets }) {
                                     </a>
                                 </span>
                                 <span className="ml-auto flex items-center gap-2">
-                                    <a
-                                        href="https://shkolladigjitale.com/"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        title="Shkolla Digjitale Prizren"
-                                        aria-label="Shkolla Digjitale Prizren"
-                                        className="group inline-flex size-8 items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-white"
-                                    >
-                                        <img src={shkollaIcon} alt="" className="size-5 brightness-0 invert transition-[filter] group-hover:brightness-100 group-hover:invert-0" />
-                                    </a>
-                                    <a
-                                        href="https://github.com/n1ssyyy/DigiClip"
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        title="DigiClip on GitHub"
-                                        aria-label="DigiClip on GitHub"
-                                        className="group inline-flex size-8 items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-white"
-                                    >
-                                        <img src={githubMark} alt="" className="size-4 transition-[filter] group-hover:brightness-0" />
-                                    </a>
+                                    <Tip label="Shkolla Digjitale Prizren" side="top">
+                                        <a
+                                            href="https://shkolladigjitale.com/"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            aria-label="Shkolla Digjitale Prizren"
+                                            className="group inline-flex size-8 items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-white"
+                                        >
+                                            <img src={shkollaIcon} alt="" className="size-5 brightness-0 invert transition-[filter] group-hover:brightness-100 group-hover:invert-0" />
+                                        </a>
+                                    </Tip>
+                                    <Tip label="DigiClip on GitHub" side="top">
+                                        <a
+                                            href="https://github.com/n1ssyyy/DigiClip"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            aria-label="DigiClip on GitHub"
+                                            className="group inline-flex size-8 items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-white"
+                                        >
+                                            <img src={githubMark} alt="" className="size-4 transition-[filter] group-hover:brightness-0" />
+                                        </a>
+                                    </Tip>
                                 </span>
                             </div>
                             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">

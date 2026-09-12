@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, RefreshCw, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import Tip from './Tooltip';
 
 export const isContributor = (id) => id.toLowerCase().includes('contributor');
 export const isFree = (id) => id.toLowerCase().endsWith(':free');
@@ -95,15 +96,16 @@ export default function ModelPicker({ value, onChange }) {
                                     className={cn(inputCls, 'h-8 pl-9')}
                                 />
                             </div>
-                            <button
-                                type="button"
-                                title="Refresh catalog"
-                                aria-label="Refresh catalog"
-                                onClick={() => load(true)}
-                                className="rounded-md p-1.5 hover:bg-accent"
-                            >
-                                <RefreshCw className={cn('size-4', loading && 'animate-spin')} aria-hidden />
-                            </button>
+                            <Tip label="Refresh catalog" side="bottom">
+                                <button
+                                    type="button"
+                                    aria-label="Refresh catalog"
+                                    onClick={() => load(true)}
+                                    className="rounded-md p-1.5 hover:bg-accent"
+                                >
+                                    <RefreshCw className={cn('size-4', loading && 'animate-spin')} aria-hidden />
+                                </button>
+                            </Tip>
                         </div>
                         <div className="flex gap-1.5">
                             <button

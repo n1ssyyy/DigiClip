@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { getEcho, onConnect, onDisconnect } from '../lib/echo';
 import { cn } from '../lib/utils';
+import Tip from '../components/digiclip/Tooltip';
 
 function StatusIcon({ ok }) {
     if (ok === true) return <CheckCircle2 className="size-4 text-[var(--viral)]" aria-label="ok" />;
@@ -21,7 +22,11 @@ function Row({ label, version, value, hint }) {
                     {label}
                     {version && <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{version}</span>}
                 </p>
-                {sub && <p className="truncate font-mono text-xs text-muted-foreground" title={sub}>{sub}</p>}
+                {sub && (
+                    <Tip label={sub} side="top" className="min-w-0">
+                        <p className="truncate font-mono text-xs text-muted-foreground min-w-0">{sub}</p>
+                    </Tip>
+                )}
             </div>
             <Badge variant={value?.ok ? 'success' : 'secondary'}>{value?.ok ? 'ready' : 'pending'}</Badge>
         </li>

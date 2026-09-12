@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { cn } from '../lib/utils';
 import { getEcho } from '../lib/echo';
+import Tip from '../components/digiclip/Tooltip';
 
 // Pipeline steps shown as dots joined by lines in the queue.
 const STEPS = [
@@ -93,9 +94,9 @@ function Stepper({ status }) {
                 const failedDot = st.failed && i === 1;
                 return (
                     <div key={s.key} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
-                        <span
-                            title={s.label}
-                            className={cn(
+                        <Tip label={s.label} side="top" className="shrink-0">
+                            <span
+                                className={cn(
                                 'size-2.5 shrink-0 rounded-full',
                                 done && !failedDot && tone.dot,
                                 active && cn('animate-pulse ring-4', tone.dot, tone.ring),
@@ -104,6 +105,7 @@ function Stepper({ status }) {
                                 st.paused && !done && 'bg-orange-500/50',
                             )}
                         />
+                        </Tip>
                         {i < STEPS.length - 1 && (
                             <span className={cn('mx-1 h-0.5 flex-1 rounded-full', i + 1 <= st.done ? tone.line : 'bg-border')} aria-hidden />
                         )}
@@ -183,7 +185,9 @@ function QueueRow({ project, onCancel }) {
             </div>
             <div className="flex min-w-0 flex-1 flex-col justify-between gap-2 self-stretch py-0.5">
                 <div className="flex items-center gap-2">
-                    <p className="min-w-0 shrink truncate text-sm font-medium" title={project.name}>{project.name}</p>
+                    <Tip label={project.name} side="top" className="min-w-0">
+                        <p className="min-w-0 shrink truncate text-sm font-medium">{project.name}</p>
+                    </Tip>
                     <span className="flex flex-1 items-center justify-center">
                         <Badge variant="secondary" className={cn(
                             'whitespace-nowrap',
@@ -195,45 +199,55 @@ function QueueRow({ project, onCancel }) {
                     </span>
                     <span className="flex shrink-0 items-center justify-end gap-0.5">
                         {pausable && (
-                            <button
-                                type="button" title="Pause" aria-label={`Pause ${project.name}`}
-                                onClick={() => router.post(`/projects/${project.id}/pause`, {}, { preserveScroll: true })}
-                                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                                <Pause className="size-4" />
-                            </button>
+                            <Tip label="Pause" side="top">
+                                <button
+                                    type="button" aria-label={`Pause ${project.name}`}
+                                    onClick={() => router.post(`/projects/${project.id}/pause`, {}, { preserveScroll: true })}
+                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                >
+                                    <Pause className="size-4" />
+                                </button>
+                            </Tip>
                         )}
                         {paused && (
-                            <button
-                                type="button" title="Resume" aria-label={`Resume ${project.name}`}
-                                onClick={() => router.post(`/projects/${project.id}/resume`, {}, { preserveScroll: true })}
-                                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                                <Play className="size-4" />
-                            </button>
+                            <Tip label="Resume" side="top">
+                                <button
+                                    type="button" aria-label={`Resume ${project.name}`}
+                                    onClick={() => router.post(`/projects/${project.id}/resume`, {}, { preserveScroll: true })}
+                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                >
+                                    <Play className="size-4" />
+                                </button>
+                            </Tip>
                         )}
                         {failed && (
-                            <button
-                                type="button" title="Retry" aria-label={`Retry ${project.name}`}
-                                onClick={() => router.post(`/projects/${project.id}/retry`, {}, { preserveScroll: true })}
-                                className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                                <RotateCcw className="size-4" />
-                            </button>
+                            <Tip label="Retry" side="top">
+                                <button
+                                    type="button" aria-label={`Retry ${project.name}`}
+                                    onClick={() => router.post(`/projects/${project.id}/retry`, {}, { preserveScroll: true })}
+                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                                >
+                                    <RotateCcw className="size-4" />
+                                </button>
+                            </Tip>
                         )}
-                        <button
-                            type="button" title="Cancel and remove" aria-label={`Cancel ${project.name}`}
-                            onClick={() => onCancel(project)}
-                            className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        >
-                            <X className="size-4" />
-                        </button>
+                        <Tip label="Cancel and remove" side="top">
+                            <button
+                                type="button" aria-label={`Cancel ${project.name}`}
+                                onClick={() => onCancel(project)}
+                                className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            >
+                                <X className="size-4" />
+                            </button>
+                        </Tip>
                     </span>
                 </div>
                 <div className="rounded-md border bg-muted/40 px-2.5 py-2">
                     <Stepper status={project.status} />
                     {failed && project.error && (
-                        <p className="mt-1 truncate text-[11px] text-red-500" title={project.error}>{project.error}</p>
+                        <Tip label={project.error} side="top" className="min-w-0">
+                            <p className="mt-1 truncate text-[11px] text-red-500 min-w-0">{project.error}</p>
+                        </Tip>
                     )}
                 </div>
             </div>
@@ -268,7 +282,7 @@ function PlayerDialog({ title, sub, src, poster, onClose }) {
                     <p className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</p>
                     {sub && <p className="shrink-0 font-mono text-[11px] text-muted-foreground">{sub}</p>}
                     <button
-                        type="button" title="Close player" aria-label="Close player" autoFocus
+                        type="button" aria-label="Close player" autoFocus
                         onClick={onClose}
                         className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                     >
@@ -308,7 +322,6 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
         <div
             role={playable ? 'button' : undefined}
             tabIndex={playable ? 0 : undefined}
-            title={playable ? `Play ${clip.title || `Clip #${clip.rank}`}` : undefined}
             aria-label={playable ? `Play ${clip.title || `Clip #${clip.rank}`}` : undefined}
             onClick={playable ? () => onPlay({
                 title: clip.title || `Clip #${clip.rank}`,
@@ -350,22 +363,25 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
             <span className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
                 <span className="truncate">#{clip.rank}{fmtRange(clip.start_s, clip.end_s) ? ` · ${fmtRange(clip.start_s, clip.end_s)}` : ''}</span>
                 {render?.status === 'done' ? (
-                    <a
-                        href={`/renders/${render.id}/download`}
-                        title={`Download clip #${clip.rank}`}
-                        aria-label={`Download clip #${clip.rank}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
-                    >
-                        <Download className="size-3.5" aria-hidden />
-                    </a>
+                    <Tip label={`Download clip #${clip.rank}`} side="top">
+                        <a
+                            href={`/renders/${render.id}/download`}
+                            aria-label={`Download clip #${clip.rank}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
+                        >
+                            <Download className="size-3.5" aria-hidden />
+                        </a>
+                    </Tip>
                 ) : render?.status === 'failed' ? (
                     <span className="shrink-0 text-red-500">failed</span>
                 ) : (
-                    <span className="flex shrink-0 items-center gap-1" title="Clip is being made">
-                        <Loader2 className="size-3 animate-spin" aria-hidden />
-                        making
-                    </span>
+                    <Tip label="Clip is being made" side="top">
+                        <span className="flex shrink-0 items-center gap-1">
+                            <Loader2 className="size-3 animate-spin" aria-hidden />
+                            making
+                        </span>
+                    </Tip>
                 )}
             </span>
         </div>
@@ -403,7 +419,6 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
             className="absolute top-1/2 right-3 z-10 flex -translate-y-1/2 items-center gap-2"
             role="navigation"
             aria-label="Projects"
-            title="Scroll to switch project"
         >
             {/* Names live outside the container and fade; pills always stay. */}
             <div className={cn(
@@ -425,7 +440,6 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
                             >
                                 <button
                                     type="button"
-                                    title={p.name}
                                     aria-label={`Jump to ${p.name}`}
                                     aria-current={current || undefined}
                                     onClick={() => onJump(p.id)}
@@ -461,23 +475,24 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
                                     className="flex shrink-0 items-center justify-center"
                                     style={{ height: rowH }}
                                 >
-                                    <button
-                                        type="button"
-                                        title={p.name}
-                                        aria-label={`Jump to ${p.name}`}
-                                        aria-current={current || undefined}
-                                        onClick={() => onJump(p.id)}
-                                        className="flex h-full w-full items-center justify-center"
-                                    >
-                                        <span className={cn(
-                                            'block rounded-full transition-all motion-safe:duration-300',
-                                            current ? `h-5 w-2 ${pillCls}`
-                                            : d === 1 ? 'size-2 bg-muted-foreground/70'
-                                            : d === 2 ? 'size-1.5 bg-muted-foreground/45'
-                                            : 'size-1 bg-muted-foreground/25',
-                                        )}
-                                        />
-                                    </button>
+                                    <Tip label={p.name} side="left">
+                                        <button
+                                            type="button"
+                                            aria-label={`Jump to ${p.name}`}
+                                            aria-current={current || undefined}
+                                            onClick={() => onJump(p.id)}
+                                            className="flex h-full w-full items-center justify-center"
+                                        >
+                                            <span className={cn(
+                                                'block rounded-full transition-all motion-safe:duration-300',
+                                                current ? `h-5 w-2 ${pillCls}`
+                                                : d === 1 ? 'size-2 bg-muted-foreground/70'
+                                                : d === 2 ? 'size-1.5 bg-muted-foreground/45'
+                                                : 'size-1 bg-muted-foreground/25',
+                                            )}
+                                            />
+                                        </button>
+                                    </Tip>
                                 </div>
                             );
                         })}
@@ -774,10 +789,10 @@ export default function Home({ projects, limits }) {
                                 tiles for a few videos, source strip + grid
                                 once there are more. */}
                             <div className={cn('grid min-h-0 flex-1 gap-2', gridCls)}>
+                                <Tip label={`Play ${shown.name}`} side="top">
                                 <div
                                     role="button"
                                     tabIndex={0}
-                                    title={`Play ${shown.name}`}
                                     aria-label={`Play ${shown.name}`}
                                     onClick={() => setPlayer({
                                         title: shown.name,
@@ -814,6 +829,7 @@ export default function Home({ projects, limits }) {
                                         </span>
                                     )}
                                 </div>
+                                </Tip>
                                 {visClips.map((c) => (
                                     <ClipTile key={c.id} clip={c} tall={tallClip} projectName={shown.name} onPlay={setPlayer} />
                                 ))}

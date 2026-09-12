@@ -8,7 +8,6 @@ function SideLink({ href, label, active, children }) {
     return (
         <Link
             href={href}
-            title={label}
             aria-label={label}
             aria-current={active ? 'page' : undefined}
             data-no-drag
