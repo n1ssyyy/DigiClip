@@ -36,7 +36,10 @@ class WhisperCppTranscriber implements Transcriber
         $whisper = $this->binaries->require('whisper-cli');
         $modelPath = $this->models->require($options['model'] ?? $this->model);
         $lang = $options['lang'] ?? 'en';
-        $threads = $options['threads'] ?? max(1, (int) shell_exec('nproc') ?: 4);
+        // Leave two cores for the app server + UI: a fully loaded box
+        // makes page loads crawl while transcription runs.
+        $cpus = max(1, (int) (shell_exec('nproc') ?: 4));
+        $threads = $options['threads'] ?? max(1, $cpus - 2);
         $outPrefix = $options['out_prefix'] ?? (sys_get_temp_dir().'/digiclip-'.uniqid());
 
         $p = new Process([

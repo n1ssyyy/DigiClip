@@ -4,6 +4,8 @@ import AppLayout from './layouts/AppLayout';
 
 createInertiaApp({
     title: (title) => (title ? `${title} - DigiClip` : 'DigiClip'),
+    // Built-in blue progress bar off: PageLine owns the loading line.
+    progress: false,
     resolve: (name) => {
         const pages = import.meta.glob('./pages/**/*.jsx', { eager: true });
         const page = pages[`./pages/${name}.jsx`];

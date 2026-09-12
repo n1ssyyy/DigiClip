@@ -1,5 +1,24 @@
 @import 'tailwindcss';
 
+/* Caption-preview display faces (same files ffmpeg burns with). */
+@font-face {
+    font-family: 'Archivo Black';
+    src: url('../fonts/ArchivoBlack-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Anton';
+    src: url('../fonts/Anton-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+/* House face: JetBrains Mono everywhere, weights from one variable file. */
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('../fonts/JetBrainsMono-Variable.ttf') format('truetype');
+    font-weight: 100 800;
+    font-display: swap;
+}
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
@@ -25,7 +44,7 @@
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
-    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-sans: 'JetBrains Mono', 'Inter', ui-monospace, monospace;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
@@ -148,6 +167,261 @@ header[style*='app-region'] {
 }
 header [data-no-drag] {
     app-region: no-drag;
+}
+
+/* App motion language: pages travel the sidebar direction (down the
+   list = new page rises from below, old page drifts up; up the list =
+   the mirror). Panels stagger behind the page. Everything runs only
+   with full motion enabled; reduced motion gets instant cuts. */
+@keyframes page-enter-down {
+    from {
+        transform: translateY(26px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes page-enter-up {
+    from {
+        transform: translateY(-26px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes page-leave-down {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(-14px);
+        opacity: 0;
+    }
+}
+@keyframes page-leave-up {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(14px);
+        opacity: 0;
+    }
+}
+@keyframes rise {
+    from {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes pop {
+    from {
+        transform: scale(0.97) translateY(3px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes menu-out {
+    from {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: scale(0.98) translateY(3px);
+        opacity: 0;
+    }
+}
+@keyframes fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .page-enter-down {
+        animation: page-enter-down 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .page-enter-up {
+        animation: page-enter-up 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .page-leave-down {
+        animation: page-leave-down 160ms ease-in forwards;
+    }
+    .page-leave-up {
+        animation: page-leave-up 160ms ease-in forwards;
+    }
+    /* Mount fade-and-rise for rows, tiles, banners. Backwards fill:
+       hidden during the delay, then fully released (no retained
+       transform, so no stray stacking contexts trap popups). */
+    .rise {
+        animation: rise 260ms ease-out backwards;
+    }
+    /* Mount fade-and-grow for dropdown panels and dialog boxes. */
+    .pop {
+        animation: pop 150ms ease-out;
+    }
+    /* Dropdown exit beat: retreats the way it came before unmount. */
+    .menu-out {
+        animation: menu-out 130ms ease-in forwards;
+    }
+    /* Plain mount fade for overlays. */
+    .fade {
+        animation: fade 150ms ease-out;
+    }
+    /* Staggered main panels: 1 lands with the page, each next 70ms later.
+       Backwards fill for the same reason as .rise above. */
+    .stagger-1, .stagger-2, .stagger-3, .stagger-4 {
+        animation: rise 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+    .stagger-1 {
+        animation-delay: 40ms;
+    }
+    .stagger-2 {
+        animation-delay: 110ms;
+    }
+    .stagger-3 {
+        animation-delay: 180ms;
+    }
+    .stagger-4 {
+        animation-delay: 250ms;
+    }
+    /* Gap-fill: interactive elements with no tuned transition of their
+       own still ease between states. The :not guard leaves every
+       hand-tuned timing in the codebase untouched. */
+    button:not([class*='transition']),
+    a:not([class*='transition']),
+    input:not([class*='transition']),
+    select:not([class*='transition']) {
+        transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out, opacity 150ms ease-out;
+    }
+}
+
+/* Dropdown panels: guaranteed-opaque popover surface (falls back to
+   the dark token value if the var ever fails to resolve) in its own
+   stacking context so page content can never show through. */
+.digi-menu {
+    background-color: var(--popover, #1a1a1a);
+    isolation: isolate;
+}
+
+/* Native number spinners hide cross-browser and can't be styled;
+   the Settings stepper brings its own always-visible buttons. */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.no-spin {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Page loading line: white bar with a glowing comet head that swells
+   toward the tip. Partial reloads never trigger it. */
+.pageline {
+    position: fixed;
+    top: 53px;
+    right: 0;
+    left: 0;
+    z-index: 200;
+    height: 2px;
+    pointer-events: none;
+    transition: opacity 300ms ease-out;
+}
+.pageline-done {
+    opacity: 0;
+}
+.pageline-bar {
+    position: relative;
+    height: 100%;
+    transition: width 160ms linear;
+}
+/* Bright core, faint at the tail and full white at the tip. */
+.pageline-bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.3), #fff);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.55);
+}
+/* Glow halo: starts at nothing and spreads ease-in style, staying low
+   for most of the run then rising steeply into the tip. */
+.pageline-bar::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 12px;
+    transform: translateY(-50%);
+    background: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(255, 255, 255, 0.06) 45%,
+        rgba(255, 255, 255, 0.28) 72%,
+        rgba(255, 255, 255, 0.85) 100%
+    );
+    filter: blur(3px);
+}
+@media (prefers-reduced-motion: reduce) {
+    .pageline {
+        display: none;
+    }
+}
+
+/* Skeleton loaders: shimmer block + mount fade-in for the Swap
+   crossfade (skeleton out, real content in, per instance). */
+.skel {
+    position: relative;
+    overflow: hidden;
+    background: var(--muted);
+}
+.skel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.07) 50%, transparent 80%);
+    animation: skel-sweep 1.6s linear infinite;
+}
+@keyframes skel-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+@keyframes skel-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .skel-fade-in {
+        animation: skel-fade-in 300ms ease-out;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .skel::after {
+        animation: none;
+    }
 }
 
 /* Home project viewer: incoming project slides in from the travel direction

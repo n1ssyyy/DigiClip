@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, RefreshCw, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Tip from './Tooltip';
+import { usePanelBeat } from './usePanelBeat';
+import { useFloatingPanel } from './useFloatingPanel';
 
 export const isContributor = (id) => id.toLowerCase().includes('contributor');
 export const isFree = (id) => id.toLowerCase().endsWith(':free');
@@ -21,7 +24,10 @@ export default function ModelPicker({ value, onChange }) {
     const [models, setModels] = useState(null);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
+    const { show: panelShow, leaving: panelLeaving } = usePanelBeat(open);
     const rootRef = useRef(null);
+    const panelRef = useRef(null);
+    const panelPos = useFloatingPanel(panelShow, rootRef);
 
     async function load(refresh = false) {
         setLoading(true);
@@ -43,7 +49,8 @@ export default function ModelPicker({ value, onChange }) {
     useEffect(() => {
         const onDown = (e) => {
             if (e.key === 'Escape') setOpen(false);
-            if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+            if (rootRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return;
+            setOpen(false);
         };
         document.addEventListener('mousedown', onDown);
         document.addEventListener('keydown', onDown);
@@ -81,8 +88,8 @@ export default function ModelPicker({ value, onChange }) {
                 <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>
 
-            {open && (
-                <div className="absolute z-20 mt-1.5 w-full rounded-md border bg-popover text-popover-foreground shadow-md">
+            {panelShow && panelPos && createPortal(
+                <div ref={panelRef} style={panelPos} className={cn('digi-menu fixed z-[100] rounded-md border bg-popover text-popover-foreground shadow-md', panelLeaving ? 'menu-out' : 'pop')}>
                     <div className="space-y-2 border-b p-2">
                         <div className="flex items-center gap-2">
                             <div className="relative flex-1">
@@ -113,7 +120,7 @@ export default function ModelPicker({ value, onChange }) {
                                 aria-pressed={contribOnly}
                                 onClick={() => setContribOnly((v) => !v)}
                                 className={cn(
-                                    'rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wide transition-colors',
+                                    'rounded-md border px-2.5 py-1 text-xs font-semibold tracking-wide transition-colors',
                                     contribOnly ? 'border-transparent bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
                                 )}
                             >
@@ -124,7 +131,7 @@ export default function ModelPicker({ value, onChange }) {
                                 aria-pressed={freeOnly}
                                 onClick={() => setFreeOnly((v) => !v)}
                                 className={cn(
-                                    'rounded-full border px-2.5 py-1 font-mono text-xs font-semibold tracking-wide transition-colors',
+                                    'rounded-md border px-2.5 py-1 font-mono text-xs font-semibold tracking-wide transition-colors',
                                     freeOnly ? 'border-transparent bg-[var(--viral)] text-black' : 'text-muted-foreground hover:bg-accent',
                                 )}
                             >
@@ -179,7 +186,7 @@ export default function ModelPicker({ value, onChange }) {
                             className={cn(inputCls, 'h-8 font-mono text-xs')}
                         />
                     </div>
-                </div>
+                </div>, document.body,
             )}
         </div>
     );

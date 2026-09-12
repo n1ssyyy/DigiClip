@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { KeyRound } from 'lucide-react';
+import { ChevronDown, ChevronUp, KeyRound } from 'lucide-react';
 import shkollaIcon from '../assets/shkolla-icon.png';
 import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
@@ -22,9 +22,9 @@ function Field({ label, aside, hint, children }) {
     );
 }
 
-function Section({ title, children }) {
+function Section({ title, children, className }) {
     return (
-        <section className="space-y-3">
+        <section className={cn('space-y-3', className)}>
             <p className="font-mono text-[11px] tracking-widest text-muted-foreground uppercase">{title}</p>
             {children}
         </section>
@@ -32,6 +32,34 @@ function Section({ title, children }) {
 }
 
 const inputCls = 'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+
+/** Number input with always-visible custom steppers (native spinners
+ *  hide cross-browser and can't be styled). */
+function Stepper({ label, value, min = 1, max = 10, onChange }) {
+    const clamp = (v) => Math.min(max, Math.max(min, Number.isFinite(+v) ? +v : min));
+    const stepCls = 'flex flex-1 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-accent/60';
+    return (
+        <div className="flex h-9 w-full overflow-hidden rounded-md border border-input bg-background transition-shadow focus-within:ring-2 focus-within:ring-ring">
+            <input
+                type="number"
+                aria-label={label}
+                min={min}
+                max={max}
+                value={value}
+                onChange={(e) => onChange(clamp(e.target.value))}
+                className="no-spin min-w-0 flex-1 bg-transparent px-3 py-1 text-sm outline-none"
+            />
+            <div className="flex w-9 shrink-0 flex-col divide-y divide-input border-l border-input">
+                <button type="button" aria-label={`More ${label}`} onClick={() => onChange(clamp(value + 1))} className={stepCls}>
+                    <ChevronUp className="size-3.5" aria-hidden />
+                </button>
+                <button type="button" aria-label={`Fewer ${label}`} onClick={() => onChange(clamp(value - 1))} className={stepCls}>
+                    <ChevronDown className="size-3.5" aria-hidden />
+                </button>
+            </div>
+        </div>
+    );
+}
 
 export default function Settings({ settings, model_presets }) {
     const [saving, setSaving] = useState(false);
@@ -44,6 +72,18 @@ export default function Settings({ settings, model_presets }) {
     });
     const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value });
 
+    // One word, only alive when something actually changed. Baseline
+    // re-derives from server props, so a saved form settles itself.
+    const baseline = {
+        openrouter_key: '',
+        openrouter_model: settings.openrouter_model,
+        stt_model: settings.stt_model,
+        clips_count: settings.clips_count,
+        caption_default: settings.caption_default,
+    };
+    const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
+    const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved';
+
     function save(e) {
         e.preventDefault();
         router.put('/settings', form, {
@@ -55,14 +95,15 @@ export default function Settings({ settings, model_presets }) {
 
     return (
         <div className="h-[calc(100dvh-101px)] min-h-[480px]">
-            <Card className="flex h-full flex-col overflow-hidden">
+            <Card className="stagger-1 flex h-full flex-col overflow-hidden">
                 <CardHeader className="shrink-0 px-4 py-3">
                     <CardTitle className="text-sm">Settings</CardTitle>
                 </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 pt-1 pb-4">
+                <div aria-hidden className="mx-4 shrink-0 border-t border-border" />
+                <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4 pb-4">
                     <div className="mx-auto my-auto w-full max-w-3xl space-y-5">
                     <form id="settings-form" className="space-y-5" onSubmit={save}>
-                        <Section title="Connection">
+                        <Section title="Connection" className="stagger-2">
                             <Field
                                 label="OpenRouter API key"
                                 aside={settings.openrouter_key_set
@@ -77,7 +118,7 @@ export default function Settings({ settings, model_presets }) {
                                 </div>
                             </Field>
                         </Section>
-                        <Section title="Models">
+                        <Section title="Models" className="stagger-3">
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="Clip model">
                                     <ModelPicker
@@ -94,10 +135,16 @@ export default function Settings({ settings, model_presets }) {
                                 </Field>
                             </div>
                         </Section>
-                        <Section title="Output">
+                        <Section title="Output" className="stagger-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <Field label="Clips per video" hint="1-10">
-                                    <input type="number" name="clips_count" min={1} max={10} value={form.clips_count} onChange={set('clips_count')} className={inputCls} />
+                                    <Stepper
+                                        label="Clips per video"
+                                        value={form.clips_count}
+                                        min={1}
+                                        max={10}
+                                        onChange={(v) => setForm({ ...form, clips_count: v })}
+                                    />
                                 </Field>
                                 <Field label="Caption style">
                                     <CaptionPicker
@@ -108,7 +155,7 @@ export default function Settings({ settings, model_presets }) {
                             </div>
                         </Section>
                     </form>
-                    <Section title="About">
+                    <Section title="About" className="stagger-4">
                         <div className="space-y-2.5 rounded-lg border bg-muted/40 px-4 py-3">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                                 <span className="text-sm text-muted-foreground">
@@ -164,10 +211,15 @@ export default function Settings({ settings, model_presets }) {
                     </Section>
                     </div>
                 </CardContent>
-                <div className="flex shrink-0 items-center justify-end border-t px-4 py-3">
-                    <Button type="submit" form="settings-form" disabled={saving}>
-                        {saving ? 'Saving…' : 'Save settings'}
-                    </Button>
+                <div className="shrink-0 px-4 pb-3">
+                    <div aria-hidden className="border-t border-border" />
+                    <div className="flex items-center justify-end pt-3">
+                        <Button type="submit" form="settings-form" disabled={saving || !dirty}>
+                            <span key={saveLabel} className="skel-fade-in block">
+                                {saveLabel}
+                            </span>
+                        </Button>
+                    </div>
                 </div>
             </Card>
         </div>

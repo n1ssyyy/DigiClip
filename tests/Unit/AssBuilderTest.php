@@ -43,22 +43,36 @@ class AssBuilderTest extends TestCase
     }
 
     #[\PHPUnit\Framework\Attributes\DataProvider('presets')]
-    public function test_all_presets_build_valid_ass(string $preset): void
+    public function test_all_presets_build_valid_ass(string $preset, string $end, string $first): void
     {
         $ass = (new AssBuilder)->build($this->words(), $preset);
 
         $this->assertStringContainsString('PlayResX: 1080', $ass);
         $this->assertStringContainsString('PlayResY: 1920', $ass);
-        // tiktok/karaoke/hormozi budget (3 words): line 1 = and/so/my → 1.40s.
-        // minimal (4w/20ch): line 1 = and/so/my/fellow → 1.90s.
-        $end = $preset === 'minimal' ? '0:00:01.90' : '0:00:01.40';
         $this->assertStringContainsString("Dialogue: 0,0:00:00.00,{$end},", $ass);
-        $this->assertStringContainsString($preset === 'minimal' ? '{\\k40}and' : '{\\k40}AND', $ass); // 0.4s → 40cs
+        $this->assertStringContainsString('{\\k40}'.$first, $ass); // 0.4s → 40cs
     }
 
     public static function presets(): array
     {
-        return [['tiktok'], ['karaoke'], ['hormozi'], ['minimal']];
+        // preset → first line end (from its word/char budget) + first word case.
+        return [
+            ['tiktok', '0:00:01.40', 'AND'],
+            ['karaoke', '0:00:01.40', 'AND'],
+            ['hormozi', '0:00:01.40', 'AND'],
+            ['minimal', '0:00:01.90', 'and'],
+            ['beast', '0:00:00.90', 'AND'],
+            ['neon', '0:00:01.40', 'AND'],
+            ['highlight', '0:00:01.40', 'AND'],
+            ['ghost', '0:00:01.90', 'and'],
+        ];
+    }
+
+    public function test_every_preset_has_a_line_budget(): void
+    {
+        foreach (array_keys(AssBuilder::PRESETS) as $preset) {
+            $this->assertArrayHasKey($preset, AssBuilder::LINE_BUDGETS);
+        }
     }
 
     public function test_tiktok_budget_keeps_lines_short(): void
