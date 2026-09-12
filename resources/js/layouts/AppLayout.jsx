@@ -34,6 +34,30 @@ export default function AppLayout({ children }) {
         }
     }, []);
 
+    // External links (target _blank) leave the app via the OS browser
+    // instead of spawning an app child window. Plain browsers keep tabs.
+    useEffect(() => {
+        if (!isNativeWindow()) return;
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+        const onClick = (e) => {
+            const a = e.target.closest?.('a[href^="http"]');
+            if (!a || a.target !== '_blank') return;
+            e.preventDefault();
+            fetch('/api/open-external', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({ url: a.href }),
+            }).catch(() => window.open(a.href, '_blank', 'noopener'));
+        };
+        document.addEventListener('click', onClick);
+        return () => document.removeEventListener('click', onClick);
+    }, []);
+
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
             {/* Custom window chrome: frameless shell, this header is the drag region. */}

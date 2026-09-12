@@ -73,9 +73,17 @@ function fmtRange(a, b) {
     return `${fmtDur(a)} → ${fmtDur(b)}`;
 }
 
-/** Dots-and-lines pipeline stepper for one queued video. */
+/** Dots-and-lines pipeline stepper for one queued video. Wears the status
+ *  color end to end: green done, orange working, red broken. */
+const TONES = {
+    green: { dot: 'bg-emerald-500', line: 'bg-emerald-500/60', ring: 'ring-emerald-500/20' },
+    orange: { dot: 'bg-orange-500', line: 'bg-orange-500/60', ring: 'ring-orange-500/20' },
+    red: { dot: 'bg-red-500', line: 'bg-red-500/60', ring: 'ring-red-500/20' },
+};
+
 function Stepper({ status }) {
     const st = stepState(status);
+    const tone = TONES[st.failed ? 'red' : status === 'clips_ready' ? 'green' : 'orange'];
     const current = st.active != null ? STEPS[st.active]?.label : (st.failed ? 'Failed' : st.paused ? 'Paused' : 'Done');
     return (
         <div className="flex items-center" aria-label={`Pipeline: ${current}`}>
@@ -89,15 +97,15 @@ function Stepper({ status }) {
                             title={s.label}
                             className={cn(
                                 'size-2.5 shrink-0 rounded-full',
-                                done && !failedDot && 'bg-primary',
-                                active && 'animate-pulse bg-primary ring-4 ring-primary/20',
-                                failedDot && 'bg-red-500 ring-4 ring-red-500/20',
+                                done && !failedDot && tone.dot,
+                                active && cn('animate-pulse ring-4', tone.dot, tone.ring),
+                                failedDot && cn(tone.dot, 'ring-4', tone.ring),
                                 !done && !active && !failedDot && 'bg-border',
                                 st.paused && !done && 'bg-orange-500/50',
                             )}
                         />
                         {i < STEPS.length - 1 && (
-                            <span className={cn('mx-1 h-0.5 flex-1 rounded-full', i + 1 <= st.done ? 'bg-primary/60' : 'bg-border')} aria-hidden />
+                            <span className={cn('mx-1 h-0.5 flex-1 rounded-full', i + 1 <= st.done ? tone.line : 'bg-border')} aria-hidden />
                         )}
                     </div>
                 );
@@ -174,12 +182,18 @@ function QueueRow({ project, onCancel }) {
                 <span className={cn('absolute top-1.5 left-1.5 size-2 rounded-full ring-2 ring-black/50', statusDot(project.status))} aria-hidden />
             </div>
             <div className="flex min-w-0 flex-1 flex-col justify-between gap-2 self-stretch py-0.5">
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                    <p className="truncate text-sm font-medium" title={project.name}>{project.name}</p>
-                    <Badge variant="secondary" className={cn('whitespace-nowrap', failed && 'text-red-500')}>
-                        {label}
-                    </Badge>
-                    <span className="flex items-center justify-end gap-0.5">
+                <div className="flex items-center gap-2">
+                    <p className="min-w-0 shrink truncate text-sm font-medium" title={project.name}>{project.name}</p>
+                    <span className="flex flex-1 items-center justify-center">
+                        <Badge variant="secondary" className={cn(
+                            'whitespace-nowrap',
+                            failed ? 'text-red-500' : project.status === 'clips_ready' ? 'text-emerald-500' : 'text-orange-500',
+                        )}
+                        >
+                            {label}
+                        </Badge>
+                    </span>
+                    <span className="flex shrink-0 items-center justify-end gap-0.5">
                         {pausable && (
                             <button
                                 type="button" title="Pause" aria-label={`Pause ${project.name}`}

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\LinkController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RenderController;
 use App\Http\Controllers\SettingsController;
@@ -42,3 +43,6 @@ Route::post('/native/window/minimize', [WindowController::class, 'minimize'])->n
 Route::post('/native/window/maximize', [WindowController::class, 'maximize'])->name('native.window.maximize');
 Route::post('/native/window/unmaximize', [WindowController::class, 'unmaximize'])->name('native.window.unmaximize');
 Route::post('/native/window/close', [WindowController::class, 'close'])->name('native.window.close');
+
+// External links leave the app via the OS browser (same no-op contract).
+Route::post('/api/open-external', [LinkController::class, 'open'])->name('api.open-external');
