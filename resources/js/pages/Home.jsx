@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { router } from '@inertiajs/react';
+import { Button } from '../components/ui/button';
 import { UploadCloud, FileVideo, Pause, Play, X, RotateCcw, Film, Download, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -95,9 +96,54 @@ function Stepper({ status }) {
     );
 }
 
+/** Cancel confirmation: replaces window.confirm with an in-app dialog. */
+function CancelDialog({ project, onClose }) {
+    const keepRef = useRef(null);
+
+    useEffect(() => {
+        keepRef.current?.focus();
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    function confirm() {
+        router.delete(`/projects/${project.id}`, { preserveScroll: true, onFinish: onClose });
+    }
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="cancel-title"
+                aria-describedby="cancel-desc"
+                className="w-[min(400px,calc(100vw-3rem))] rounded-lg border bg-card p-5 shadow-2xl"
+            >
+                <h2 id="cancel-title" className="text-sm font-semibold">Cancel and remove?</h2>
+                <p id="cancel-desc" className="mt-1.5 text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{project.name}</span>
+                    {' '}stops processing and its source file is deleted. This can't be undone.
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                    <Button ref={keepRef} variant="outline" size="sm" onClick={onClose}>
+                        Keep video
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={confirm}>
+                        Remove
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 /** One queue row: top half (name left, status center, buttons right),
  *  bottom half (thicker live stepper). */
-function QueueRow({ project }) {
+function QueueRow({ project, onCancel }) {
     const pausable = ACTIVE.includes(project.status);
     const paused = project.status === 'paused';
     const failed = project.status === 'failed';
@@ -157,11 +203,7 @@ function QueueRow({ project }) {
                         )}
                         <button
                             type="button" title="Cancel and remove" aria-label={`Cancel ${project.name}`}
-                            onClick={() => {
-                                if (window.confirm(`Cancel and remove "${project.name}" completely?`)) {
-                                    router.delete(`/projects/${project.id}`, { preserveScroll: true });
-                                }
-                            }}
+                            onClick={() => onCancel(project)}
                             className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                         >
                             <X className="size-4" />
@@ -340,6 +382,7 @@ export default function Home({ projects, limits }) {
     const wheelAcc = useRef(0);
     const touchY = useRef(null);
     const [dragging, setDragging] = useState(false);
+    const [confirmTarget, setConfirmTarget] = useState(null);
     const [uploading, setUploading] = useState(null);
     const [activeId, setActiveId] = useState(projects[0]?.id ?? null);
     const [dir, setDir] = useState(null);
@@ -541,7 +584,7 @@ export default function Home({ projects, limits }) {
                             </p>
                         ) : (
                             <div className="space-y-2">
-                                {projects.map((p) => <QueueRow key={p.id} project={p} />)}
+                                {projects.map((p) => <QueueRow key={p.id} project={p} onCancel={setConfirmTarget} />)}
                             </div>
                         )}
                     </CardContent>
@@ -647,6 +690,9 @@ export default function Home({ projects, limits }) {
                     <ProjectScroller projects={projects} activeId={activeId} onJump={(id) => goTo(id)} snap={snap} visible={namesVisible} />
                 </CardContent>
             </Card>
+            {confirmTarget && (
+                <CancelDialog project={confirmTarget} onClose={() => setConfirmTarget(null)} />
+            )}
         </div>
     );
 }
