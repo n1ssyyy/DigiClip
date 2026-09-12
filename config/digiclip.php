@@ -10,9 +10,10 @@ return [
     'openrouter' => [
         'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
         'key' => env('OPENROUTER_API_KEY'),
-        'model_default' => env('OPENROUTER_MODEL', 'meta/muse-spark-1.3'),
+        'model_default' => env('OPENROUTER_MODEL', 'nvidia/nemotron-3-ultra-550b-a55b:free'),
         // $/1M tokens, used for the "~$ cost" line. Unknown models → default.
         'pricing' => [
+            'nvidia/nemotron-3-ultra-550b-a55b:free' => ['in' => 0, 'out' => 0],
             'meta/muse-spark-1.3' => ['in' => 1.25, 'out' => 4.25],
             'openai/gpt-4o-mini' => ['in' => 0.15, 'out' => 0.60],
             'anthropic/claude-3.5-sonnet' => ['in' => 3.00, 'out' => 15.00],

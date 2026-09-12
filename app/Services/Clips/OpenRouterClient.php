@@ -8,7 +8,7 @@ use RuntimeException;
 
 /**
  * OpenRouter Chat Completions. BYOK; default model
- * `meta/muse-spark-1.3` (Muse Spark 1.3 Contributor). Strict JSON only.
+ * `nvidia/nemotron-3-ultra-550b-a55b:free`. Strict JSON only.
  */
 class OpenRouterClient
 {
@@ -18,7 +18,7 @@ class OpenRouterClient
     ) {
         // Explicit args win, then Settings UI, then .env (config).
         $this->apiKey ??= Setting::get('openrouter_key') ?? (string) config('digiclip.openrouter.key');
-        $this->model ??= Setting::get('openrouter_model') ?? (string) config('digiclip.openrouter.model_default', 'meta/muse-spark-1.3');
+        $this->model ??= Setting::get('openrouter_model') ?? (string) config('digiclip.openrouter.model_default', 'nvidia/nemotron-3-ultra-550b-a55b:free');
     }
 
     public function hasKey(): bool

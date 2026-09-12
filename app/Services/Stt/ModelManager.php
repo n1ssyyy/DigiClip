@@ -53,7 +53,7 @@ class ModelManager
     public function require(string $model): string
     {
         if (! $this->isDownloaded($model)) {
-            throw new RuntimeException("STT model [{$model}] not downloaded yet. Download it from Settings.");
+            throw new RuntimeException("STT model [{$model}] is not on disk and auto-download failed. Run: php artisan digiclip:provision-media {$model}");
         }
 
         return $this->fileFor($model);

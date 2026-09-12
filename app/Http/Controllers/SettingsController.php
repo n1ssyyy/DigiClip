@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Setting;
 use App\Services\Clips\OpenRouterClient;
+use App\Services\Stt\ModelManager;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -11,13 +12,14 @@ use Inertia\Response;
 class SettingsController extends Controller
 {
     public const MODELS = [
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
         'meta/muse-spark-1.3',
         'openai/gpt-4o-mini',
         'anthropic/claude-3.5-sonnet',
         'google/gemini-2.0-flash',
     ];
 
-    public function edit(): Response
+    public function edit(ModelManager $models): Response
     {
         return Inertia::render('Settings', [
             'settings' => [
@@ -25,6 +27,9 @@ class SettingsController extends Controller
                 'openrouter_model' => Setting::get('openrouter_model') ?? config('digiclip.openrouter.model_default'),
                 'stt_model' => Setting::get('stt_model') ?? config('digiclip.stt.default_model'),
                 'stt_models' => config('digiclip.stt.models', []),
+                'stt_downloaded' => collect(array_keys(config('digiclip.stt.models', [])))
+                    ->mapWithKeys(fn ($id) => [$id => $models->isDownloaded($id)])
+                    ->all(),
                 'clips_count' => (int) (Setting::get('clips_count') ?? config('digiclip.clips.count_default', 3)),
                 'caption_default' => Setting::get('caption_default') ?? 'tiktok',
             ],
