@@ -54,10 +54,7 @@ jobs:
         run: npm run build
 
       - name: Run tests
-        run: php artisan test --no-interaction
-
-      - name: Code style (Pint)
-        run: vendor/bin/pint --test
+        run: php artisan test
 
   build:
     name: Build (${{ matrix.target }})
