@@ -135,7 +135,6 @@ Linux ships `ffmpeg`, `ffprobe`, `whisper-cli` today. Whisper models live in `st
 ```bash
 php artisan test        # feature + unit (media tests skip cleanly without binaries/fixtures)
 npm run build           # production assets → public/build
-vendor/bin/pint --test  # Laravel Pint style check
 ```
 
 ## 🤖 CI / CD
@@ -193,7 +192,7 @@ resources/js/pages/       Home (dropzone + pipeline + clips) · Health · Settin
 
 ## 🤝 Contributing
 
-PRs welcome: fork, branch, `php artisan test` + `vendor/bin/pint --test` green, open a PR against `main`. CI must stay green on Linux and Windows.
+PRs welcome: fork, branch, `php artisan test` green, open a PR against `main`. CI must stay green on Linux and Windows.
 
 ## 📄 License
 
