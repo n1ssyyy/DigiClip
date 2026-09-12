@@ -81,7 +81,7 @@ export default function Health({ report }) {
             setLive(await res.json());
             setUpdatedAt(Date.now());
         } catch {
-            // Offline or backend restarting — keep last report, label goes stale.
+            // Offline or backend restarting, keep last report, label goes stale.
         }
     }, [fetchSnap]);
 

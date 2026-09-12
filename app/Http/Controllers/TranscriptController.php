@@ -10,7 +10,7 @@ class TranscriptController extends Controller
     public function show(Project $project)
     {
         $t = $project->transcript;
-        abort_unless($t, 404, 'No transcript yet — transcription is queued or failed.');
+        abort_unless($t, 404, 'No transcript yet, transcription is queued or failed.');
 
         return response()->json([
             'model' => $t->model,

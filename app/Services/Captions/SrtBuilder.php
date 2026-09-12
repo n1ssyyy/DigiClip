@@ -3,7 +3,7 @@
 namespace App\Services\Captions;
 
 /**
- * Words → SRT cues (M1 export; ASS karaoke lands in M3).
+ * Words → SRT cues (see AssBuilder for karaoke captions).
  * Groups: ≤8 words, ≤42 chars, ≤0.8s gap, ≤5s per cue.
  */
 class SrtBuilder

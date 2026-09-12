@@ -10,7 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
-class M3RenderTest extends TestCase
+class RenderTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -20,7 +20,7 @@ class M3RenderTest extends TestCase
         $ffprobe = resource_path('bin/linux-x64/ffprobe');
         foreach ([$ffmpeg, $ffprobe] as $bin) {
             if (! is_file($bin)) {
-                $this->markTestSkipped('missing M3 binaries');
+                $this->markTestSkipped('missing media binaries');
             }
         }
         if (! is_file(base_path('tests/Fixtures/sample.mp4'))) {
@@ -28,10 +28,10 @@ class M3RenderTest extends TestCase
         }
 
         \Illuminate\Support\Facades\Storage::disk('local')->put(
-            'm3-source.mp4', file_get_contents(base_path('tests/Fixtures/sample.mp4'))
+            'render-source.mp4', file_get_contents(base_path('tests/Fixtures/sample.mp4'))
         );
         $project = Project::create([
-            'name' => 'm3', 'source_path' => 'm3-source.mp4',
+            'name' => 'render', 'source_path' => 'render-source.mp4',
             'mime' => 'video/mp4', 'size_bytes' => 1, 'duration_s' => 11.0,
             'width' => 640, 'height' => 360, 'status' => 'transcribed',
         ]);

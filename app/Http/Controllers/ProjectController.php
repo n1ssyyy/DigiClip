@@ -52,10 +52,10 @@ class ProjectController extends Controller
             (new AnalyzeClipsJob($project->id))->onQueue('default'),
         ])->dispatch();
 
-        return redirect()->route('projects.index')->with('flash', "Stored {$project->name} — transcription queued.");
+        return redirect()->route('projects.index')->with('flash', "Stored {$project->name}, transcription queued.");
     }
 
-    /** Re-run only clip analysis (cheap — no re-transcribe). */
+    /** Re-run only clip analysis (cheap, no re-transcribe). */
     public function analyze(Project $project)
     {
         Bus::dispatch((new AnalyzeClipsJob($project->id))->onQueue('default'));

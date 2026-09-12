@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
- * OpenRouter Chat Completions (PLAN.MD §6). BYOK; default model
+ * OpenRouter Chat Completions. BYOK; default model
  * `meta/muse-spark-1.3` (Muse Spark 1.3 Contributor). Strict JSON only.
  */
 class OpenRouterClient

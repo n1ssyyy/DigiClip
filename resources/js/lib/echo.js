@@ -31,7 +31,7 @@ export function connectionState() {
 export function onConnect(fn) {
     const conn = getEcho()?.connector?.pusher?.connection;
     if (!conn) return;
-    // The singleton may already be connected (remount) — pusher never
+    // The singleton may already be connected (remount), pusher never
     // replays past transitions, so sync state first.
     if (conn.state === 'connected') fn();
     conn.bind('connected', fn);

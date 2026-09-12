@@ -67,7 +67,7 @@ export default function Settings({ settings, model_presets }) {
                                 aside={settings.openrouter_key_set
                                     ? <Badge variant="success" className="text-[10px]">set</Badge>
                                     : <Badge variant="secondary" className="text-[10px]">not set</Badge>}
-                                hint={settings.openrouter_key_set ? 'Saved. Blank keeps it.' : 'No key — clips use heuristics.'}
+                                hint={settings.openrouter_key_set ? 'Saved. Blank keeps it.' : 'No key, clips use heuristics.'}
                             >
                                 <div className="relative">
                                     <KeyRound className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -95,7 +95,7 @@ export default function Settings({ settings, model_presets }) {
                         </Section>
                         <Section title="Output">
                             <div className="grid grid-cols-2 gap-4">
-                                <Field label="Clips per video" hint="1–10">
+                                <Field label="Clips per video" hint="1-10">
                                     <input type="number" name="clips_count" min={1} max={10} value={form.clips_count} onChange={set('clips_count')} className={inputCls} />
                                 </Field>
                                 <Field label="Caption style">

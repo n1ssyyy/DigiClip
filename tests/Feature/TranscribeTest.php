@@ -9,7 +9,7 @@ use Tests\TestCase;
  * Real end-to-end transcription with the bundled whisper.cpp binary.
  * Skipped when binaries/models are absent (e.g. fresh CI checkout).
  */
-class M1TranscribeTest extends TestCase
+class TranscribeTest extends TestCase
 {
     public function test_transcribes_sample_audio(): void
     {
@@ -27,7 +27,7 @@ class M1TranscribeTest extends TestCase
         $stt = app(WhisperCppTranscriber::class);
         $this->assertSame('base.en', $stt->modelId());
 
-        $result = $stt->transcribe($sample, ['out_prefix' => sys_get_temp_dir().'/m1test']);
+        $result = $stt->transcribe($sample, ['out_prefix' => sys_get_temp_dir().'/stttest']);
 
         $this->assertGreaterThan(5, $result->wordCount());
         $this->assertStringContainsString('fellow Americans', $result->fullText());

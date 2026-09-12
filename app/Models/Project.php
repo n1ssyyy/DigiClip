@@ -23,7 +23,7 @@ class Project extends Model
                 try {
                     event(new \App\Events\ProjectStatusChanged($project->id));
                 } catch (\Throwable) {
-                    // Reverb down? UI degrades to the state from last load — never break the job.
+                    // Reverb down? UI degrades to the state from last load, never break the job.
                 }
             }
         });

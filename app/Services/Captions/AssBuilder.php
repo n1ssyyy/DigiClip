@@ -3,7 +3,7 @@
 namespace App\Services\Captions;
 
 /**
- * Words → ASS animated subtitles, TikTok style (PLAN.MD §7).
+ * Words → ASS animated subtitles, TikTok style.
  * PHP port of the karaoke-subs grouping pattern: per-word {\k} karaoke tags
  * burned later with `ffmpeg -vf ass=...`. PlayRes fixed 1080×1920.
  */
@@ -16,7 +16,7 @@ class AssBuilder
     /**
      * Per-preset line budgets (words, chars). Sized from real font metrics:
      * 1080px frame − 80px margins = 1000px usable. Archivo Black caps run
-     * ~0.8em wide, Anton ~0.55em, Inter ~0.55em — budgets keep every line
+     * ~0.8em wide, Anton ~0.55em, Inter ~0.55em, budgets keep every line
      * inside the frame with headroom (verified by tests/Unit/AssBuilderTest
      * width audit via Pillow).
      */

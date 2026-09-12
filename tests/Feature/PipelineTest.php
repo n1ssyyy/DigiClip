@@ -10,9 +10,9 @@ use Tests\TestCase;
 
 /**
  * Full ingest pipeline on the sync queue: upload → extract → transcribe.
- * Needs the M1 binaries (skipped otherwise).
+ * Needs the media binaries (skipped otherwise).
  */
-class M1PipelineTest extends TestCase
+class PipelineTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -26,7 +26,7 @@ class M1PipelineTest extends TestCase
     {
         foreach ([resource_path('bin/linux-x64/ffmpeg'), resource_path('bin/linux-x64/whisper-cli'), storage_path('app/digiclip/models/ggml-base.en.bin')] as $path) {
             if (! is_file($path)) {
-                $this->markTestSkipped('missing M1 binaries');
+                $this->markTestSkipped('missing media binaries');
             }
         }
         $fixture = base_path('tests/Fixtures/sample.mp4');

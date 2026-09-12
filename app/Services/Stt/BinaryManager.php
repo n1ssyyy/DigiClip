@@ -6,7 +6,7 @@ use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * Locates bundled-or-system media binaries (PLAN.MD §5).
+ * Locates bundled-or-system media binaries.
  * Order: resources/bin/{platform}/ → system PATH. Never requires sudo.
  */
 class BinaryManager

@@ -5,9 +5,9 @@ namespace App\Services\Stt;
 use RuntimeException;
 
 /**
- * whisper.cpp ggml model manager (PLAN.MD §5).
+ * whisper.cpp ggml model manager.
  * Models live in storage/app/digiclip/models (user-data, never in the bundle).
- * Default `base.en` 142MB — seconds to download; turbo upgrades lazy.
+ * Default `base.en` 142MB, seconds to download; turbo upgrades lazy.
  */
 class ModelManager
 {
@@ -23,7 +23,7 @@ class ModelManager
         return $dir;
     }
 
-    /** Model IDs contain dots (e.g. base.en) — index the array directly, never via dot notation. */
+    /** Model IDs contain dots (e.g. base.en), index the array directly, never via dot notation. */
     private function meta(string $model): array
     {
         $meta = config('digiclip.stt.models', [])[$model] ?? null;
@@ -67,7 +67,7 @@ class ModelManager
     }
 
     /**
-     * Stream-download with progress (0–100). Resumable via Range when the server allows.
+     * Stream-download with progress (0-100). Resumable via Range when the server allows.
      */
     public function download(string $model, ?callable $onProgress = null): string
     {

@@ -3,7 +3,7 @@
 namespace App\Services\Clips;
 
 /**
- * Local post-processing gate (PLAN.MD §6 — non-negotiable):
+ * Local post-processing gate (non-negotiable):
  * validate → clamp → SNAP to word boundaries → merge/dedupe → rank → cap.
  * Pure + unit-tested. Used for both LLM and heuristic candidates.
  */
