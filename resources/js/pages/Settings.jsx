@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
-import { KeyRound } from 'lucide-react';
+import { KeyRound, ExternalLink } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -57,7 +57,8 @@ export default function Settings({ settings, model_presets }) {
                     <CardTitle className="text-sm">Settings</CardTitle>
                 </CardHeader>
                 <CardContent className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 pt-1 pb-4">
-                    <form id="settings-form" className="mx-auto w-full max-w-3xl space-y-8" onSubmit={save}>
+                    <div className="mx-auto my-auto w-full max-w-3xl space-y-8">
+                    <form id="settings-form" className="space-y-8" onSubmit={save}>
                         <Section title="Connection">
                             <Field
                                 label="OpenRouter API key"
@@ -104,6 +105,25 @@ export default function Settings({ settings, model_presets }) {
                             </div>
                         </Section>
                     </form>
+                    <Section title="About">
+                        <div className="space-y-2 rounded-lg border bg-muted/40 px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                                <span className="text-sm font-semibold">Made by n1ssyyy</span>
+                                <a
+                                    href="https://github.com/n1ssyyy/DigiClip"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex h-7 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent"
+                                >
+                                    <ExternalLink className="size-3.5" aria-hidden />
+                                    GitHub
+                                </a>
+                            </div>
+                            <p className="text-xs text-muted-foreground">In collaboration with Shkolla Digjitale Prizren.</p>
+                            <p className="text-xs text-muted-foreground">Shoutout — Kebir Cesko · Arianit Tershnjaku.</p>
+                        </div>
+                    </Section>
+                    </div>
                 </CardContent>
                 <div className="flex shrink-0 items-center justify-end border-t px-4 py-3">
                     <Button type="submit" form="settings-form" disabled={saving}>
