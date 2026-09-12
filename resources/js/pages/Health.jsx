@@ -14,7 +14,7 @@ function StatusIcon({ ok }) {
 function Row({ label, version, value, hint }) {
     const sub = value?.path ?? hint ?? value?.hint;
     return (
-        <li className="flex flex-1 items-center gap-3">
+        <li className="flex items-center gap-3 py-2.5">
             <span><StatusIcon ok={value?.ok} /></span>
             <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">
@@ -23,7 +23,7 @@ function Row({ label, version, value, hint }) {
                 </p>
                 {sub && <p className="truncate font-mono text-xs text-muted-foreground" title={sub}>{sub}</p>}
             </div>
-            <Badge variant={value?.ok ? 'success' : 'secondary'} className="mb-1 self-end">{value?.ok ? 'ready' : 'pending'}</Badge>
+            <Badge variant={value?.ok ? 'success' : 'secondary'}>{value?.ok ? 'ready' : 'pending'}</Badge>
         </li>
     );
 }
@@ -110,8 +110,8 @@ export default function Health({ report }) {
                         </span>
                     </div>
                 </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col px-4 pt-0 pb-3">
-                    <ul className="flex min-h-0 flex-1 flex-col divide-y divide-border">
+                <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-0 pb-3">
+                    <ul className="mt-auto flex shrink-0 flex-col divide-y divide-border">
                         {checks.map((c) => <Row key={c.label} {...c} />)}
                     </ul>
                     {missing.length > 0 && (
