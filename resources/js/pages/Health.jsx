@@ -37,9 +37,9 @@ function ago(ms) {
 
 function Stat({ label, value, alert }) {
     return (
-        <div className="px-3 py-2 text-center">
-            <p className="font-mono text-[11px] tracking-widest text-muted-foreground uppercase">{label}</p>
-            <p className={cn('text-lg font-semibold tabular-nums', alert && value > 0 && 'text-red-500')}>{value}</p>
+        <div className="flex flex-col items-center justify-center px-3 py-2">
+            <p className="font-mono text-[11px] tracking-widest text-muted-foreground uppercase indent-[0.1em]">{label}</p>
+            <p className={cn('text-lg leading-snug font-semibold tabular-nums', alert && value > 0 && 'text-red-500')}>{value}</p>
         </div>
     );
 }
@@ -154,15 +154,19 @@ export default function Health({ report }) {
                 </CardHeader>
                 <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-0 pb-3">
                     {snap && (
-                        <div className="mb-3 grid shrink-0 grid-cols-5 divide-x divide-border rounded-md border">
-                            <Stat label="Working" value={working} />
-                            <Stat label="Paused" value={paused} />
-                            <Stat label="Ready" value={readyCount} />
-                            <Stat label="Rendered" value={rendered} />
-                            <Stat label="Failed" value={failed} alert />
-                        </div>
+                        <>
+                            <div className="flex-1" aria-hidden />
+                            <div className="grid shrink-0 grid-cols-5 divide-x divide-border rounded-md border">
+                                <Stat label="Working" value={working} />
+                                <Stat label="Paused" value={paused} />
+                                <Stat label="Ready" value={readyCount} />
+                                <Stat label="Rendered" value={rendered} />
+                                <Stat label="Failed" value={failed} alert />
+                            </div>
+                            <div className="flex-1" aria-hidden />
+                        </>
                     )}
-                    <ul className="mt-auto flex shrink-0 flex-col divide-y divide-border">
+                    <ul className="flex shrink-0 flex-col divide-y divide-border">
                         {checks.map((c) => <Row key={c.label} {...c} />)}
                     </ul>
                     {missing.length > 0 && (
