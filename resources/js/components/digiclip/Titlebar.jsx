@@ -1,5 +1,6 @@
 import { Copy, Minus, Square, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import Tip from './Tooltip';
 
 /** True when rendered inside the NativePHP Electron shell. */
 export function isNativeWindow() {
@@ -42,33 +43,36 @@ export default function WindowControls({ maximized, onToggleMaximize }) {
 
     return (
         <div className="flex h-[53px] items-center gap-2 pr-2" style={{ WebkitAppRegion: 'no-drag' }}>
-            <button
-                type="button"
-                aria-label="Minimize"
-                title="Minimize"
-                className={btn}
-                onClick={() => sendWindowAction('minimize')}
-            >
-                <Minus className="size-4" aria-hidden />
-            </button>
-            <button
-                type="button"
-                aria-label={maximized ? 'Restore' : 'Maximize'}
-                title={maximized ? 'Restore' : 'Maximize'}
-                className={btn}
-                onClick={onToggleMaximize}
-            >
-                {maximized ? <Copy className="size-3.5" aria-hidden /> : <Square className="size-3.5" aria-hidden />}
-            </button>
-            <button
-                type="button"
-                aria-label="Close"
-                title="Close"
-                className={cn(btn, 'hover:bg-destructive hover:text-destructive-foreground')}
-                onClick={() => sendWindowAction('close')}
-            >
-                <X className="size-4" aria-hidden />
-            </button>
+            <Tip label="Minimize" side="bottom">
+                <button
+                    type="button"
+                    aria-label="Minimize"
+                    className={btn}
+                    onClick={() => sendWindowAction('minimize')}
+                >
+                    <Minus className="size-4" aria-hidden />
+                </button>
+            </Tip>
+            <Tip label={maximized ? 'Restore' : 'Maximize'} side="bottom">
+                <button
+                    type="button"
+                    aria-label={maximized ? 'Restore' : 'Maximize'}
+                    className={btn}
+                    onClick={onToggleMaximize}
+                >
+                    {maximized ? <Copy className="size-3.5" aria-hidden /> : <Square className="size-3.5" aria-hidden />}
+                </button>
+            </Tip>
+            <Tip label="Close" side="bottom">
+                <button
+                    type="button"
+                    aria-label="Close"
+                    className={cn(btn, 'hover:bg-destructive hover:text-destructive-foreground')}
+                    onClick={() => sendWindowAction('close')}
+                >
+                    <X className="size-4" aria-hidden />
+                </button>
+            </Tip>
         </div>
     );
 }
