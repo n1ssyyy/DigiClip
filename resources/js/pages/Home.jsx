@@ -811,7 +811,7 @@ export default function Home({ projects, limits }) {
                                             });
                                         }
                                     }}
-                                    className={cn('relative min-h-0 cursor-pointer overflow-hidden rounded-md bg-muted transition-colors hover:ring-1 hover:ring-muted-foreground/40', sourceCls)}
+                                    className={cn('relative min-h-0 h-full w-full cursor-pointer overflow-hidden rounded-md bg-muted transition-colors hover:ring-1 hover:ring-muted-foreground/40', sourceCls)}
                                 >
                                     <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
                                     <video
