@@ -11,17 +11,19 @@ function StatusIcon({ ok }) {
     return <MinusCircle className="size-4 text-muted-foreground" aria-label="unknown" />;
 }
 
-function Row({ label, value, hint }) {
+function Row({ label, version, value, hint }) {
+    const sub = value?.path ?? hint ?? value?.hint;
     return (
         <li className="flex flex-1 items-center gap-3">
             <span><StatusIcon ok={value?.ok} /></span>
             <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{label}</p>
-                {value?.version && <p className="truncate font-mono text-xs text-muted-foreground">{value.version}</p>}
-                {value?.path && <p className="truncate font-mono text-xs text-muted-foreground">{value.path}</p>}
-                {hint ?? value?.hint ? <p className="truncate text-xs text-muted-foreground">{hint ?? value.hint}</p> : null}
+                <p className="truncate text-sm font-medium">
+                    {label}
+                    {version && <span className="ml-2 font-mono text-xs font-normal text-muted-foreground">{version}</span>}
+                </p>
+                {sub && <p className="truncate font-mono text-xs text-muted-foreground" title={sub}>{sub}</p>}
             </div>
-            <Badge variant={value?.ok ? 'success' : 'secondary'}>{value?.ok ? 'ready' : 'pending'}</Badge>
+            <Badge variant={value?.ok ? 'success' : 'secondary'} className="mb-1 self-end">{value?.ok ? 'ready' : 'pending'}</Badge>
         </li>
     );
 }
@@ -34,11 +36,11 @@ function ago(ms) {
 }
 
 const CHECKS = (live) => [
-    { label: `PHP ${live.php.version}`, value: { ok: live.php.ok } },
-    { label: 'Node', value: live.node },
-    { label: `ffmpeg${live.ffmpeg.libass ? ' + libass' : ''}`, value: live.ffmpeg },
-    { label: 'render encoder', value: live.encoder },
-    { label: 'whisper.cpp', value: live.whisper },
+    { label: 'PHP', version: live.php.version, value: { ok: live.php.ok } },
+    { label: 'Node', version: live.node.version, value: live.node },
+    { label: `ffmpeg${live.ffmpeg.libass ? ' + libass' : ''}`, version: live.ffmpeg.version, value: live.ffmpeg },
+    { label: 'render encoder', version: live.encoder.version, value: live.encoder },
+    { label: 'whisper.cpp', version: live.whisper.version, value: live.whisper },
     { label: 'Storage', value: live.storage },
     { label: 'Database (SQLite)', value: live.database },
     { label: `Queue (${live.queue.connection})`, value: live.queue },

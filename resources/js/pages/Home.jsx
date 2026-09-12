@@ -579,9 +579,11 @@ export default function Home({ projects, limits }) {
                     </CardHeader>
                     <CardContent className="min-h-0 flex-1 overflow-y-auto px-4 pt-0 pb-3">
                         {projects.length === 0 ? (
-                            <p className="py-8 text-center text-sm text-muted-foreground">
+                            <div className="flex min-h-full items-center justify-center">
+                                <p className="text-center text-sm text-muted-foreground">
                                 Queue is clear. Drop your first video above.
                             </p>
+                            </div>
                         ) : (
                             <div className="space-y-2">
                                 {projects.map((p) => <QueueRow key={p.id} project={p} onCancel={setConfirmTarget} />)}
@@ -634,9 +636,11 @@ export default function Home({ projects, limits }) {
                     }}
                 >
                     {shown == null ? (
-                        <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                        <div className="flex h-full items-center justify-center px-4">
+                            <p className="text-center text-sm text-muted-foreground">
                             Nothing here yet — uploads appear here grouped by project.
                         </p>
+                        </div>
                     ) : (
                         <div
                             key={shown.id}
