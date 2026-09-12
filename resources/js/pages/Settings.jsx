@@ -154,7 +154,7 @@ export default function Settings({ settings, model_presets }) {
                                 </span>
                             </div>
                             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                                <p className="text-xs text-muted-foreground">Reviewed by Kebir Cesko and Arianit Tershnjaku.</p>
+                                <p className="text-xs text-muted-foreground">Reviewed by Kebir Çesko and Arianit Tërshnjaku.</p>
                                 <p className="font-mono text-[11px] text-muted-foreground">Local-first · stays on this machine.</p>
                             </div>
                         </div>
