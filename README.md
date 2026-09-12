@@ -1,35 +1,78 @@
-# DigiClip dev setup
+<p align="center">
+  <img src="public/icon.png" width="128" height="128" alt="DigiClip logo" />
+</p>
 
-Stack: Laravel 13 + NativePHP Desktop v2 (`nativephp/desktop`) + Inertia
-React + shadcn/ui (neutral, dark-first) + SQLite.
+<h1 align="center">DigiClip</h1>
 
-## 0. Toolchain (this machine, no sudo)
+<p align="center">
+  <strong>Drop a video, get TikTok-ready clips.</strong><br />
+  Offline-first desktop app that transcribes long-form video, finds the moments worth posting,
+  and renders captioned 9:16 clips — no cloud render farm required.
+</p>
 
-User-space toolchain lives in `~/.local` (Node 22, PHP 8.3 via Ubuntu
-`apt download` + `dpkg-deb -x`, Composer 2.10). Every shell command in this
-project needs these two exports (the composer-spawned `artisan` also needs
-them, it uses the raw PHP binary, see `PHPRC`):
+<p align="center">
+  <a href="https://github.com/n1ssyyy/DigiClip/actions/workflows/ci.yml"><img src="https://github.com/n1ssyyy/DigiClip/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/n1ssyyy/DigiClip/releases"><img src="https://img.shields.io/github/v/release/n1ssyyy/DigiClip" alt="Latest release" /></a>
+  <img src="https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white" alt="PHP 8.3" />
+  <img src="https://img.shields.io/badge/Laravel-13-FF2D20?logo=laravel&logoColor=white" alt="Laravel 13" />
+  <img src="https://img.shields.io/badge/NativePHP-Desktop-000000" alt="NativePHP Desktop" />
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT license" />
+</p>
 
-```bash
-export PHPRC="$HOME/.local/php-root"
-export LD_LIBRARY_PATH="$HOME/.local/php-root/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
+---
+
+## ✨ Features
+
+- **Drag-and-drop ingest** — `.mp4`, `.mov`, `.mkv`, `.webm`, `.m4a` up to 500 MB (configurable).
+- **Offline transcription** — [whisper.cpp](https://github.com/ggerganov/whisper.cpp) sidecar (`tiny.en` → `large-v3`) with word-level timestamps. No Python, no torch, no API bill for STT.
+- **Smart clip picking** — bring-your-own-key [OpenRouter](https://openrouter.ai) LLM scores viral moments (hook, payoff, self-containment), with an offline heuristic fallback when no key is set.
+- **Vertical renders** — 1080×1920 H.264 + faststart, center-crop 9:16, loudness-normalized mobile audio (`loudnorm`), hardware encoder auto-pick (VideoToolbox / NVENC / libx264).
+- **8 caption presets** — `tiktok`, `karaoke`, `hormozi`, `minimal`, `beast`, `neon`, `highlight`, `ghost`, burned in via libass (plus downloadable `.srt`).
+- **Live UI, no refresh buttons** — project status and render progress stream over Laravel Reverb websockets (autostarted inside the desktop app).
+- **Queue-resilient pipeline** — pause, resume, retry, cancel; failed jobs report inline. Media jobs run on a dedicated queue worker (1 GB / 30 min).
+- **Desktop-native** — [NativePHP Desktop v2](https://nativephp.com) (Electron shell, frameless dark-first UI, system health probe at `/health`).
+- **Private by default** — video, transcripts and renders stay in local SQLite + `storage/`; only clip *scoring* optionally calls OpenRouter.
+
+## 🧭 How it works
+
+```
+Upload ─▶ ExtractAudio ─▶ Transcribe ─▶ AnalyzeClips ─▶ RenderClip(s)
+  │            │               │               │                │
+  │        ffmpeg 16kHz    whisper.cpp    OpenRouter LLM    ffmpeg 9:16
+  │         mono WAV       word timings   or heuristic      + libass burn
+  │                                            fallback
+  └────────────────── queues: transcribe · default · render ──────────────────┘
+                              realtime: Reverb → Echo → React
 ```
 
-Add them to `~/.bashrc` to make them permanent. `~/.local/bin` must be on
-`PATH` (provides `php`, `composer`, `node`, `npm`).
+1. **Upload** (`POST /projects`) stores the source and chains `ExtractAudio → Transcribe → AnalyzeClips`.
+2. **ExtractAudioJob** pulls 16 kHz mono WAV + a poster frame via `FfmpegService`.
+3. **TranscribeJob** runs `WhisperCppTranscriber` (token timings when the binary provides them, even-split fallback otherwise) and stores words/segments/confidence.
+4. **AnalyzeClipsJob** asks OpenRouter for ranked candidates (15–90 s, default 3 clips) or falls back to `HeuristicScorer`; `ClipValidator` clamps ranges and styles.
+5. **RenderClipJob** cuts each candidate to captioned 1080×1920 MP4 with progress events (`render.progress`) on `project.{id}`.
 
-Verify: `php -v` → 8.3.6, `composer --version` → 2.10.x, `node -v` → v22,
-`php artisan native:debug Console -n` → full environment report.
+## 🛠 Tech stack
 
-`~/.local/php-root/php.ini` additionally sets `variables_order = "EGPCS"`
-(so `$_ENV` is populated) and `extension=iconv`. `AppServiceProvider`
-extends `ServeCommand::$passthroughVariables` with `PHPRC` +
-`LD_LIBRARY_PATH`, otherwise `artisan serve` spawns its `php -S` child
-with zero extensions and every request dies reading `.env`
-(symfony mbstring polyfill → missing `iconv()`). If serve ever 500s on
-every route, check the child env first (`/api/health` reports PHP exts).
+| Layer      | Choice |
+|------------|--------|
+| App        | Laravel 13, Inertia.js + React 19, Tailwind 4, shadcn/ui (neutral, dark-first) |
+| Desktop    | NativePHP Desktop v2 (Electron), auto-started Reverb + queue workers |
+| Realtime   | Laravel Reverb (localhost) + Laravel Echo / pusher-js |
+| STT        | whisper.cpp sidecar via `BinaryManager` + `ModelManager` |
+| Clip AI    | OpenRouter (BYOK, default `meta/muse-spark-1.3`) with offline heuristic fallback |
+| Render     | ffmpeg (bundled or system) + libass captions, loudnorm audio |
+| Data       | SQLite, database queue (`default` + `media`), local disk storage |
 
-## 1. First run
+## 🚀 Getting started
+
+### Prerequisites
+
+- PHP **8.3** with `ctype curl dom fileinfo mbstring openssl pdo pdo_sqlite tokenizer xml zip` (+ `iconv`)
+- Composer 2, Node **22** + npm
+- ffmpeg + ffprobe on `PATH` **or** bundled under `resources/bin/<platform>/` (see [Media binaries](#-media-binaries))
+- whisper.cpp `whisper-cli` binary + a `ggml-*.bin` model for real transcription (tests skip gracefully without them)
+
+### Web dev loop
 
 ```bash
 composer install
@@ -37,62 +80,125 @@ npm install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate
-npm run dev          # vite dev server
-php artisan serve    # Laravel (separate terminal)
-php artisan reverb:start --host=127.0.0.1 --port=8080   # realtime sockets (separate terminal)
+
+npm run dev                            # vite (terminal 1)
+php artisan serve                      # Laravel (terminal 2)
+php artisan reverb:start --host=127.0.0.1 --port=8080   # sockets (terminal 3)
 ```
 
-Open http://127.0.0.1:8000 → Home (dropzone). `/health` → system probe.
-(Dev servers are disposable: `php artisan serve --port=800X`. If a server
-starts 500ing after heavy file churn underneath it, restart it, PHP's
-built-in server keeps loaded classes in memory.)
+Open http://127.0.0.1:8000 → drop a video. `/health` shows the system probe.
 
-## 2. Tests + build + realtime
+### Desktop dev loop
 
 ```bash
-php artisan test     # green (feature + unit, incl. realtime handshake shape)
-npm run build        # production assets → public/build
+php artisan native:run -n              # Electron + queue workers + hot reload
 ```
 
-Live updates are event-based (Laravel Reverb on 127.0.0.1:8080 + Echo):
-`project.{id}` carries `project.status` + `render.progress`. No polling,
-no refresh buttons. In the packaged app the socket autostarts via
-`NativeAppServiceProvider` (ChildProcess `reverb`, persistent); in dev run
-`reverb:start` yourself. Verified end-to-end with a raw-websocket handshake
-test (event fired in tinker → received on the socket).
-
-## 3. NativePHP desktop
+### Production builds
 
 ```bash
-export PHPRC="$HOME/.local/php-root"   # every shell, like §0
-export LD_LIBRARY_PATH="$HOME/.local/php-root/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
-php artisan native:run -n    # dev loop (Electron + queue workers + hot reload)
-php artisan native:build linux
+php artisan native:build linux         # AppImage + deb
+php artisan native:build win           # NSIS installer (wine needed when cross-compiling from Linux)
 ```
 
-Queue workers (`config/nativephp.php`): `default` (512MB/300s) +
-`media` for `transcribe,render` (1024MB/1800s). `QUEUE_CONNECTION=database`.
+> **Known upstream wrinkle** (nativephp/desktop 2.3.0): the shipped `electron-plugin/dist/` can be stale and fail the Electron main build. Workaround after every `composer install/update`:
+> ```bash
+> npm run plugin:build --prefix vendor/nativephp/desktop/resources/electron
+> ```
+> CI does this automatically.
 
-Known upstream wrinkle (nativephp/desktop 2.3.0): the shipped
-`electron-plugin/dist/` is stale (missing `pdfPageSize.js`), so the Electron
-main build fails with "No electron app entry file found". Workaround (once
-per `composer install/update`):
-`npm run plugin:build` inside
-`vendor/nativephp/desktop/resources/electron/`, then re-run. The
-`/_native/api/* 403`s in logs are the expected `PreventRegularBrowserAccess`
-gate (only the app webview may call them).
+## ⚙️ Configuration
 
-## 4. Env knobs (see `.env.example`)
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `OPENROUTER_API_KEY` | — | BYOK key for LLM clip scoring. Unset → offline heuristic scorer. |
+| `OPENROUTER_MODEL` | `meta/muse-spark-1.3` | Scoring model (override per-project in Settings). |
+| `OPENROUTER_TOKEN_CAP` / `OPENROUTER_TIMEOUT_S` | `120000` / `90` | Prompt budget guard + HTTP timeout. |
+| `DIGICLIP_STT_MODEL` | `base.en` | `tiny.en`, `base.en`, `large-v3-turbo(-q5_0)`, `large-v3`. |
+| `DIGICLIP_UPLOAD_MAX_MB` | `500` | Upload cap (desktop `php.ini` allows 512 MB). |
+| `NATIVEPHP_APP_VERSION` | `1.0.0` | **Bump every release** — drives updater + installer filenames. |
+| Reverb `REVERB_*` / `VITE_REVERB_*` | localhost:8080 | Realtime socket; packaged app autostarts it. |
 
-`OPENROUTER_MODEL` (default `meta/muse-spark-1.3`), `DIGICLIP_STT_MODEL`
-(default `base.en`), `DIGICLIP_UPLOAD_MAX_MB` (default 500).
+In-app **Settings** page additionally controls OpenRouter key/model, STT model, clip count and default caption style.
 
-## 5. Map
+## 📦 Media binaries
 
-- `routes/web.php` — `/` Home, `/health`, `/api/health`, `POST /projects`
-- `app/Http/Controllers/{ProjectController,HealthController}.php`
-- `app/Services/System/HealthProbe.php`, ffmpeg/whisper/storage/db/queue probe
-- `app/Services` seams: `Stt/`, `Clips/`, `Captions/`, `Render/`
-- `config/digiclip.php` — upload/OpenRouter/STT/clip defaults
-- `resources/js/{pages/{Home,Health,Settings},layouts/AppLayout,components/ui/*}`, shadcn neutral
-- `tests/Feature/SmokeTest.php`
+`App\Services\Stt\BinaryManager` resolves each binary in order:
+
+1. `resources/bin/<platform>/` (`linux-x64`, `linux-arm64`, `mac-x64`, `mac-arm64`, `win-x64`)
+2. System `PATH`
+
+Linux ships `ffmpeg`, `ffprobe`, `whisper-cli` today. Whisper models live in `storage/app/digiclip/models/` (`ggml-base.en.bin` ≈ 142 MB). `/api/health` reports exactly what's resolved — check there first when a job fails.
+
+## 🧪 Tests & code style
+
+```bash
+php artisan test        # feature + unit (media tests skip cleanly without binaries/fixtures)
+npm run build           # production assets → public/build
+vendor/bin/pint --test  # Laravel Pint style check
+```
+
+## 🤖 CI / CD
+
+`.github/workflows/ci.yml` runs on pushes to `main`, PRs and tags:
+
+| Job | Runner | Does |
+|-----|--------|------|
+| `test` | `ubuntu-latest` | composer + npm install, `npm run build`, `php artisan test`, Pint |
+| `build-linux` | `ubuntu-latest` | Electron system deps, plugin workaround, `native:build linux` → AppImage + deb artifacts |
+| `build-windows` | `windows-latest` | same via native toolchain, `native:build win` → NSIS `.exe` artifact |
+| `release` | `ubuntu-latest` | on `v*` tags only: attaches both platforms' installers to the GitHub Release |
+
+Cut a release:
+
+```bash
+# bump config/nativephp.php 'version' (or NATIVEPHP_APP_VERSION), then:
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+Unsigned builds are the default and install fine for personal/team distribution; for public auto-update + SmartScreen/Gatekeeper trust, add signing secrets (see [NativePHP code signing](https://nativephp.com/docs/desktop/2/publishing/building)) and extend the workflow env.
+
+## 🗺 Project map
+
+```
+routes/web.php            / Home · /health · /api/health · POST /projects · renders · settings
+app/Http/Controllers/     Project · Transcript · Render · Settings · Health · Window · Link
+app/Jobs/                 ExtractAudio · Transcribe · AnalyzeClips · RenderClip
+app/Services/Stt/         WhisperCppTranscriber · ModelManager · BinaryManager
+app/Services/Clips/       OpenRouterClient · ClipPrompt · HeuristicScorer · ClipValidator
+app/Services/Render/      RenderService (9:16 + libass + loudnorm + progress)
+app/Services/Captions/    AssBuilder (8 presets) · SrtBuilder
+app/Services/Media/       FfmpegService (extract / poster / probe)
+app/Services/System/      HealthProbe (/health + /api/health)
+config/digiclip.php       upload · OpenRouter pricing/caps · STT models · clip bounds
+resources/js/pages/       Home (dropzone + pipeline + clips) · Health · Settings
+```
+
+## 🩺 Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| Every route 500s after `artisan serve` | Child `php -S` lost extensions — ensure `iconv`/mbstring load in the serving PHP (`/api/health` lists them). |
+| `whisper-cli` / `ffmpeg not found` | Check `/health`; add binary to `resources/bin/<platform>/` or `PATH`. |
+| Transcribe/render jobs stuck | `QUEUE_CONNECTION=database`; in dev run a worker (`php artisan queue:work`), desktop autostarts them. |
+| Electron build: "No electron app entry file found" | Stale `electron-plugin/dist/` — run the `plugin:build` workaround above. |
+| `/_native/api/* 403` in logs | Expected: `PreventRegularBrowserAccess` gate, only the app webview may call them. |
+
+## 🗺 Roadmap
+
+- [ ] **Speaker autofocus** — face-tracked 9:16 crop that follows whoever is talking (track planner feeding a dynamic `crop` expression into `RenderService`; mouth-motion heuristic first, neural ASD later).
+- [ ] Chunked/resumable uploads for 2 GB+ sources.
+- [ ] Two-person / letterbox framing presets.
+- [ ] Signed releases + auto-update channel.
+
+## 🤝 Contributing
+
+PRs welcome: fork, branch, `php artisan test` + `vendor/bin/pint --test` green, open a PR against `main`. CI must stay green on Linux and Windows.
+
+## 📄 License
+
+MIT — see `composer.json`. Video you process stays yours and stays local.
+
+## 🙏 Acknowledgements
+
+Laravel · NativePHP · Inertia.js · whisper.cpp · ffmpeg · OpenRouter · Reverb · Tailwind CSS.
