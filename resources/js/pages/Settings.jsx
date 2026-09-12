@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { KeyRound } from 'lucide-react';
-import shkollaLogo from '../assets/shkolla.png';
+import shkollaIcon from '../assets/shkolla-icon.png';
 import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -116,34 +116,34 @@ export default function Settings({ settings, model_presets }) {
                                         href="https://github.com/n1ssyyy"
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="font-semibold text-foreground hover:underline"
+                                        className="font-semibold text-foreground"
                                     >
                                         n1ssyyy
                                     </a>
+                                    {' '}in collaboration with <span className="font-semibold text-foreground">Shkolla Digjitale</span>
                                 </span>
-                                <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    in collaboration with
+                                <span className="ml-auto flex items-center gap-2">
                                     <a
                                         href="https://shkolladigjitale.com/"
                                         target="_blank"
                                         rel="noreferrer"
                                         title="Shkolla Digjitale Prizren"
                                         aria-label="Shkolla Digjitale Prizren"
-                                        className="inline-flex h-8 items-center rounded-md bg-white px-2 hover:brightness-110"
+                                        className="inline-flex size-8 items-center justify-center rounded-md bg-white hover:brightness-110"
                                     >
-                                        <img src={shkollaLogo} alt="" className="h-5 w-auto" />
+                                        <img src={shkollaIcon} alt="" className="size-5" />
+                                    </a>
+                                    <a
+                                        href="https://github.com/n1ssyyy/DigiClip"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title="DigiClip on GitHub"
+                                        aria-label="DigiClip on GitHub"
+                                        className="inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent"
+                                    >
+                                        <img src={githubMark} alt="" className="size-4" />
                                     </a>
                                 </span>
-                                <a
-                                    href="https://github.com/n1ssyyy/DigiClip"
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    title="DigiClip on GitHub"
-                                    aria-label="DigiClip on GitHub"
-                                    className="ml-auto inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent"
-                                >
-                                    <img src={githubMark} alt="" className="size-4" />
-                                </a>
                             </div>
                             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                                 <p className="text-xs text-muted-foreground">Reviewed by Kebir Cesko and Arianit Tershnjaku.</p>
