@@ -128,26 +128,29 @@ jobs:
         run: npm run build
 
       - name: Build ${{ matrix.target }} installer
-        run: php artisan native:build ${{ matrix.target }} --no-interaction
+        # NativePHP emits installers to nativephp/electron/dist (not ./build).
+        # Pin arch=x64: the default linux target also builds arm64 and the
+        # two AppImages share one filename (arm64 would clobber x64).
+        run: php artisan native:build ${{ matrix.target }} x64 --no-interaction
 
       - name: List build output
         shell: bash
         run: |
-          ls -la build 2>/dev/null || true
-          find build -maxdepth 4 -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.exe' -o -name '*.msi' -o -name '*.zip' -o -name '*.yml' \) 2>/dev/null || true
+          ls -la nativephp/electron/dist 2>/dev/null || true
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: digiclip-${{ matrix.target }}
           path: |
-            build/**/*.AppImage
-            build/**/*.deb
-            build/**/*.exe
-            build/**/*.msi
-            build/**/*.zip
-            build/**/latest*.yml
-          if-no-files-found: warn
+            nativephp/electron/dist/*.AppImage
+            nativephp/electron/dist/*.deb
+            nativephp/electron/dist/*.exe
+            nativephp/electron/dist/*.msi
+            nativephp/electron/dist/*.zip
+            nativephp/electron/dist/*.yml
+            nativephp/electron/dist/*.blockmap
+          if-no-files-found: error
           retention-days: 14
 
   release:
