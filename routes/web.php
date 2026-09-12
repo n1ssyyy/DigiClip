@@ -33,6 +33,7 @@ Route::get('/api/echo-debug', function (\Illuminate\Http\Request $request) {
 
 Route::get('/health', [HealthController::class, 'index'])->name('health');
 Route::get('/api/health', [HealthController::class, 'show'])->name('api.health');
+Route::get('/api/snapshot', [HealthController::class, 'snapshot'])->name('api.snapshot');
 
 // Custom frameless titlebar controls (no-op outside the native runtime).
 Route::post('/native/window/minimize', [WindowController::class, 'minimize'])->name('native.window.minimize');

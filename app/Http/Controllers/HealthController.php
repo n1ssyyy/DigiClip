@@ -17,4 +17,19 @@ class HealthController extends Controller
     {
         return response()->json($probe->report());
     }
+
+    /** Live pipeline counts for the health snapshot strip. */
+    public function snapshot()
+    {
+        $projects = \App\Models\Project::query()
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status');
+        $renders = \App\Models\Render::query()
+            ->selectRaw('status, COUNT(*) as c')
+            ->groupBy('status')
+            ->pluck('c', 'status');
+
+        return response()->json(['projects' => $projects, 'renders' => $renders]);
+    }
 }
