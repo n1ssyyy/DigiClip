@@ -45,11 +45,21 @@ const LIVE_LABEL = {
     clips_ready: 'Ready', paused: 'Paused', failed: 'Failed',
 };
 
+// Status signal, one language everywhere: green done, orange working,
+// red broken. (The scroller's active pill is the single exception: it
+// reads white when ready so it pops against the dots.)
 function statusDot(status) {
     if (status === 'failed') return 'bg-red-500';
-    if (status === 'paused') return 'bg-amber-500';
     if (status === 'clips_ready') return 'bg-emerald-500';
-    return 'animate-pulse bg-emerald-500';
+    return 'animate-pulse bg-orange-500';
+}
+
+// Scroller names read the same signal as the pill: white done,
+// orange working, red broken.
+function statusText(status) {
+    if (status === 'failed') return 'text-red-500';
+    if (status === 'clips_ready') return 'text-white';
+    return 'text-orange-500';
 }
 
 function fmtDur(s) {
@@ -83,7 +93,7 @@ function Stepper({ status }) {
                                 active && 'animate-pulse bg-primary ring-4 ring-primary/20',
                                 failedDot && 'bg-red-500 ring-4 ring-red-500/20',
                                 !done && !active && !failedDot && 'bg-border',
-                                st.paused && !done && 'bg-amber-500/50',
+                                st.paused && !done && 'bg-orange-500/50',
                             )}
                         />
                         {i < STEPS.length - 1 && (
@@ -161,18 +171,14 @@ function QueueRow({ project, onCancel }) {
                     poster={`/projects/${project.id}/poster`}
                     src={`/projects/${project.id}/stream`}
                 />
+                <span className={cn('absolute top-1.5 left-1.5 size-2 rounded-full ring-2 ring-black/50', statusDot(project.status))} aria-hidden />
             </div>
             <div className="flex min-w-0 flex-1 flex-col justify-between gap-2 self-stretch py-0.5">
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                     <p className="truncate text-sm font-medium" title={project.name}>{project.name}</p>
-                    <span className={cn(
-                        'flex items-center gap-1.5 text-xs whitespace-nowrap',
-                        failed ? 'text-red-500' : 'text-muted-foreground',
-                    )}
-                    >
-                        <span className={cn('size-1.5 rounded-full', statusDot(project.status))} aria-hidden />
+                    <Badge variant="secondary" className={cn('whitespace-nowrap', failed && 'text-red-500')}>
                         {label}
-                    </span>
+                    </Badge>
                     <span className="flex items-center justify-end gap-0.5">
                         {pausable && (
                             <button
@@ -223,14 +229,80 @@ function QueueRow({ project, onCancel }) {
 
 /** One generated clip: title, time range, and its render state, a download
  *  button the moment the video file exists. */
-function ClipTile({ clip, tall }) {
+/** In-app video player: same overlay language as the cancel dialog. */
+function PlayerDialog({ title, sub, src, poster, onClose }) {
+    useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={title}
+                className="w-[min(760px,100%)] rounded-lg border bg-card p-4 shadow-2xl"
+            >
+                <div className="flex items-center gap-2 pb-3">
+                    <p className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</p>
+                    {sub && <p className="shrink-0 font-mono text-[11px] text-muted-foreground">{sub}</p>}
+                    <button
+                        type="button" title="Close player" aria-label="Close player" autoFocus
+                        onClick={onClose}
+                        className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                    >
+                        <X className="size-4" aria-hidden />
+                    </button>
+                </div>
+                <video
+                    key={src}
+                    className="aspect-video w-full rounded-md bg-black"
+                    src={src}
+                    poster={poster}
+                    controls
+                    autoPlay
+                    playsInline
+                />
+            </div>
+        </div>
+    );
+}
+
+function ClipTile({ clip, tall, projectName, onPlay }) {
     const renders = clip.renders ?? [];
     const render = renders[renders.length - 1] ?? null;
+    const playable = render?.status === 'done';
     return (
-        <div className={cn(
-            'flex min-h-0 flex-col justify-between overflow-hidden rounded-md border bg-card p-2',
-            tall && 'row-span-2',
-        )}
+        <div
+            role={playable ? 'button' : undefined}
+            tabIndex={playable ? 0 : undefined}
+            title={playable ? `Play ${clip.title || `Clip #${clip.rank}`}` : undefined}
+            aria-label={playable ? `Play ${clip.title || `Clip #${clip.rank}`}` : undefined}
+            onClick={playable ? () => onPlay({
+                title: clip.title || `Clip #${clip.rank}`,
+                sub: projectName,
+                src: `/renders/${render.id}/stream`,
+            }) : undefined}
+            onKeyDown={playable ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onPlay({
+                        title: clip.title || `Clip #${clip.rank}`,
+                        sub: projectName,
+                        src: `/renders/${render.id}/stream`,
+                    });
+                }
+            } : undefined}
+            className={cn(
+                'flex min-h-0 flex-col justify-between overflow-hidden rounded-md border bg-card p-2',
+                tall && 'row-span-2',
+                playable && 'cursor-pointer transition-colors hover:border-muted-foreground/40',
+            )}
         >
             <span className="flex items-center gap-1.5 text-xs font-medium">
                 <Film className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
@@ -243,6 +315,7 @@ function ClipTile({ clip, tall }) {
                         href={`/renders/${render.id}/download`}
                         title={`Download clip #${clip.rank}`}
                         aria-label={`Download clip #${clip.rank}`}
+                        onClick={(e) => e.stopPropagation()}
                         className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
                     >
                         <Download className="size-3.5" aria-hidden />
@@ -322,8 +395,8 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
                                     <span
                                         style={{ opacity: nameOpacity }}
                                         className={cn(
-                                            'block max-w-36 truncate text-right text-sm transition-opacity motion-safe:duration-300',
-                                            current ? 'font-semibold text-foreground' : 'text-muted-foreground hover:text-foreground',
+                                            'block max-w-36 truncate text-right text-sm transition-all motion-safe:duration-300',
+                                            current ? `font-semibold ${statusText(p.status)}` : 'text-muted-foreground hover:text-foreground',
                                         )}
                                     >
                                         {p.name}
@@ -383,6 +456,7 @@ export default function Home({ projects, limits }) {
     const touchY = useRef(null);
     const [dragging, setDragging] = useState(false);
     const [confirmTarget, setConfirmTarget] = useState(null);
+    const [player, setPlayer] = useState(null);
     const [uploading, setUploading] = useState(null);
     const [activeId, setActiveId] = useState(projects[0]?.id ?? null);
     const [dir, setDir] = useState(null);
@@ -601,8 +675,8 @@ export default function Home({ projects, limits }) {
                         {shown != null && (
                             <>
                                 <Badge variant="secondary" className="gap-1.5">
-                                    <span className={cn('size-1.5 rounded-full', statusDot(shown.status))} aria-hidden />
                                     {LIVE_LABEL[shown.status] ?? shown.status}
+                                    <span className={cn('size-1.5 rounded-full', statusDot(shown.status))} aria-hidden />
                                     <span className="font-mono text-[11px]">
                                         {shownIdx + 1}/{projects.length}
                                     </span>
@@ -658,7 +732,28 @@ export default function Home({ projects, limits }) {
                                 once there are more. */}
                             <div className={cn('grid min-h-0 flex-1 gap-2', gridCls)}>
                                 <div
-                                    className={cn('relative min-h-0 overflow-hidden rounded-md bg-muted', sourceCls)}
+                                    role="button"
+                                    tabIndex={0}
+                                    title={`Play ${shown.name}`}
+                                    aria-label={`Play ${shown.name}`}
+                                    onClick={() => setPlayer({
+                                        title: shown.name,
+                                        sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
+                                        src: `/projects/${shown.id}/stream`,
+                                        poster: `/projects/${shown.id}/poster`,
+                                    })}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            setPlayer({
+                                                title: shown.name,
+                                                sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
+                                                src: `/projects/${shown.id}/stream`,
+                                                poster: `/projects/${shown.id}/poster`,
+                                            });
+                                        }
+                                    }}
+                                    className={cn('relative min-h-0 cursor-pointer overflow-hidden rounded-md bg-muted transition-colors hover:ring-1 hover:ring-muted-foreground/40', sourceCls)}
                                 >
                                     <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
                                     <video
@@ -671,13 +766,13 @@ export default function Home({ projects, limits }) {
                                         SOURCE{fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''}
                                     </span>
                                     {clipCount === 0 && shown.status !== 'failed' && (
-                                        <span className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
+                                        <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
                                             Clips land here
                                         </span>
                                     )}
                                 </div>
                                 {visClips.map((c) => (
-                                    <ClipTile key={c.id} clip={c} tall={tallClip} />
+                                    <ClipTile key={c.id} clip={c} tall={tallClip} projectName={shown.name} onPlay={setPlayer} />
                                 ))}
                                 {clipCount > 5 && (
                                     <button
@@ -696,6 +791,9 @@ export default function Home({ projects, limits }) {
             </Card>
             {confirmTarget && (
                 <CancelDialog project={confirmTarget} onClose={() => setConfirmTarget(null)} />
+            )}
+            {player && (
+                <PlayerDialog {...player} onClose={() => setPlayer(null)} />
             )}
         </div>
     );
