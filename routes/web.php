@@ -14,6 +14,7 @@ Route::get('/projects/{project}/transcript', [TranscriptController::class, 'show
 Route::get('/projects/{project}/transcript.srt', [TranscriptController::class, 'download'])->name('transcript.srt');
 Route::get('/renders/{render}/download', [RenderController::class, 'download'])->name('renders.download');
 Route::get('/renders/{render}/stream', [RenderController::class, 'stream'])->name('renders.stream');
+Route::get('/renders/{render}/poster', [RenderController::class, 'poster'])->name('renders.poster');
 Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
 Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
 Route::get('/api/openrouter-models', [SettingsController::class, 'models'])->name('api.models');

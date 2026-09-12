@@ -93,4 +93,24 @@ class AssBuilderTest extends TestCase
         $this->assertSame('0:05:04.20', AssBuilder::stamp(304.2));
         $this->assertSame('1:00:00.00', AssBuilder::stamp(3600.0));
     }
+
+    public function test_offset_shifts_dialogue_to_clip_time(): void
+    {
+        $ass = (new AssBuilder)->build($this->words(), 'tiktok', 100.0);
+
+        // First word starts at 0.0s source time, shifted back 100s and clamped.
+        $this->assertStringContainsString('Dialogue: 0,0:00:00.00,', $ass);
+        $this->assertStringNotContainsString('0:01:40', $ass);
+    }
+
+    public function test_lone_punctuation_attaches_to_previous_word(): void
+    {
+        $ass = (new AssBuilder)->build([
+            ['w' => 'really', 's' => 0.0, 'e' => 0.4, 'conf' => 0.9],
+            ['w' => '?', 's' => 0.4, 'e' => 0.5, 'conf' => 0.9],
+        ], 'minimal');
+
+        $this->assertStringContainsString('{\\k50}really?', $ass);
+        $this->assertStringNotContainsString('}?', $ass);
+    }
 }

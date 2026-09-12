@@ -100,4 +100,35 @@ class RenderTest extends TestCase
         $missing = $clip->renders()->create(['preset' => 'tiktok', 'status' => 'failed']);
         $this->get("/renders/{$missing->id}/stream")->assertNotFound();
     }
+
+    public function test_poster_generates_from_finished_render(): void
+    {
+        if (! is_file(resource_path('bin/linux-x64/ffmpeg'))) {
+            $this->markTestSkipped('missing media binaries');
+        }
+        if (! is_file(base_path('tests/Fixtures/sample.mp4'))) {
+            $this->markTestSkipped('missing fixture video');
+        }
+
+        file_put_contents(
+            storage_path('app/render-poster.mp4'), file_get_contents(base_path('tests/Fixtures/sample.mp4'))
+        );
+        $project = Project::create([
+            'name' => 'poster', 'source_path' => 'render-poster.mp4',
+            'mime' => 'video/mp4', 'size_bytes' => 1, 'status' => 'clips_ready',
+        ]);
+        $clip = ClipCandidate::create([
+            'project_id' => $project->id, 'rank' => 1, 'start_s' => 0, 'end_s' => 5,
+        ]);
+        $render = $clip->renders()->create([
+            'preset' => 'tiktok', 'status' => 'done', 'mp4_path' => 'render-poster.mp4',
+        ]);
+
+        $this->get("/renders/{$render->id}/poster")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg');
+
+        $missing = $clip->renders()->create(['preset' => 'tiktok', 'status' => 'failed']);
+        $this->get("/renders/{$missing->id}/poster")->assertNotFound();
+    }
 }

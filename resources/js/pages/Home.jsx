@@ -231,6 +231,8 @@ function QueueRow({ project, onCancel }) {
  *  button the moment the video file exists. */
 /** In-app video player: same overlay language as the cancel dialog. */
 function PlayerDialog({ title, sub, src, poster, onClose }) {
+    const [waiting, setWaiting] = useState(true);
+
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
@@ -259,15 +261,26 @@ function PlayerDialog({ title, sub, src, poster, onClose }) {
                         <X className="size-4" aria-hidden />
                     </button>
                 </div>
-                <video
-                    key={src}
-                    className="aspect-video w-full rounded-md bg-black"
-                    src={src}
-                    poster={poster}
-                    controls
-                    autoPlay
-                    playsInline
-                />
+                <div className="relative">
+                    {waiting && (
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
+                            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                        </span>
+                    )}
+                    <video
+                        key={src}
+                        className="aspect-video w-full rounded-md bg-black"
+                        src={src}
+                        poster={poster}
+                        controls
+                        autoPlay
+                        playsInline
+                        preload="auto"
+                        onCanPlay={() => setWaiting(false)}
+                        onPlaying={() => setWaiting(false)}
+                        onWaiting={() => setWaiting(true)}
+                    />
+                </div>
             </div>
         </div>
     );
@@ -307,6 +320,18 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
             <span className="flex items-center gap-1.5 text-xs font-medium">
                 <Film className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="truncate">{clip.title || `Clip #${clip.rank}`}</span>
+            </span>
+            <span className="relative my-1 min-h-0 flex-1 overflow-hidden rounded bg-muted/50">
+                <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
+                {playable && (
+                    <img
+                        src={`/renders/${render.id}/poster`}
+                        alt=""
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        className="absolute inset-0 h-full w-full object-cover"
+                    />
+                )}
             </span>
             <span className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
                 <span className="truncate">#{clip.rank}{fmtRange(clip.start_s, clip.end_s) ? ` · ${fmtRange(clip.start_s, clip.end_s)}` : ''}</span>
@@ -562,15 +587,19 @@ export default function Home({ projects, limits }) {
         });
     }
 
-    // Live queue: Reverb pushes status events per project; poll as backup.
+    // Live queue: Reverb pushes status + render events per project; poll as backup.
     useEffect(() => {
         const ids = projects.map((p) => p.id);
         const echo = getEcho();
         if (echo) {
             ids.forEach((id) => {
-                echo.channel(`project.${id}`).listen('.project.status', () => {
-                    router.reload({ only: ['projects'] });
-                });
+                echo.channel(`project.${id}`)
+                    .listen('.project.status', () => {
+                        router.reload({ only: ['projects'] });
+                    })
+                    .listen('.render.progress', () => {
+                        router.reload({ only: ['projects'] });
+                    });
             });
         }
         const onVisible = () => {

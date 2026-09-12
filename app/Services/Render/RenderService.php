@@ -39,7 +39,8 @@ class RenderService
         @mkdir($dir, 0755, true);
 
         $assPath = "{$dir}/clip.ass";
-        file_put_contents($assPath, $this->ass->build($slice, $clip->caption_style));
+        // The cut resets to 0, so dialogue stamps shift back by the clip start.
+        file_put_contents($assPath, $this->ass->build($slice, $clip->caption_style, (float) $clip->start_s));
         $srtPath = "{$dir}/clip.srt";
         file_put_contents($srtPath, $this->srt->fromWords($slice));
 
