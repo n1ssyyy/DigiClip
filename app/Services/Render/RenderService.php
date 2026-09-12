@@ -11,9 +11,9 @@ use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * Clip → 1080×1920 captioned MP4 (PLAN.MD §7).
+ * Clip → 1080×1920 captioned MP4.
  * Center-crop 9:16 (face-track replaces the crop expr in V2), libass burn,
- * loudnorm mobile audio, H.264 + faststart. Progress 0–100 via callback.
+ * loudnorm mobile audio, H.264 + faststart. Progress 0-100 via callback.
  */
 class RenderService
 {

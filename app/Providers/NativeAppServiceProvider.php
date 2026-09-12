@@ -61,7 +61,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
     public function phpIni(): array
     {
         return [
-            // Video uploads (PLAN.MD §1: up to 500MB in dev; chunked uploads in V2)
+            // Video uploads (up to 500MB in dev; chunked uploads in V2)
             'upload_max_filesize' => '512M',
             'post_max_size' => '512M',
             'max_execution_time' => 0,

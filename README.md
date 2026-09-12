@@ -1,15 +1,14 @@
-# DigiClip — dev setup
+# DigiClip dev setup
 
-M0 scaffold: Laravel 13 + NativePHP Desktop v2 (`nativephp/desktop`) + Inertia
-React + shadcn/ui (neutral, dark-first) + SQLite. See `PLAN.MD` for the full
-production plan.
+Stack: Laravel 13 + NativePHP Desktop v2 (`nativephp/desktop`) + Inertia
+React + shadcn/ui (neutral, dark-first) + SQLite.
 
 ## 0. Toolchain (this machine, no sudo)
 
 User-space toolchain lives in `~/.local` (Node 22, PHP 8.3 via Ubuntu
 `apt download` + `dpkg-deb -x`, Composer 2.10). Every shell command in this
 project needs these two exports (the composer-spawned `artisan` also needs
-them — it uses the raw PHP binary, see `PHPRC`):
+them, it uses the raw PHP binary, see `PHPRC`):
 
 ```bash
 export PHPRC="$HOME/.local/php-root"
@@ -25,7 +24,7 @@ Verify: `php -v` → 8.3.6, `composer --version` → 2.10.x, `node -v` → v22,
 `~/.local/php-root/php.ini` additionally sets `variables_order = "EGPCS"`
 (so `$_ENV` is populated) and `extension=iconv`. `AppServiceProvider`
 extends `ServeCommand::$passthroughVariables` with `PHPRC` +
-`LD_LIBRARY_PATH` — otherwise `artisan serve` spawns its `php -S` child
+`LD_LIBRARY_PATH`, otherwise `artisan serve` spawns its `php -S` child
 with zero extensions and every request dies reading `.env`
 (symfony mbstring polyfill → missing `iconv()`). If serve ever 500s on
 every route, check the child env first (`/api/health` reports PHP exts).
@@ -43,9 +42,9 @@ php artisan serve    # Laravel (separate terminal)
 php artisan reverb:start --host=127.0.0.1 --port=8080   # realtime sockets (separate terminal)
 ```
 
-Open http://127.0.0.1:8000 → Inbox (dropzone). `/health` → system probe.
+Open http://127.0.0.1:8000 → Home (dropzone). `/health` → system probe.
 (Dev servers are disposable: `php artisan serve --port=800X`. If a server
-starts 500ing after heavy file churn underneath it, restart it — PHP's
+starts 500ing after heavy file churn underneath it, restart it, PHP's
 built-in server keeps loaded classes in memory.)
 
 ## 2. Tests + build + realtime
@@ -88,12 +87,12 @@ gate (only the app webview may call them).
 `OPENROUTER_MODEL` (default `meta/muse-spark-1.3`), `DIGICLIP_STT_MODEL`
 (default `base.en`), `DIGICLIP_UPLOAD_MAX_MB` (default 500).
 
-## 5. Map (M0 files)
+## 5. Map
 
-- `routes/web.php` — `/` Inbox, `/health`, `/api/health`, `POST /projects`
+- `routes/web.php` — `/` Home, `/health`, `/api/health`, `POST /projects`
 - `app/Http/Controllers/{ProjectController,HealthController}.php`
-- `app/Services/System/HealthProbe.php` — ffmpeg/whisper/storage/db/queue probe
-- `app/Services` seams for M1+: `Stt/`, `Clips/`, `Captions/`, `Render/`
+- `app/Services/System/HealthProbe.php`, ffmpeg/whisper/storage/db/queue probe
+- `app/Services` seams: `Stt/`, `Clips/`, `Captions/`, `Render/`
 - `config/digiclip.php` — upload/OpenRouter/STT/clip defaults
-- `resources/js/{pages/{Inbox,Health},layouts/AppLayout,components/ui/*}` — shadcn neutral
-- `tests/Feature/M0SmokeTest.php`
+- `resources/js/{pages/{Home,Health,Settings},layouts/AppLayout,components/ui/*}`, shadcn neutral
+- `tests/Feature/SmokeTest.php`

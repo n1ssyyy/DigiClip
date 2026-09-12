@@ -31,7 +31,7 @@ export default function ModelPicker({ value, onChange }) {
             const data = await res.json();
             setModels(data.models ?? []);
         } catch (e) {
-            setError('Model list unavailable — type any slug manually below.');
+            setError('Model list unavailable. Type any slug manually below.');
         } finally {
             setLoading(false);
         }
@@ -162,7 +162,7 @@ export default function ModelPicker({ value, onChange }) {
                             </li>
                         ))}
                         {!error && !loading && filtered.length === 0 && (
-                            <li className="px-2 py-3 text-xs text-muted-foreground">No models match — clear search or filters.</li>
+                            <li className="px-2 py-3 text-xs text-muted-foreground">No models match. Clear search or filters.</li>
                         )}
                         {!error && loading && models === null && (
                             <li className="px-2 py-3 text-xs text-muted-foreground">Loading catalog…</li>

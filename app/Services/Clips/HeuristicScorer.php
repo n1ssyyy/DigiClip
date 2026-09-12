@@ -3,10 +3,10 @@
 namespace App\Services\Clips;
 
 /**
- * Offline fallback scorer (PLAN.MD §6): the app never dead-ends without an
+ * Offline fallback scorer: the app never dead-ends without an
  * OpenRouter key. Splits words into sentences, boosts questions / exclamations /
- * numbers / meaty lengths, then grows 20–45s windows around the best ones.
- * Output is RAW — the job still runs it through ClipValidator.
+ * numbers / meaty lengths, then grows 20-45s windows around the best ones.
+ * Output is RAW, the job still runs it through ClipValidator.
  */
 class HeuristicScorer
 {

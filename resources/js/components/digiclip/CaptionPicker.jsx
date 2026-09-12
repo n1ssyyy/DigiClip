@@ -7,7 +7,7 @@ export const CAPTION_STYLES = ['tiktok', 'karaoke', 'hormozi', 'minimal'];
 const inputCls = 'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /**
- * Caption style picker — same trigger + popover language as ModelPicker,
+ * Caption style picker, same trigger + popover language as ModelPicker,
  * minus the catalog machinery (four fixed styles).
  */
 export default function CaptionPicker({ value, onChange }) {

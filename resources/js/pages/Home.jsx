@@ -221,7 +221,7 @@ function QueueRow({ project, onCancel }) {
     );
 }
 
-/** One generated clip: title, time range, and its render state — a download
+/** One generated clip: title, time range, and its render state, a download
  *  button the moment the video file exists. */
 function ClipTile({ clip, tall }) {
     const renders = clip.renders ?? [];
@@ -389,7 +389,7 @@ export default function Home({ projects, limits }) {
     // snap: far jumps (wrap-around, distant tap) cut instead of sweeping.
     const [snap, setSnap] = useState(false);
     // shownId trails activeId: the outgoing videos fade out first, then the
-    // incoming project fades in — never a crossfade overlap.
+    // incoming project fades in, never a crossfade overlap.
     const [shownId, setShownId] = useState(projects[0]?.id ?? null);
     const [leaving, setLeaving] = useState(false);
     // Project names fade; pills always stay. Names surface on movement or
@@ -418,7 +418,7 @@ export default function Home({ projects, limits }) {
     const shownIdx = Math.max(0, ids.indexOf(shownId));
     const shown = projects[shownIdx] ?? null;
 
-    // Dynamic stage layout: the outer height stays fixed, the arrangement
+    // Dynamic grid layout: the outer height stays fixed, the arrangement
     // follows the clip count (vertical tiles for few, strip + grid for many).
     const showClips = shown?.clip_candidates ?? [];
     const clipCount = showClips.length;
@@ -458,7 +458,7 @@ export default function Home({ projects, limits }) {
     useEffect(() => {
         if (snap) setSnap(false);
     }, [activeId, snap]);
-    // New project on stage: clips start on page one.
+    // New project in view: clips start on page one.
     useEffect(() => {
         setClipPage(0);
     }, [shownId]);
@@ -522,7 +522,7 @@ export default function Home({ projects, limits }) {
 
     // Sequential swap: fade the current videos out, then show the incoming
     // project (which fades in from the travel direction). Fast successive
-    // flips collapse onto the latest target — no stale flash.
+    // flips collapse onto the latest target, no stale flash.
     useEffect(() => {
         if (activeId === shownId) return;
         const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -567,7 +567,7 @@ export default function Home({ projects, limits }) {
                         />
                         {uploading && (
                             <p className="pt-2 font-mono text-xs text-muted-foreground">
-                                {uploading.name} — {uploading.pct}%
+                                {uploading.name}, {uploading.pct}%
                             </p>
                         )}
                     </CardContent>
@@ -593,7 +593,7 @@ export default function Home({ projects, limits }) {
                 </Card>
             </div>
 
-            {/* RIGHT HALF: one project's videos at a time — scroll flips projects */}
+            {/* RIGHT HALF: one project's videos at a time, scroll flips projects */}
             <Card className="flex min-h-0 min-w-0 flex-col overflow-hidden">
                 <CardHeader className="shrink-0 px-4 py-3">
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-sm">
@@ -621,7 +621,7 @@ export default function Home({ projects, limits }) {
                         const rect = e.currentTarget.getBoundingClientRect();
                         const dist = rect.right - e.clientX;
                         // Hysteresis: appear when properly close, only vanish
-                        // once clearly away — no flicker at the boundary.
+                        // once clearly away, no flicker at the boundary.
                         if (dist < 120) showNamesSticky();
                         else if (dist > 230) hideNamesNow();
                     }}
@@ -638,7 +638,7 @@ export default function Home({ projects, limits }) {
                     {shown == null ? (
                         <div className="flex h-full items-center justify-center px-4">
                             <p className="text-center text-sm text-muted-foreground">
-                            Nothing here yet — uploads appear here grouped by project.
+                            Nothing here yet. Uploads appear here grouped by project.
                         </p>
                         </div>
                     ) : (
@@ -652,8 +652,8 @@ export default function Home({ projects, limits }) {
                                 !leaving && dir === 'up' && 'proj-enter-up',
                             )}
                         >
-                            {/* Dynamic stage: fixed outer height, but the
-                                arrangement follows the clip count — vertical
+                            {/* Dynamic grid: fixed outer height, but the
+                                arrangement follows the clip count, vertical
                                 tiles for a few videos, source strip + grid
                                 once there are more. */}
                             <div className={cn('grid min-h-0 flex-1 gap-2', gridCls)}>

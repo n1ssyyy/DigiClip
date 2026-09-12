@@ -3,7 +3,7 @@
 namespace App\Services\Clips;
 
 /**
- * Virality clip-picking prompts, Opus/Vizard style (PLAN.MD §6).
+ * Virality clip-picking prompts, Opus/Vizard style.
  * Transcript is chunked with [mm:ss] anchors; video bytes never leave the machine.
  */
 class ClipPrompt
@@ -45,7 +45,7 @@ class ClipPrompt
             $lines[] = $line;
         }
         if ($lines === []) {
-            // No segments (shouldn't happen) — rebuild from words in 10s blocks.
+            // No segments (shouldn't happen), rebuild from words in 10s blocks.
             $lines = self::fromWords($words);
         }
 

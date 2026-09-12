@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 /**
  * Custom frameless titlebar endpoints (WindowController).
- * Outside the native runtime the Electron bridge is absent — the actions
+ * Outside the native runtime the Electron bridge is absent, the actions
  * must degrade to a silent no-op (204), never a 500.
  */
 class WindowChromeTest extends TestCase

@@ -30,7 +30,7 @@ export default function AppLayout({ children }) {
             window.Native.on('Native\\Desktop\\Events\\Windows\\WindowMaximized', () => setMaximized(true));
             window.Native.on('Native\\Desktop\\Events\\Windows\\WindowUnmaximized', () => setMaximized(false));
         } catch {
-            // Older shell without the event bridge — local toggle state is enough.
+            // Older shell without the event bridge, local toggle state is enough.
         }
     }, []);
 
@@ -54,7 +54,6 @@ export default function AppLayout({ children }) {
                 >
                     <Clapperboard className="size-4" aria-hidden />
                     DigiClip
-                    <span className="rounded-full bg-secondary px-2 py-0.5 font-mono text-[11px] text-secondary-foreground">M0</span>
                 </Link>
                 <div className="flex-1" aria-hidden />
                 <WindowControls maximized={maximized} onToggleMaximize={toggleMaximize} />

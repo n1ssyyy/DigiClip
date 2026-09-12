@@ -6,7 +6,7 @@ return [
     'upload_max_mb' => (int) env('DIGICLIP_UPLOAD_MAX_MB', 500),
     'upload_max_kb' => (int) env('DIGICLIP_UPLOAD_MAX_MB', 500) * 1024,
 
-    // OpenRouter (BYOK, model default per PLAN.MD §6 / §14)
+    // OpenRouter (BYOK, model default)
     'openrouter' => [
         'base_url' => env('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
         'key' => env('OPENROUTER_API_KEY'),
@@ -23,7 +23,7 @@ return [
         'timeout_s' => (int) env('OPENROUTER_TIMEOUT_S', 90),
     ],
 
-    // Transcription (whisper.cpp sidecar, PLAN.MD §5)
+    // Transcription (whisper.cpp sidecar)
     'stt' => [
         'default_model' => env('DIGICLIP_STT_MODEL', 'base.en'),
         'models' => [

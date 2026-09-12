@@ -45,7 +45,7 @@ function SideLink({ href, label, active, children }) {
 /**
  * Icon-only rail (w-11, same as the header height). Buttons are small rounded
  * squares floating with padding around them; hovering grows just that button
- * rightward out of the rail to reveal its label — rail and siblings stay put.
+ * rightward out of the rail to reveal its label, rail and siblings stay put.
  */
 export default function Sidebar() {
     const { url } = usePage();

@@ -6,14 +6,14 @@ use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * whisper.cpp sidecar transcriber — no Python, no torch (PLAN.MD §5).
+ * whisper.cpp sidecar transcriber, no Python, no torch.
  * Requires 16kHz mono WAV in; emits word-level timestamps out.
  *
  * NOTE: whisper.cpp `--output-json` segment schema varies by release
  * (timestamps "HH:MM:SS,mmm" + text; newer builds add per-token timing).
  * parseOutput() prefers token timing when present, else distributes each
  * segment evenly across its words (captions still work, pop-style).
- * Verified against the real binary in the M1 binaries step.
+ * Verified against the real binary.
  */
 class WhisperCppTranscriber implements Transcriber
 {

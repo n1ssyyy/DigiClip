@@ -29,7 +29,7 @@
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-/* shadcn neutral — light */
+/* shadcn neutral - light */
 :root {
     --background: hsl(0 0% 100%);
     --foreground: hsl(0 0% 9%);
@@ -54,7 +54,7 @@
     --viral: #65a30d;
 }
 
-/* shadcn neutral — dark (DigiClip default: video-tool dark room) */
+/* shadcn neutral - dark (DigiClip default: video-tool dark room) */
 .dark {
     --background: hsl(0 0% 7%);
     --foreground: hsl(0 0% 93%);
@@ -135,7 +135,7 @@ body {
     scrollbar-color: var(--border) transparent;
 }
 
-/* Maximized windows go edge-to-edge — no radius. Toggled from AppLayout. */
+/* Maximized windows go edge-to-edge, no radius. Toggled from AppLayout. */
 .window-maximized #app {
     border-radius: 0;
 }

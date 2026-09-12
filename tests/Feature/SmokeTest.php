@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class M0SmokeTest extends TestCase
+class SmokeTest extends TestCase
 {
     use RefreshDatabase;
     public function test_inbox_renders(): void

@@ -23,7 +23,7 @@ export async function sendWindowAction(action) {
             },
         });
     } catch {
-        // Plain browser dev with no backend — window controls are inert.
+        // Plain browser dev with no backend, window controls are inert.
     }
 }
 

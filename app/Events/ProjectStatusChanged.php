@@ -9,7 +9,7 @@ use Illuminate\Foundation\Events\Dispatchable;
 
 /**
  * Fired on every project status transition (via Project model hook).
- * Public channel — single-user local app, no auth needed.
+ * Public channel, single-user local app, no auth needed.
  */
 class ProjectStatusChanged implements ShouldBroadcastNow
 {

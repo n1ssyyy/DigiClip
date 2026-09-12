@@ -12,7 +12,7 @@ use Native\Desktop\Facades\Window;
  * titlebar buttons POST here and we drive the Electron window server-side.
  * Every action is wrapped: outside the native runtime (plain browser dev,
  * tests) the Electron API bridge is absent, so we swallow the failure and
- * still answer 204 — window controls are a no-op on the web.
+ * still answer 204, window controls are a no-op on the web.
  */
 class WindowController extends Controller
 {
@@ -49,7 +49,7 @@ class WindowController extends Controller
         try {
             $action();
         } catch (\Throwable) {
-            // Not running inside Electron (browser dev / tests) — ignore.
+            // Not running inside Electron (browser dev / tests), ignore.
         }
     }
 }

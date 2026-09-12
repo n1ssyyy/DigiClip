@@ -41,7 +41,7 @@ return [
     /**
      * The description of your application.
      */
-    'description' => env('NATIVEPHP_APP_DESCRIPTION', 'DigiClip — drop a video, get TikTok-ready clips'),
+    'description' => env('NATIVEPHP_APP_DESCRIPTION', 'DigiClip, drop a video, get TikTok-ready clips'),
 
     /**
      * The Website of your application.
@@ -159,7 +159,7 @@ return [
             'timeout' => 300,
             'sleep' => 2,
         ],
-        // PLAN.MD §3: heavy media jobs (transcribe/render) get room to breathe.
+        // Heavy media jobs (transcribe/render) get room to breathe.
         'media' => [
             'queues' => ['transcribe', 'render'],
             'memory_limit' => 1024,

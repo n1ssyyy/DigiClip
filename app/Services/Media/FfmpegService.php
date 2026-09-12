@@ -7,8 +7,8 @@ use RuntimeException;
 use Symfony\Component\Process\Process;
 
 /**
- * ffmpeg wrapper (PLAN.MD §3, §7). Tolerant: ffprobe preferred, falls back to
- * parsing `ffmpeg -i` stderr. All meta fields nullable — never block ingest.
+ * ffmpeg wrapper. Tolerant: ffprobe preferred, falls back to
+ * parsing `ffmpeg -i` stderr. All meta fields nullable, never block ingest.
  */
 class FfmpegService
 {
@@ -32,7 +32,7 @@ class FfmpegService
 
     /**
      * Grab a single poster frame (~1s in, 320px wide). Tolerant: returns
-     * false on any failure — never block ingest for a thumbnail.
+     * false on any failure, never block ingest for a thumbnail.
      */
     public function poster(string $source, string $dest): bool
     {

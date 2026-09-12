@@ -3,7 +3,7 @@
 namespace App\Services\Stt;
 
 /**
- * Local speech-to-text seam (PLAN.MD §5).
+ * Local speech-to-text seam.
  * Implementations must run fully offline with word-level timestamps.
  */
 interface Transcriber
