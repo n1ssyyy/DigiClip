@@ -213,4 +213,8 @@ MIT — see `composer.json`. Video you process stays yours and stays local.
 
 ## 🙏 Acknowledgements
 
-Laravel · NativePHP · Inertia.js · whisper.cpp · ffmpeg · OpenRouter · Reverb · Tailwind CSS.
+Developed by [n1ssyyy](https://github.com/n1ssyyy) in collaboration with
+[Shkolla Digjitale](https://shkolladigjitale.com/) (Prizren).
+Reviewed by Kebir Çesko and Arianit Tërshnjaku.
+
+Built on Laravel · NativePHP · Inertia.js · whisper.cpp · ffmpeg · OpenRouter · Reverb · Tailwind CSS.
