@@ -59,8 +59,8 @@ export default function Settings({ settings, model_presets }) {
                     <CardTitle className="text-sm">Settings</CardTitle>
                 </CardHeader>
                 <CardContent className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-4 pt-1 pb-4">
-                    <div className="mx-auto my-auto w-full max-w-3xl space-y-8">
-                    <form id="settings-form" className="space-y-8" onSubmit={save}>
+                    <div className="mx-auto my-auto w-full max-w-3xl space-y-5">
+                    <form id="settings-form" className="space-y-5" onSubmit={save}>
                         <Section title="Connection">
                             <Field
                                 label="OpenRouter API key"
