@@ -70,4 +70,34 @@ class RenderTest extends TestCase
         $probe->mustRun();
         $this->assertSame('1080,1920', trim($probe->getOutput()));
     }
+
+    public function test_stream_serves_finished_render_inline(): void
+    {
+        if (! is_file(base_path('tests/Fixtures/sample.mp4'))) {
+            $this->markTestSkipped('missing fixture video');
+        }
+
+        // Renders live under storage/app (see RenderService), outside the
+        // local disk root, so seed the file exactly where mp4Absolute looks.
+        file_put_contents(
+            storage_path('app/render-stream.mp4'), file_get_contents(base_path('tests/Fixtures/sample.mp4'))
+        );
+        $project = Project::create([
+            'name' => 'stream', 'source_path' => 'render-stream.mp4',
+            'mime' => 'video/mp4', 'size_bytes' => 1, 'status' => 'clips_ready',
+        ]);
+        $clip = ClipCandidate::create([
+            'project_id' => $project->id, 'rank' => 1, 'start_s' => 0, 'end_s' => 5,
+        ]);
+        $render = $clip->renders()->create([
+            'preset' => 'tiktok', 'status' => 'done', 'mp4_path' => 'render-stream.mp4',
+        ]);
+
+        $this->get("/renders/{$render->id}/stream")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'video/mp4');
+
+        $missing = $clip->renders()->create(['preset' => 'tiktok', 'status' => 'failed']);
+        $this->get("/renders/{$missing->id}/stream")->assertNotFound();
+    }
 }
