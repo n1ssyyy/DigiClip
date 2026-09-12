@@ -120,7 +120,15 @@ export default function Settings({ settings, model_presets }) {
                                     >
                                         n1ssyyy
                                     </a>
-                                    {' '}in collaboration with <span className="font-semibold text-foreground">Shkolla Digjitale</span>
+                                    {' '}in collaboration with{' '}
+                                    <a
+                                        href="https://shkolladigjitale.com/"
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="font-semibold text-foreground"
+                                    >
+                                        Shkolla Digjitale
+                                    </a>
                                 </span>
                                 <span className="ml-auto flex items-center gap-2">
                                     <a
@@ -129,9 +137,9 @@ export default function Settings({ settings, model_presets }) {
                                         rel="noreferrer"
                                         title="Shkolla Digjitale Prizren"
                                         aria-label="Shkolla Digjitale Prizren"
-                                        className="inline-flex size-8 items-center justify-center rounded-md bg-white hover:brightness-110"
+                                        className="group inline-flex size-8 items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-white"
                                     >
-                                        <img src={shkollaIcon} alt="" className="size-5" />
+                                        <img src={shkollaIcon} alt="" className="size-5 brightness-0 invert transition-[filter] group-hover:brightness-100 group-hover:invert-0" />
                                     </a>
                                     <a
                                         href="https://github.com/n1ssyyy/DigiClip"
@@ -139,9 +147,9 @@ export default function Settings({ settings, model_presets }) {
                                         rel="noreferrer"
                                         title="DigiClip on GitHub"
                                         aria-label="DigiClip on GitHub"
-                                        className="inline-flex size-8 items-center justify-center rounded-md border border-input bg-background hover:bg-accent"
+                                        className="group inline-flex size-8 items-center justify-center rounded-md border border-input bg-background transition-colors hover:bg-white"
                                     >
-                                        <img src={githubMark} alt="" className="size-4" />
+                                        <img src={githubMark} alt="" className="size-4 transition-[filter] group-hover:brightness-0" />
                                     </a>
                                 </span>
                             </div>
