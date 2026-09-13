@@ -34,7 +34,7 @@
 <p align="center">
   <a href="https://github.com/n1ssyyy"><img src="https://shieldcn.dev/badge/Author-n1ssyyy-181717.svg?logo=github&variant=default&size=default" alt="n1ssyyy" /></a>
   <a href="https://shkolladigjitale.com/">
-    <img src="https://shieldcn.dev/badge/Partner-Shkolla_Digjitale-1e40af.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cGF0aCBkPSJNMTIgMmw4IDN2NmMwIDUtMy40IDguNi04IDExLTQuNi0yLjQtOC02LTgtMTFWNWw4LTN6Ii8%2BPC9zdmc%2B&variant=outline&color=1e40af&logoColor=1e40af&labelTextColor=1e40af&gradient=ffffff,ffffff&size=default" alt="Shkolla Digjitale" />
+    <img src="https://shieldcn.dev/badge/Partner-Shkolla_Digjitale-1e40af.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMTUgMTI4Ij48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik01NS41LDBMNTgsLTAuNUw2Niw2LjVMNzgsMTEuNUw5MiwxMi41TDkzLDExLjVMMTAyLDEwLjVMMTA5LDcuNUwxMTEuNSwxMEwxMTAuNSwxMTFMMTA2LjUsMTE4TDEwMiwxMjEuNUw5MiwxMjMuNUw5MSwxMjIuNUw4NiwxMjIuNUw3OCwxMTkuNUw2NywxMTkuNUw2MSwxMjIuNUw1OCwxMjcuNUw1NiwxMjcuNUw1MywxMjIuNUw0NywxMTkuNUwzNiwxMTkuNUwyOSwxMjIuNUwyNCwxMjIuNUwyMywxMjMuNUwxNCwxMjIuNUwxMCwxMjAuNUw0LjUsMTE0TDQuNSwxMTJMMy41LDExMUwzLjUsOTBMMi41LDg5TDIuNSwxMkwzLjUsMTFMMi41LDEwTDUsNy41TDEyLDEwLjVMMjEsMTEuNUwyMiwxMi41TDM2LDExLjVMNDgsNi41TDU1LjUsMFoiLz48L3N2Zz4%3D&variant=outline&color=1e40af&logoColor=1e40af&labelTextColor=1e40af&gradient=ffffff,ffffff&size=default" alt="Shkolla Digjitale" />
   </a>
 </p>
 
