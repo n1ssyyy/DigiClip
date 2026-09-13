@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
 import { ChevronDown, ChevronUp, KeyRound } from 'lucide-react';
 import shkollaIcon from '../assets/shkolla-icon.png';
@@ -72,6 +72,46 @@ export default function Settings({ settings, model_presets }) {
     });
     const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value });
 
+    // Live model disk/download state. Downloads run server-side (queue), so
+    // the ring keeps filling even with the dropdown closed; 2.5s polling is
+    // cheap (single JSON, no props reload) and stops with the page.
+    const [modelStatus, setModelStatus] = useState(null);
+    useEffect(() => {
+        let dead = false;
+        const load = () => fetch('/api/stt-models', { headers: { Accept: 'application/json' } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((j) => { if (!dead && j?.models) setModelStatus(j.models); })
+            .catch(() => {});
+        load();
+        const t = setInterval(load, 2500);
+        return () => { dead = true; clearInterval(t); };
+    }, []);
+
+    const csrf = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+    function downloadModel(id) {
+        fetch(`/api/stt-models/${encodeURIComponent(id)}/download`, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': csrf(), 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+        })
+            .then((r) => (r.ok || r.status === 202 ? r.json() : null))
+            .then(() => fetch('/api/stt-models', { headers: { Accept: 'application/json' } })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((j) => { if (j?.models) setModelStatus(j.models); }))
+            .catch(() => {});
+    }
+
+    const sttLive = modelStatus?.[form.stt_model];
+    const sttState = sttLive
+        ? (sttLive.downloaded ? 'ready' : sttLive.downloading ? 'downloading' : sttLive.failed ? 'failed' : 'missing')
+        : (settings.stt_downloaded?.[form.stt_model] ? 'ready' : 'missing');
+    const sttHint = sttState === 'ready'
+        ? 'On disk, ready to transcribe.'
+        : sttState === 'downloading'
+            ? `Downloading… ${sttLive?.progress ?? 0}% — keeps going in the background.`
+            : sttState === 'failed'
+                ? 'Download failed — pick the model again to retry.'
+                : 'Not on disk yet — pick it to download in the background.';
+
     // One word, only alive when something actually changed. Baseline
     // re-derives from server props, so a saved form settles itself.
     const baseline = {
@@ -128,15 +168,15 @@ export default function Settings({ settings, model_presets }) {
                                 </Field>
                                 <Field
                                     label="Transcription model"
-                                    hint={settings.stt_downloaded?.[form.stt_model]
-                                        ? 'On disk, ready to transcribe.'
-                                        : 'Not on disk yet — downloads automatically on first run.'}
+                                    hint={sttHint}
                                 >
                                     <SttModelPicker
                                         value={form.stt_model}
                                         onChange={(id) => setForm({ ...form, stt_model: id })}
                                         options={settings.stt_models}
                                         downloaded={settings.stt_downloaded}
+                                        status={modelStatus ?? {}}
+                                        onDownload={downloadModel}
                                     />
                                 </Field>
                             </div>

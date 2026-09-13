@@ -45,6 +45,7 @@ class AnalyzeFallbackTest extends TestCase
             app(\App\Services\Clips\OpenRouterClient::class),
             app(\App\Services\Clips\ClipValidator::class),
             app(\App\Services\Clips\HeuristicScorer::class),
+            app(\App\Services\Notifications\Notifier::class),
         );
 
         $project->refresh();
@@ -71,6 +72,7 @@ class AnalyzeFallbackTest extends TestCase
             app(\App\Services\Clips\OpenRouterClient::class),
             app(\App\Services\Clips\ClipValidator::class),
             app(\App\Services\Clips\HeuristicScorer::class),
+            app(\App\Services\Notifications\Notifier::class),
         );
     }
 }

@@ -24,10 +24,13 @@ Where to get them:
   (`cmake -B build && cmake --build build -j --config Release`, binary at
   `build/bin/whisper-cli`), or download a release asset.
 
-Whisper **models** (`ggml-*.bin`, 75 MB–3 GB) are deliberately *not* bundled:
-they live in `storage/app/digiclip/models/` (gitignored user-data) and are
-fetched on demand from https://huggingface.co/ggerganov/whisper.cpp —
-automatically on first transcribe, or upfront via:
+Whisper **models** (`ggml-*.bin`, 75 MB–3 GB) live in `storage/app/digiclip/models/`
+(gitignored user-data). `base.en` (142 MB) ships **inside the installers**:
+CI fetches it into `resources/models/` at build time (too big for git —
+GitHub caps files at 100 MB) and the app seeds it to user storage on first
+boot, so transcription works out of the box with zero setup. Bigger models
+stay on demand — pick one in Settings and it downloads in the background
+with a progress ring, or prefetch from a terminal:
 
 ```bash
 php artisan digiclip:provision-media          # default model only
