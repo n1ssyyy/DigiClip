@@ -40,7 +40,12 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Must exceed the longest TranscribeJob tier (large-v3 = 14400s).
+            // At 90s (old default) any transcription over 90s was re-reserved
+            // by another worker and instantly died as "attempted too many
+            // times" (tries=1). Per-job $retryAfter is IGNORED by the
+            // database driver — this connection value is the real budget.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 15000),
             'after_commit' => false,
         ],
 
