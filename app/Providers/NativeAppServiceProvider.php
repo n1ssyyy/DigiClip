@@ -14,15 +14,10 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
-        // Packaged runtime has no Reverb socket server (the bundled static
-        // PHP ships without pcntl, so `reverb:start` cannot run there) and
-        // the packager strips `*_SECRET` env keys. Routing NativePHP's
-        // internal broadcast events through the `reverb` driver would throw
-        // on every `/_native` event dispatch — keep them on `log` (no-op).
-        // Dev (non-native `artisan serve`) still uses reverb from .env.
-        if (config('nativephp-internal.running')) {
-            config(['broadcasting.default' => 'log']);
-        }
+        // NOTE: the packaged-runtime broadcast override (reverb → log) lives
+        // in AppServiceProvider, not here: this provider boots once in the
+        // Electron main-process context, never in serve workers / queue
+        // workers where broadcasts are actually dispatched.
 
         Window::open()
             ->title('DigiClip')

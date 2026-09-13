@@ -21,6 +21,20 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Packaged runtime has no Reverb socket server (the bundled static
+        // PHP ships without pcntl, so `reverb:start` cannot run there).
+        // Routing broadcast events through the `reverb` driver would throw
+        // on every dispatch (Pusher connection refused). Keep them on `log`
+        // (no-op) in the native runtime. Dev (plain `artisan serve`) still
+        // uses reverb from .env for live Echo updates.
+        // NOTE: this must live here, not in NativeAppServiceProvider: that
+        // class is NativePHP's one-shot app provider, booted once by the
+        // Electron main process — it never runs in `serve` HTTP workers or
+        // queue workers, so a broadcast override there has no effect.
+        if (config('nativephp-internal.running')) {
+            config(['broadcasting.default' => 'log']);
+        }
+
         // User-space toolchain (see README §0): our php needs PHPRC to find
         // its php.ini and LD_LIBRARY_PATH for libzip. `serve` strips all env
         // except its allowlist when spawning `php -S`, so extend it, this is

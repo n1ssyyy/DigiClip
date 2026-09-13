@@ -38,4 +38,17 @@ class ElectronBuildEnvTest extends TestCase
             );
         }
     }
+
+    public function test_native_runtime_forces_log_broadcast_driver(): void
+    {
+        // The packaged app has no Reverb server (bundled PHP lacks pcntl),
+        // so broadcasts must fall back to `log`. This has to happen in the
+        // real Laravel provider (every process), not NativeAppServiceProvider
+        // (one-shot Electron boot context only) — v1.0.2 proved that gap.
+        config(['nativephp-internal.running' => true]);
+
+        (new \App\Providers\AppServiceProvider($this->app))->boot();
+
+        $this->assertSame('log', config('broadcasting.default'));
+    }
 }
