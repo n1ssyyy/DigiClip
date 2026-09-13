@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Setting;
 use App\Services\Clips\OpenRouterClient;
 use App\Services\Stt\ModelManager;
+use App\Services\System\GpuDetector;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,8 +20,19 @@ class SettingsController extends Controller
         'google/gemini-2.0-flash',
     ];
 
-    public function edit(ModelManager $models): Response
+    public function edit(ModelManager $models, GpuDetector $gpu, \App\Services\Stt\BinaryManager $binaries): Response
     {
+        // The toggle is honest: ON requires real hardware AND a shipped
+        // Vulkan sidecar for this platform (macOS has none yet → disabled
+        // with the reason, never a silent CPU run pretending to be GPU).
+        $vulkan = $binaries->resolve('whisper-cli-vulkan');
+        $gpuAvailable = $gpu->available() && $vulkan !== null;
+        $gpuReason = $gpuAvailable
+            ? null
+            : ($vulkan === null && $gpu->available()
+                ? 'GPU found, but no accelerated build is installed for this system — CPU transcription only.'
+                : 'No compatible GPU detected — CPU transcription only.');
+
         return Inertia::render('Settings', [
             'settings' => [
                 'openrouter_key_set' => (bool) (Setting::get('openrouter_key') ?? config('digiclip.openrouter.key')),
@@ -30,6 +42,13 @@ class SettingsController extends Controller
                 'stt_downloaded' => collect(array_keys(config('digiclip.stt.models', [])))
                     ->mapWithKeys(fn ($id) => [$id => $models->isDownloaded($id)])
                     ->all(),
+                'stt_gpu' => $gpuAvailable && $gpu->enabled(Setting::get('stt_gpu')),
+                'gpu' => [
+                    'available' => $gpuAvailable,
+                    'reason' => $gpuReason,
+                    'best' => $gpu->best(),
+                    'devices' => $gpu->detect(),
+                ],
                 'clips_count' => (int) (Setting::get('clips_count') ?? config('digiclip.clips.count_default', 3)),
                 'caption_default' => Setting::get('caption_default') ?? 'tiktok',
             ],
@@ -42,6 +61,7 @@ class SettingsController extends Controller
             'openrouter_key' => ['nullable', 'string', 'max:200'],
             'openrouter_model' => ['required', 'string', 'max:120'],
             'stt_model' => ['required', 'string', 'max:40'],
+            'stt_gpu' => ['required', 'boolean'],
             'clips_count' => ['required', 'integer', 'min:1', 'max:10'],
             'caption_default' => ['required', 'in:tiktok,karaoke,hormozi,minimal,beast,neon,highlight,ghost'],
         ]);
@@ -52,6 +72,7 @@ class SettingsController extends Controller
         }
         Setting::set('openrouter_model', $data['openrouter_model']);
         Setting::set('stt_model', $data['stt_model']);
+        Setting::set('stt_gpu', $data['stt_gpu'] ? '1' : '0');
         Setting::set('clips_count', (string) $data['clips_count']);
         Setting::set('caption_default', $data['caption_default']);
 

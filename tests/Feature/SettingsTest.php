@@ -21,6 +21,7 @@ class SettingsTest extends TestCase
             'openrouter_key' => 'sk-or-test123',
             'openrouter_model' => 'openai/gpt-4o-mini',
             'stt_model' => 'tiny.en',
+            'stt_gpu' => true,
             'clips_count' => 5,
             'caption_default' => 'hormozi',
         ])->assertRedirect();
@@ -41,6 +42,7 @@ class SettingsTest extends TestCase
             'openrouter_key' => '',
             'openrouter_model' => 'meta/muse-spark-1.3',
             'stt_model' => 'base.en',
+            'stt_gpu' => false,
             'clips_count' => 3,
             'caption_default' => 'tiktok',
         ])->assertRedirect();
