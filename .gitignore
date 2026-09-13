@@ -3,6 +3,12 @@
 .env
 .env.backup
 .env.production
+# NativePHP Electron build envs: electron-vite inlines
+# MAIN_VITE_NATIVEPHP_BUILD_PATH from these at build time. Without
+# .env.production the packaged main process crashes on startup
+# (path.resolve receives undefined). Must be committed.
+!nativephp/electron/.env.production
+!nativephp/electron/.env.development
 .phpactor.json
 .phpunit.result.cache
 /.codex

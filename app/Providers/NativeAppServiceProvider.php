@@ -14,6 +14,16 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      */
     public function boot(): void
     {
+        // Packaged runtime has no Reverb socket server (the bundled static
+        // PHP ships without pcntl, so `reverb:start` cannot run there) and
+        // the packager strips `*_SECRET` env keys. Routing NativePHP's
+        // internal broadcast events through the `reverb` driver would throw
+        // on every `/_native` event dispatch — keep them on `log` (no-op).
+        // Dev (non-native `artisan serve`) still uses reverb from .env.
+        if (config('nativephp-internal.running')) {
+            config(['broadcasting.default' => 'log']);
+        }
+
         Window::open()
             ->title('DigiClip')
             // Custom chrome: OS frame removed, the app header (Titlebar)
@@ -40,10 +50,16 @@ class NativeAppServiceProvider implements ProvidesPhpIni
      * The realtime socket (Reverb) must run for event-based UI updates.
      * No-op outside the native runtime: without the Electron API bridge
      * these calls fail fast and are ignored (dev runs reverb:start manually).
+     * Also skipped when pcntl is unavailable: Reverb's server subscribes to
+     * process signals (SIGINT) and fatals without the pcntl extension —
+     * which is exactly the case for the bundled static PHP in installers.
      */
     private function ensureReverb(): void
     {
         try {
+            if (! function_exists('pcntl_signal')) {
+                return;
+            }
             if (ChildProcess::get('reverb')) {
                 return;
             }
