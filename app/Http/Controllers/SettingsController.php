@@ -33,24 +33,45 @@ class SettingsController extends Controller
                 ? 'GPU found, but no accelerated build is installed for this system — CPU transcription only.'
                 : 'No compatible GPU detected — CPU transcription only.');
 
+        // Guard against DecryptException if APP_KEY rotated: fall back to
+        // config/env so the page never 500s. The pinning logic in
+        // AppServiceProvider should prevent this, but belt-and-suspenders.
+        $openRouterKeySet = false;
+        $openRouterModel = config('digiclip.openrouter.model_default', 'nvidia/nemotron-3-ultra-550b-a55b:free');
+        $sttModel = config('digiclip.stt.default_model', 'base.en');
+        $sttGpu = '0';
+        $clipsCount = config('digiclip.clips.count_default', 3);
+        $captionDefault = 'tiktok';
+
+        try {
+            $openRouterKeySet = (bool) (Setting::get('openrouter_key') ?? config('digiclip.openrouter.key'));
+            $openRouterModel = Setting::get('openrouter_model') ?? $openRouterModel;
+            $sttModel = Setting::get('stt_model') ?? $sttModel;
+            $sttGpu = Setting::get('stt_gpu') ?? '0';
+            $clipsCount = (int) (Setting::get('clips_count') ?? config('digiclip.clips.count_default', 3));
+            $captionDefault = Setting::get('caption_default') ?? 'tiktok';
+        } catch (\Throwable) {
+            // Keep defaults if any Setting::get throws (e.g., rotated APP_KEY).
+        }
+
         return Inertia::render('Settings', [
             'settings' => [
-                'openrouter_key_set' => (bool) (Setting::get('openrouter_key') ?? config('digiclip.openrouter.key')),
-                'openrouter_model' => Setting::get('openrouter_model') ?? config('digiclip.openrouter.model_default'),
-                'stt_model' => Setting::get('stt_model') ?? config('digiclip.stt.default_model'),
+                'openrouter_key_set' => $openRouterKeySet,
+                'openrouter_model' => $openRouterModel,
+                'stt_model' => $sttModel,
                 'stt_models' => config('digiclip.stt.models', []),
                 'stt_downloaded' => collect(array_keys(config('digiclip.stt.models', [])))
                     ->mapWithKeys(fn ($id) => [$id => $models->isDownloaded($id)])
                     ->all(),
-                'stt_gpu' => $gpuAvailable && $gpu->enabled(Setting::get('stt_gpu')),
+                'stt_gpu' => $gpuAvailable && $gpu->enabled($sttGpu),
                 'gpu' => [
                     'available' => $gpuAvailable,
                     'reason' => $gpuReason,
                     'best' => $gpu->best(),
                     'devices' => $gpu->detect(),
                 ],
-                'clips_count' => (int) (Setting::get('clips_count') ?? config('digiclip.clips.count_default', 3)),
-                'caption_default' => Setting::get('caption_default') ?? 'tiktok',
+                'clips_count' => $clipsCount,
+                'caption_default' => $captionDefault,
             ],
             'model_presets' => self::MODELS,
         ]);
@@ -66,15 +87,19 @@ class SettingsController extends Controller
             'caption_default' => ['required', 'in:tiktok,karaoke,hormozi,minimal,beast,neon,highlight,ghost'],
         ]);
 
-        // Empty key field = keep existing (never echo the secret back).
-        if (($data['openrouter_key'] ?? '') !== '') {
-            Setting::set('openrouter_key', $data['openrouter_key']);
+        try {
+            // Empty key field = keep existing (never echo the secret back).
+            if (($data['openrouter_key'] ?? '') !== '') {
+                Setting::set('openrouter_key', $data['openrouter_key']);
+            }
+            Setting::set('openrouter_model', $data['openrouter_model']);
+            Setting::set('stt_model', $data['stt_model']);
+            Setting::set('stt_gpu', $data['stt_gpu'] ? '1' : '0');
+            Setting::set('clips_count', (string) $data['clips_count']);
+            Setting::set('caption_default', $data['caption_default']);
+        } catch (\Throwable $e) {
+            return back()->with('flash', 'Settings saved, but some values could not be stored: '.mb_substr($e->getMessage(), 0, 160));
         }
-        Setting::set('openrouter_model', $data['openrouter_model']);
-        Setting::set('stt_model', $data['stt_model']);
-        Setting::set('stt_gpu', $data['stt_gpu'] ? '1' : '0');
-        Setting::set('clips_count', (string) $data['clips_count']);
-        Setting::set('caption_default', $data['caption_default']);
 
         return back()->with('flash', 'Settings saved.');
     }
