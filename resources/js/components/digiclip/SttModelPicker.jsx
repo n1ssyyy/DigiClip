@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, Download } from 'lucide-react';
+import { Check, ChevronDown, Download, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import ProgressRing from './ProgressRing';
 import { usePanelBeat } from './usePanelBeat';
@@ -18,12 +18,15 @@ const inputCls = 'flex h-9 w-full rounded-md border border-input bg-background p
  * hollow ring filling with progress; a finished row shows the check.
  * status: { [id]: { downloaded, downloading, progress, failed, error } }
  */
-export default function SttModelPicker({ value, onChange, options, downloaded = {}, status = {}, onDownload }) {
+export default function SttModelPicker({ value, onChange, options, downloaded = {}, status = {}, onDownload, onDelete }) {
     const [open, setOpen] = useState(false);
     const { show: panelShow, leaving: panelLeaving } = usePanelBeat(open);
     const rootRef = useRef(null);
     const panelRef = useRef(null);
     const panelPos = useFloatingPanel(panelShow, rootRef);
+    // Two-step delete confirm, per row: first click arms, second deletes.
+    const [confirmId, setConfirmId] = useState(null);
+    const confirmTimer = useRef(null);
 
     useEffect(() => {
         const onDown = (e) => {
@@ -53,6 +56,25 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
         // First touch fetches the weights in the background; the ring on
         // the row tracks it. Selecting again after a failure retries.
         if (!isDownloaded(id) && !isDownloading(id)) onDownload?.(id);
+    };
+
+    useEffect(() => () => {
+        if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    }, []);
+
+    const askDelete = (id) => {
+        if (confirmTimer.current) clearTimeout(confirmTimer.current);
+        setConfirmId(id);
+        confirmTimer.current = setTimeout(() => {
+            setConfirmId(null);
+            confirmTimer.current = null;
+        }, 3000);
+    };
+    const confirmDelete = (id) => {
+        if (confirmTimer.current) clearTimeout(confirmTimer.current);
+        confirmTimer.current = null;
+        setConfirmId(null);
+        onDelete?.(id);
     };
 
     const tag = (id) => {
@@ -110,11 +132,6 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                                 on disk
                                             </span>
                                         )}
-                                        {isDownloading(id) && (
-                                            <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
-                                                {progressOf(id)}%
-                                            </span>
-                                        )}
                                         {tag(id) && (
                                             <span className={cn(
                                                 'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
@@ -125,7 +142,35 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                                 {tag(id)}
                                             </span>
                                         )}
-                                        {!isDownloaded(id) && !isDownloading(id) && (
+                                        {isDownloading(id) ? (
+                                            <span className="flex h-6 shrink-0 items-center font-mono text-[11px] text-muted-foreground tabular-nums">
+                                                {progressOf(id)}%
+                                            </span>
+                                        ) : isDownloaded(id) ? (
+                                            confirmId === id ? (
+                                                <span className="flex shrink-0 items-center gap-1">
+                                                    <span className="text-[11px] font-medium text-destructive">Delete?</span>
+                                                    <button
+                                                        type="button"
+                                                        aria-label={`Confirm deleting ${id} weights`}
+                                                        onClick={() => confirmDelete(id)}
+                                                        className="flex size-6 items-center justify-center rounded-md bg-destructive font-mono text-[11px] font-bold text-destructive-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                    >
+                                                        <Check className="size-3.5" aria-hidden />
+                                                    </button>
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    aria-label={`Delete ${id} weights (${m.size_mb}MB freed)`}
+                                                    title={`Delete weights, free ${m.size_mb}MB`}
+                                                    onClick={() => askDelete(id)}
+                                                    className="flex size-6 items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-input hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                >
+                                                    <Trash2 className="size-3.5" aria-hidden />
+                                                </button>
+                                            )
+                                        ) : (
                                             <button
                                                 type="button"
                                                 aria-label={isFailed(id) ? `Retry downloading ${id}` : `Download ${id} (${m.size_mb}MB)`}
@@ -140,7 +185,6 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                                 <Download className="size-3.5" aria-hidden />
                                             </button>
                                         )}
-                                        <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">{m.size_mb}MB</span>
                                     </span>
                                 </div>
                             </li>

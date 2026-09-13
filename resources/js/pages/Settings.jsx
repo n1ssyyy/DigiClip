@@ -88,15 +88,25 @@ export default function Settings({ settings, model_presets }) {
     }, []);
 
     const csrf = () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+    const refreshModels = () => fetch('/api/stt-models', { headers: { Accept: 'application/json' } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => { if (j?.models) setModelStatus(j.models); })
+        .catch(() => {});
     function downloadModel(id) {
         fetch(`/api/stt-models/${encodeURIComponent(id)}/download`, {
             method: 'POST',
             headers: { 'X-CSRF-TOKEN': csrf(), 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
         })
             .then((r) => (r.ok || r.status === 202 ? r.json() : null))
-            .then(() => fetch('/api/stt-models', { headers: { Accept: 'application/json' } })
-                .then((r) => (r.ok ? r.json() : null))
-                .then((j) => { if (j?.models) setModelStatus(j.models); }))
+            .then(() => refreshModels())
+            .catch(() => {});
+    }
+    function deleteModel(id) {
+        fetch(`/api/stt-models/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': csrf(), 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+        })
+            .then(() => refreshModels())
             .catch(() => {});
     }
 
@@ -177,6 +187,7 @@ export default function Settings({ settings, model_presets }) {
                                         downloaded={settings.stt_downloaded}
                                         status={modelStatus ?? {}}
                                         onDownload={downloadModel}
+                                        onDelete={deleteModel}
                                     />
                                 </Field>
                             </div>
