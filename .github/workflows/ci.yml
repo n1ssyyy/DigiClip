@@ -137,31 +137,19 @@ jobs:
           curl -sfL -o resources/models/ggml-base.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
           ls -la resources/models/
 
-      - name: Build Vulkan whisper-cli (linux-x64 sidecar)
-        # GPU transcription needs a Vulkan-enabled whisper-cli. The repo
-        # carries a prebuilt linux-x64 binary, but CI rebuilds it from the
-        # pinned whisper.cpp commit so installers never go stale silently.
-        # Needs: Vulkan headers/loader + glslc (Ubuntu's glslc lives in the
-        # `shaderc` package; glslang-tools alone is not enough). A LunarG
-        # SDK glslc at /usr/local/bin is symlinked as a fallback.
+      - name: Verify Vulkan whisper-cli (linux-x64 sidecar)
+        # GPU transcription needs a Vulkan-enabled whisper-cli. It lives in
+        # git (resources/bin/linux-x64/whisper-cli-vulkan, static build from
+        # whisper.cpp @ 927cfce — see resources/bin/README.md for the rebuild
+        # recipe). Deliberately NOT rebuilt here: the Vulkan toolchain
+        # (glslc) is unavailable in Ubuntu's apt repos and a source build
+        # would add ~10min to every installer run.
         if: matrix.target == 'linux'
         shell: bash
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y libvulkan-dev glslang-tools shaderc cmake g++
-          if [ -f /usr/local/bin/glslc ] && [ ! -x /usr/bin/glslc ]; then
-            sudo ln -s /usr/local/bin/glslc /usr/bin/glslc
-          fi
-          glslc --version
-          git clone https://github.com/ggerganov/whisper.cpp /tmp/whisper.cpp
-          git -C /tmp/whisper.cpp checkout 927cfce34f31707e17f2bff35c349632fb9e2c3a
-          cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build \
-            -DGGML_VULKAN=1 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/whisper.cpp/build -j$(nproc) --target whisper-cli --config Release
-          cp /tmp/whisper.cpp/build/bin/whisper-cli resources/bin/linux-x64/whisper-cli-vulkan
-          chmod 755 resources/bin/linux-x64/whisper-cli-vulkan
-          ./resources/bin/linux-x64/whisper-cli-vulkan --version
           ls -la resources/bin/linux-x64/
+          test -x resources/bin/linux-x64/whisper-cli-vulkan
+          ./resources/bin/linux-x64/whisper-cli-vulkan --version
 
       - name: Build Windows media binaries (ffmpeg + whisper CPU/Vulkan)
         # win-x64/ is empty in git (binaries are platform-built). Fetch
