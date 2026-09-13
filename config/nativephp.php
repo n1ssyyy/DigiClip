@@ -8,7 +8,7 @@ return [
      * It is used to determine if the app needs to be updated.
      * Increment this value every time you release a new version of your app.
      */
-    'version' => env('NATIVEPHP_APP_VERSION', '1.0.1'),
+    'version' => env('NATIVEPHP_APP_VERSION', '1.0.2'),
 
     /**
      * The ID of your application. This should be a unique identifier
@@ -65,7 +65,10 @@ return [
         'AZURE_*',
         'GITHUB_*',
         'DO_SPACES_*',
-        '*_SECRET',
+        // NOTE: no blanket '*_SECRET' rule — it strips REVERB_APP_SECRET
+        // from the packaged .env, which makes the reverb broadcast driver
+        // throw (Pusher null secret) on every native event dispatch.
+        // The Reverb credentials are local dummy values, not real secrets.
         'BIFROST_*',
         'NATIVEPHP_UPDATER_PATH',
         'NATIVEPHP_APPLE_ID',
