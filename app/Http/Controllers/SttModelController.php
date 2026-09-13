@@ -46,4 +46,16 @@ class SttModelController extends Controller
 
         return response()->json(['status' => 'queued'], 202);
     }
+
+    /** Free disk: remove downloaded weights (and any resume state). */
+    public function destroy(string $model, ModelManager $models)
+    {
+        if (! isset(config('digiclip.stt.models', [])[$model])) {
+            abort(404, 'Unknown transcription model.');
+        }
+
+        return response()->json([
+            'status' => $models->deleteModel($model) ? 'deleted' : 'not-downloaded',
+        ]);
+    }
 }

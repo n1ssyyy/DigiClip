@@ -30,7 +30,9 @@ CI fetches it into `resources/models/` at build time (too big for git —
 GitHub caps files at 100 MB) and the app seeds it to user storage on first
 boot, so transcription works out of the box with zero setup. Bigger models
 stay on demand — pick one in Settings and it downloads in the background
-with a progress ring, or prefetch from a terminal:
+with a progress ring, or prefetch from a terminal. Anything on disk can be
+removed again from the same picker (trash button, far right — two clicks to
+confirm); deleting the active model is safe, it re-fetches on next run.
 
 ```bash
 php artisan digiclip:provision-media          # default model only

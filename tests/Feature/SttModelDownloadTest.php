@@ -30,9 +30,40 @@ class SttModelDownloadTest extends TestCase
         }
     }
 
-    public function test_unknown_model_download_is_404(): void
+    public function test_unknown_model_delete_is_404(): void
     {
-        $this->postJson('/api/stt-models/nope-not-a-model/download')->assertNotFound();
+        $this->deleteJson('/api/stt-models/nope-not-a-model')->assertNotFound();
+    }
+
+    public function test_delete_removes_weights_and_resume_state(): void
+    {
+        $models = app(ModelManager::class);
+        $file = $models->fileFor('tiny.en');
+        $part = $models->partPath('tiny.en');
+        if ((is_file($file) && filesize($file) > 1024 * 1024) || is_file($part) && filesize($part) > 1024 * 1024) {
+            $this->markTestSkipped('Real model weights present; refusing to touch them.');
+        }
+        @mkdir(dirname($file), 0755, true);
+        file_put_contents($file, 'fake-weights');
+        file_put_contents($part, 'fake-part');
+
+        $this->deleteJson('/api/stt-models/tiny.en')
+            ->assertOk()
+            ->assertJsonPath('status', 'deleted');
+
+        $this->assertFileDoesNotExist($file);
+        $this->assertFileDoesNotExist($part);
+    }
+
+    public function test_delete_missing_model_is_idempotent(): void
+    {
+        $this->mock(ModelManager::class, function ($m) {
+            $m->shouldReceive('deleteModel')->with('large-v3')->andReturn(false);
+        });
+
+        $this->deleteJson('/api/stt-models/large-v3')
+            ->assertOk()
+            ->assertJsonPath('status', 'not-downloaded');
     }
 
     public function test_already_downloaded_model_is_not_queued(): void

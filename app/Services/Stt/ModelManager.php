@@ -112,6 +112,24 @@ class ModelManager
     }
 
     /**
+     * Delete downloaded weights (and any resume state) to free disk.
+     * Deleting the active model is allowed — the transcriber re-fetches it
+     * on the next run. Returns true when something was removed.
+     */
+    public function deleteModel(string $model): bool
+    {
+        $removed = false;
+        foreach ([$this->fileFor($model), $this->partPath($model)] as $path) {
+            if (is_file($path) && @unlink($path)) {
+                $removed = true;
+            }
+        }
+        \Illuminate\Support\Facades\Cache::forget(static::downloadProgressKey($model));
+
+        return $removed;
+    }
+
+    /**
      * First-boot seeding: installers stage ggml-base.en.bin read-only under
      * resources/models (fetched by CI, too big for git). Copy it into the
      * user-writable models dir so the default model works with zero setup.

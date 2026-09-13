@@ -43,6 +43,7 @@ Route::get('/api/snapshot', [HealthController::class, 'snapshot'])->name('api.sn
 // Transcription models: live disk/download state + on-demand background fetch.
 Route::get('/api/stt-models', [SttModelController::class, 'index'])->name('api.stt-models');
 Route::post('/api/stt-models/{model}/download', [SttModelController::class, 'download'])->name('api.stt-models.download');
+Route::delete('/api/stt-models/{model}', [SttModelController::class, 'destroy'])->name('api.stt-models.destroy');
 
 // Notifications: unread feed, read receipts, and the window-focus heartbeat
 // that routes background completions to in-app toasts vs OS banners.
