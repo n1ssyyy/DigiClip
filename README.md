@@ -61,7 +61,7 @@ flowchart LR
     Transcribe -. "whisper.cpp · word timings" .-> AnalyzeClips
     AnalyzeClips -. "OpenRouter LLM or heuristic fallback" .-> RenderClips
     RenderClips -. "ffmpeg 9:16 + libass burn" .-> Done
-    Transcribe & AnalyzeClips & RenderClips -. "queues: transcribe · default · render<br/>realtime: Reverb → Echo → React" .-> UI["Live UI"]
+    Transcribe & AnalyzeClips & RenderClips -. "queues: transcribe · default · render\nrealtime: Reverb → Echo → React" .-> UI["Live UI"]
 ```
 
 1. **Upload** (`POST /projects`) stores the source and chains `ExtractAudio → Transcribe → AnalyzeClips`.
