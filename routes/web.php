@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\LinkController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RenderController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\SttModelController;
 use App\Http\Controllers\TranscriptController;
 use App\Http\Controllers\WindowController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +39,16 @@ Route::get('/api/echo-debug', function (\Illuminate\Http\Request $request) {
 Route::get('/health', [HealthController::class, 'index'])->name('health');
 Route::get('/api/health', [HealthController::class, 'show'])->name('api.health');
 Route::get('/api/snapshot', [HealthController::class, 'snapshot'])->name('api.snapshot');
+
+// Transcription models: live disk/download state + on-demand background fetch.
+Route::get('/api/stt-models', [SttModelController::class, 'index'])->name('api.stt-models');
+Route::post('/api/stt-models/{model}/download', [SttModelController::class, 'download'])->name('api.stt-models.download');
+
+// Notifications: unread feed, read receipts, and the window-focus heartbeat
+// that routes background completions to in-app toasts vs OS banners.
+Route::get('/api/notifications', [NotificationController::class, 'index'])->name('api.notifications');
+Route::post('/api/notifications/read', [NotificationController::class, 'read'])->name('api.notifications.read');
+Route::post('/api/presence', [NotificationController::class, 'presence'])->name('api.presence');
 
 // Custom frameless titlebar controls (no-op outside the native runtime).
 Route::post('/native/window/minimize', [WindowController::class, 'minimize'])->name('native.window.minimize');

@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Clapperboard } from 'lucide-react';
 import Sidebar from '../components/digiclip/Sidebar';
 import PageLine from '../components/digiclip/PageLine';
+import Toasts from '../components/digiclip/Toasts';
+import { useNotifications } from '../components/digiclip/useNotifications';
 import WindowControls, { isNativeWindow, sendWindowAction } from '../components/digiclip/Titlebar';
 
 const noDrag = { WebkitAppRegion: 'no-drag' };
@@ -59,8 +61,42 @@ export default function AppLayout({ children }) {
             window.Native.on('Native\\Desktop\\Events\\Windows\\WindowMaximized', () => setMaximized(true));
             window.Native.on('Native\\Desktop\\Events\\Windows\\WindowUnmaximized', () => setMaximized(false));
         } catch {
-            // Older shell without the event bridge, local toggle state is enough.
+            // Older shell without the event bridge — local toggle state is enough.
         }
+    }, []);
+
+    // In-app toasts for background completions (clips, renders, downloads).
+    const { toasts, dismiss } = useNotifications();
+
+    // Focus heartbeat: tells the backend whether completions should stay
+    // in-app (toasts) or go out as desktop banners. Blur clears it
+    // immediately so an away user is never missed; the interval keeps the
+    // 45s freshness window warm while focused.
+    useEffect(() => {
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+        const beat = (focused) => {
+            fetch('/api/presence', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({ focused }),
+            }).catch(() => {});
+        };
+        const onFocus = () => beat(true);
+        const onBlur = () => beat(false);
+        window.addEventListener('focus', onFocus);
+        window.addEventListener('blur', onBlur);
+        beat(document.hasFocus());
+        const t = setInterval(() => { if (document.hasFocus()) beat(true); }, 20000);
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            window.removeEventListener('blur', onBlur);
+            clearInterval(t);
+        };
     }, []);
 
     // External links (target _blank) leave the app via the OS browser
@@ -127,6 +163,7 @@ export default function AppLayout({ children }) {
                     </main>
                 </div>
             </div>
+            <Toasts toasts={toasts} onDismiss={dismiss} />
         </div>
     );
 }

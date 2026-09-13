@@ -9,6 +9,7 @@ use App\Services\Clips\ClipValidator;
 use App\Services\Clips\HeuristicScorer;
 use App\Services\Clips\OpenRouterClient;
 use App\Services\Clips\OpenRouterException;
+use App\Services\Notifications\Notifier;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Bus;
@@ -24,7 +25,7 @@ class AnalyzeClipsJob implements ShouldQueue
 
     public function __construct(public int $projectId) {}
 
-    public function handle(OpenRouterClient $llm, ClipValidator $validator, HeuristicScorer $heuristic): void
+    public function handle(OpenRouterClient $llm, ClipValidator $validator, HeuristicScorer $heuristic, Notifier $notify): void
     {
         $project = Project::find($this->projectId);
         // Cancelled mid-queue, or paused: exit quietly so the chain drains.
@@ -87,6 +88,7 @@ class AnalyzeClipsJob implements ShouldQueue
             $made[] = $project->clipCandidates()->create([...$c, 'source' => $source]);
         }
         $project->update(['status' => 'clips_ready']);
+        $notify->send('success', 'Clips ready', "{$project->name} — ".count($made).' clips picked, rendering now.', ['project_id' => $project->id]);
 
         // Clips are made, not proposed: render every candidate right away.
         foreach ($made as $candidate) {
@@ -100,9 +102,11 @@ class AnalyzeClipsJob implements ShouldQueue
 
     public function failed(Throwable $e): void
     {
-        Project::whereKey($this->projectId)->update([
+        $project = Project::find($this->projectId);
+        $project?->update([
             'status' => 'failed',
             'error' => mb_substr($e->getMessage(), 0, 500),
         ]);
+        app(Notifier::class)->send('error', 'Clip picking failed', ($project ? "{$project->name} — " : '').mb_substr($e->getMessage(), 0, 160), $project ? ['project_id' => $project->id] : []);
     }
 }

@@ -39,6 +39,51 @@ class ModelManager
         return $this->dir().'/'.$this->meta($model)['file'];
     }
 
+    public function partPath(string $model): string
+    {
+        return $this->fileFor($model).'.part';
+    }
+
+    public static function downloadProgressKey(string $model): string
+    {
+        return "digiclip:model-dl:{$model}";
+    }
+
+    /**
+     * Live download state for the picker: downloaded | downloading (with
+     * 0-100 progress) | failed (retryable) | missing.
+     */
+    public function downloadState(string $model): array
+    {
+        if ($this->isDownloaded($model)) {
+            return ['status' => 'downloaded', 'progress' => 100, 'error' => null];
+        }
+        $state = \Illuminate\Support\Facades\Cache::get(static::downloadProgressKey($model));
+        if (is_array($state) && ($state['status'] ?? null) === 'downloading' && $this->partGrowing($model)) {
+            return ['status' => 'downloading', 'progress' => (int) ($state['progress'] ?? 0), 'error' => null];
+        }
+        if (is_array($state) && ($state['status'] ?? null) === 'failed') {
+            return ['status' => 'failed', 'progress' => null, 'error' => $state['error'] ?? null];
+        }
+
+        return ['status' => 'missing', 'progress' => null, 'error' => null];
+    }
+
+    /**
+     * A crashed worker leaves stale "downloading" state behind; the .part
+     * freshness check lets a retry resume instead of reporting "stuck".
+     */
+    public function partGrowing(string $model): bool
+    {
+        try {
+            $part = $this->partPath($model);
+
+            return is_file($part) && filemtime($part) > time() - 180;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public function isDownloaded(string $model): bool
     {
         $path = $this->fileFor($model);
@@ -64,6 +109,27 @@ class ModelManager
         $file = $this->meta($model)['file'];
 
         return "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{$file}";
+    }
+
+    /**
+     * First-boot seeding: installers stage ggml-base.en.bin read-only under
+     * resources/models (fetched by CI, too big for git). Copy it into the
+     * user-writable models dir so the default model works with zero setup.
+     * No-op in dev (no staged file) and when already on disk.
+     */
+    public function ensureBundled(): void
+    {
+        try {
+            if ($this->isDownloaded('base.en')) {
+                return;
+            }
+            $staged = resource_path('models/ggml-base.en.bin');
+            if (! is_file($staged)) {
+                return;
+            }
+            copy($staged, $this->fileFor('base.en'));
+        } catch (\Throwable) {
+        }
     }
 
     /**

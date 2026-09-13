@@ -127,6 +127,16 @@ jobs:
       - name: Build frontend assets
         run: npm run build
 
+      - name: Fetch bundled STT model (base.en, ships in the installer)
+        # 142MB — over GitHub's 100MB file cap, so it is NOT committed.
+        # Staged under resources/models/, copied into the build by
+        # native:build, seeded to user storage on first boot.
+        shell: bash
+        run: |
+          mkdir -p resources/models
+          curl -sfL -o resources/models/ggml-base.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
+          ls -la resources/models/
+
       - name: Build ${{ matrix.target }} installer
         # NativePHP emits installers to nativephp/electron/dist (not ./build).
         # Pin arch=x64: the default linux target also builds arm64 and the

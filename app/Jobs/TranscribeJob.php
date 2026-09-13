@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Project;
 use App\Models\Transcript;
+use App\Services\Notifications\Notifier;
 use App\Services\Stt\WhisperCppTranscriber;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -19,7 +20,7 @@ class TranscribeJob implements ShouldQueue
 
     public function __construct(public int $projectId) {}
 
-    public function handle(WhisperCppTranscriber $stt): void
+    public function handle(WhisperCppTranscriber $stt, Notifier $notify): void
     {
         $project = Project::find($this->projectId);
         // Cancelled mid-queue, or paused: exit quietly so the chain drains.
@@ -47,13 +48,16 @@ class TranscribeJob implements ShouldQueue
             ]
         );
         $project->update(['status' => 'transcribed']);
+        $notify->send('success', 'Transcription done', "{$project->name} transcribed — finding clips.", ['project_id' => $project->id]);
     }
 
     public function failed(Throwable $e): void
     {
-        Project::whereKey($this->projectId)->update([
+        $project = Project::find($this->projectId);
+        $project?->update([
             'status' => 'failed',
             'error' => mb_substr($e->getMessage(), 0, 500),
         ]);
+        app(Notifier::class)->send('error', 'Transcription failed', ($project ? "{$project->name} — " : '').mb_substr($e->getMessage(), 0, 160), $project ? ['project_id' => $project->id] : []);
     }
 }

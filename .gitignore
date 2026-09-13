@@ -24,6 +24,10 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+# Staged STT weights (base.en, 142MB — over GitHub's 100MB file cap).
+# Fetched by CI at build time; never committed. Ships inside installers,
+# seeded to user storage on first boot (ModelManager::ensureBundled).
+/resources/models/*.bin
 /storage/*.key
 /storage/pail
 /vendor

@@ -39,6 +39,21 @@ class NativeAppServiceProvider implements ProvidesPhpIni
 
         $this->ensureReverb();
         $this->ensureDatabase();
+        $this->ensureBundledModel();
+    }
+
+    /**
+     * Zero-setup transcription: installers stage ggml-base.en.bin read-only
+     * (fetched by CI, too big for git). Seed it into the user-writable
+     * models dir on first boot; other models download on demand from the
+     * Settings picker. No-op in dev (nothing staged) and when present.
+     */
+    private function ensureBundledModel(): void
+    {
+        try {
+            app(\App\Services\Stt\ModelManager::class)->ensureBundled();
+        } catch (\Throwable) {
+        }
     }
 
     /**
