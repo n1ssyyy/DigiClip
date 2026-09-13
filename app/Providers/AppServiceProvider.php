@@ -38,28 +38,37 @@ class AppServiceProvider extends ServiceProvider
     private function pinNativeAppKey(): void
     {
         try {
-            // Run in native context (packaged app) OR when explicitly told
-            // to run via env. NATIVEPHP_RUNNING is set by NativePHP in all
-            // native processes (main, queue workers, php children).
+            // 1) NativePHP sets these in the main process; queue workers
+            //    inherit them only if explicitly passed. Be permissive:
+            //    also check the known user-data path directly.
             $isNative = (bool) env('NATIVEPHP_RUNNING', false)
-                || config('nativephp-internal.running', false)
-                || (is_string(env('NATIVEPHP_USER_DATA_PATH', '')) && is_dir(env('NATIVEPHP_USER_DATA_PATH', '')));
-
-            if (! $isNative) {
-                return;
-            }
+                || config('nativephp-internal.running', false);
 
             $dir = env('NATIVEPHP_USER_DATA_PATH');
             if (! is_string($dir) || $dir === '' || ! is_dir($dir)) {
-                return;
+                // Fallback: known Linux path for this app (id = com.digiclip.app)
+                $user = env('USER') ?: getenv('USER') ?: getenv('LOGNAME') ?: 'nexaura';
+                $dir = "/home/{$user}/.config/digiclip";
+                if (! is_dir($dir)) {
+                    // Last resort: try common locations
+                    foreach (['/home/nexaura/.config/digiclip', '/root/.config/digiclip'] as $d) {
+                        if (is_dir($d)) {
+                            $dir = $d;
+                            break;
+                        }
+                    }
+                    if (! is_dir($dir)) {
+                        return;
+                    }
+                }
             }
-            $pin = $dir.'/app-key';
+
+            $pin = $dir . '/app-key';
             if (is_file($pin)) {
                 $key = trim((string) @file_get_contents($pin));
                 if (str_starts_with($key, 'base64:')) {
                     config(['app.key' => $key]);
                 }
-
                 return;
             }
             $key = (string) config('app.key', '');
