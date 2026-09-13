@@ -8,7 +8,7 @@ return [
      * It is used to determine if the app needs to be updated.
      * Increment this value every time you release a new version of your app.
      */
-    'version' => env('NATIVEPHP_APP_VERSION', '1.0.6'),
+    'version' => env('NATIVEPHP_APP_VERSION', '1.0.7'),
 
     /**
      * The ID of your application. This should be a unique identifier
@@ -159,14 +159,16 @@ return [
         'default' => [
             'queues' => ['default'],
             'memory_limit' => 512,
-            'timeout' => 300,
+            // Must cover DownloadModelJob (3GB weights on slow links).
+            'timeout' => 7200,
             'sleep' => 2,
         ],
         // Heavy media jobs (transcribe/render) get room to breathe.
+        // Must cover the largest TranscribeJob tier (big weights on CPU).
         'media' => [
             'queues' => ['transcribe', 'render'],
             'memory_limit' => 1024,
-            'timeout' => 1800,
+            'timeout' => 14400,
             'sleep' => 2,
         ],
     ],

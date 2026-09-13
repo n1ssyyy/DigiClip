@@ -10,10 +10,27 @@ Platform dirs:
 
 | Dir | Status |
 |-----|--------|
-| `linux-x64/` | ✅ `ffmpeg`, `ffprobe`, `whisper-cli` bundled |
-| `linux-arm64/` | ⏳ empty — drop the three binaries here |
-| `mac-x64/` / `mac-arm64/` | ⏳ empty — same |
-| `win-x64/` | ⏳ empty — same (`whisper-cli.exe`, `ffmpeg.exe`, `ffprobe.exe`) |
+| `linux-x64/` | ✅ `ffmpeg`, `ffprobe`, `whisper-cli` (CPU) + `whisper-cli-vulkan` (GPU, static, 52MB) bundled |
+| `linux-arm64/` | ⏳ empty — drop the binaries here |
+| `mac-x64/` / `mac-arm64/` | ⏳ empty — same (no GPU sidecar yet: toggle stays off with the reason) |
+| `win-x64/` | ✅ built in CI (`ffmpeg.exe`, `ffprobe.exe`, `whisper-cli.exe`, `whisper-cli-vulkan.exe`) — empty in git |
+
+GPU sidecar: whisper.cpp @ `927cfce` (v1.9.4-dev) with `-DGGML_VULKAN=1
+-DBUILD_SHARED_LIBS=OFF`. Static link keeps it a single file (only the
+system Vulkan loader is needed, which ships with GPU drivers). Rebuild:
+
+```bash
+git clone https://github.com/ggerganov/whisper.cpp /tmp/whisper.cpp
+git -C /tmp/whisper.cpp checkout 927cfce34f31707e17f2bff35c349632fb9e2c3a
+cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build \
+  -DGGML_VULKAN=1 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/whisper.cpp/build -j4 --target whisper-cli --config Release
+cp /tmp/whisper.cpp/build/bin/whisper-cli resources/bin/linux-x64/whisper-cli-vulkan
+```
+
+Needs `libvulkan-dev` + `glslang-tools` (glslc) on Debian/Ubuntu, or the
+Vulkan SDK on Windows (preinstalled on the CI runners). This whisper.cpp
+release uses `-ng` / `-dev N` for GPU control (not the older `-ngl`).
 
 Where to get them:
 

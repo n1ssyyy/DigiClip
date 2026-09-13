@@ -58,6 +58,7 @@ const CHECKS = (live) => [
     { label: `ffmpeg${live.ffmpeg.libass ? ' + libass' : ''}`, version: live.ffmpeg.version, value: live.ffmpeg },
     { label: 'render encoder', version: live.encoder.version, value: live.encoder },
     { label: 'whisper.cpp', version: live.whisper.version, value: live.whisper },
+    { label: 'GPU', version: live.gpu?.version, value: live.gpu ?? { ok: false }, hint: live.gpu?.hint },
     { label: 'Storage', value: live.storage },
     { label: 'Database (SQLite)', value: live.database },
     { label: `Queue (${live.queue.connection})`, value: live.queue },

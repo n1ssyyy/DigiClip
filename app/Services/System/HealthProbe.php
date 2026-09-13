@@ -20,6 +20,7 @@ class HealthProbe
             'ffmpeg' => $this->ffmpeg(),
             'encoder' => $this->encoder(),
             'whisper' => $this->binaryVersion('whisper-cli', ['--version']),
+            'gpu' => $this->gpu(),
             'storage' => $this->writable('app storage', storage_path('app')),
             'database' => $this->database(),
             'queue' => ['connection' => config('queue.default'), 'ok' => config('queue.default') === 'database'],
@@ -108,9 +109,34 @@ class HealthProbe
         return $base;
     }
 
-    private function encoder(): array
+    private function gpu(): array
     {
         try {
+            $detector = app(\App\Services\System\GpuDetector::class);
+            $best = $detector->best();
+            if (! $best) {
+                return ['ok' => false, 'version' => null, 'path' => null, 'hint' => 'No compatible GPU — CPU transcription.'];
+            }
+            $vulkan = app(\App\Services\Stt\BinaryManager::class)->resolve('whisper-cli-vulkan');
+            if ($vulkan === null) {
+                return ['ok' => false, 'version' => $best['name'], 'path' => null, 'hint' => 'GPU found, but no accelerated build shipped for this platform — CPU transcription.'];
+            }
+            $devices = $detector->detect();
+            $mem = $best['memory_mb'] ? ($best['memory_mb'] >= 1024 ? round($best['memory_mb'] / 1024).'GB' : $best['memory_mb'].'MB') : null;
+
+            return [
+                'ok' => true,
+                'version' => $best['name'].($mem ? " · {$mem}" : ''),
+                'path' => $vulkan,
+                'hint' => count($devices) > 1 ? count($devices).' GPUs detected, fastest transcribes.' : 'Transcription offloads to this GPU when enabled.',
+            ];
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'version' => null, 'path' => null, 'hint' => mb_substr($e->getMessage(), 0, 120)];
+        }
+    }
+
+    private function encoder(): array
+    {        try {
             $enc = app(\App\Services\Render\RenderService::class)->pickEncoder();
 
             return ['ok' => true, 'version' => $enc, 'path' => null, 'hint' => 'auto-picked render encoder'];

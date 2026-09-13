@@ -2,6 +2,7 @@
 
 namespace App\Services\Stt;
 
+use App\Services\System\GpuDetector;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 
@@ -21,11 +22,44 @@ class WhisperCppTranscriber implements Transcriber
         private BinaryManager $binaries,
         private ModelManager $models,
         private string $model = 'base.en',
+        private bool $gpu = true,
+        private ?GpuDetector $gpus = null,
     ) {}
 
     public function modelId(): string
     {
         return $this->model;
+    }
+
+    /**
+     * Vulkan sidecar path when GPU transcription is wanted AND shipped
+     * (resources/bin/<platform>/whisper-cli-vulkan[.exe]); null otherwise.
+     * macOS and bare-Windows installs fall back to the CPU binary.
+     */
+    public function gpuBinary(): ?string
+    {
+        return $this->binaries->resolve('whisper-cli-vulkan');
+    }
+
+    /** Prefer the Vulkan sidecar for GPU runs, else the regular binary. */
+    public function pickBinary(bool $gpu): ?string
+    {
+        if ($gpu && ($vulkan = $this->gpuBinary())) {
+            return $vulkan;
+        }
+
+        return $this->binaries->resolve('whisper-cli');
+    }
+
+    public function cpuCount(): int
+    {
+        $nproc = is_string($n = @shell_exec('nproc')) ? (int) $n : 0;
+        if ($nproc <= 0) {
+            // Windows has no nproc; the process env always carries this.
+            $nproc = (int) (getenv('NUMBER_OF_PROCESSORS') ?: 0);
+        }
+
+        return max(1, $nproc > 0 ? $nproc : 4);
     }
 
     public function transcribe(string $wavPath, array $options = []): TranscriptionResult
@@ -43,21 +77,29 @@ class WhisperCppTranscriber implements Transcriber
             $this->models->download($modelId);
         }
         $modelPath = $this->models->require($modelId);
+        // GPU = Vulkan sidecar (default device); anything else is an
+        // explicit CPU run via -ng. This whisper.cpp release uses -ng/-dev,
+        // not the older -ngl flag (unknown flags abort with no JSON out).
+        $gpu = (bool) ($options['gpu'] ?? $this->gpu);
+        $vulkan = $gpu ? $this->gpuBinary() : null;
+        $whisper = $vulkan ?? $this->binaries->require('whisper-cli');
         $lang = $options['lang'] ?? 'en';
         // Leave two cores for the app server + UI: a fully loaded box
         // makes page loads crawl while transcription runs.
-        $cpus = max(1, (int) (shell_exec('nproc') ?: 4));
-        $threads = $options['threads'] ?? max(1, $cpus - 2);
+        $threads = $options['threads'] ?? max(1, $this->cpuCount() - 2);
         $outPrefix = $options['out_prefix'] ?? (sys_get_temp_dir().'/digiclip-'.uniqid());
 
-        $p = new Process([
-            $whisper,
-            '-m', $modelPath,
-            '-f', $wavPath,
-            '-l', $lang,
-            '-oj', '-ojf', '-of', $outPrefix,
-            '-t', (string) $threads,
-        ]);
+        // -dev maps our ranked-best GPU to whisper's loader order (device 0
+        // is often a weak iGPU: measured 23s there vs 1.3s on the RTX 3050
+        // for the same base.en clip). Unknown mapping → omit (default).
+        $devIndex = array_key_exists('vulkan_device', $options)
+            ? $options['vulkan_device']
+            : ($vulkan !== null ? $this->resolveVulkanIndex($modelPath) : null);
+
+        $p = new Process($this->buildCommand(
+            $whisper, $modelPath, $wavPath, $lang, $outPrefix, $threads,
+            $vulkan !== null, $devIndex,
+        ));
         $p->setTimeout($options['timeout'] ?? 1800);
         $p->mustRun();
 
@@ -69,6 +111,53 @@ class WhisperCppTranscriber implements Transcriber
         @unlink($jsonPath);
 
         return $this->parseOutput($data ?? [], $options['model'] ?? $this->model);
+    }
+
+    /** Pure command builder (no I/O): unit-tested flag matrix. */
+    public function buildCommand(
+        string $whisper,
+        string $modelPath,
+        string $wavPath,
+        string $lang,
+        string $outPrefix,
+        int $threads,
+        bool $isVulkan,
+        mixed $devIndex = null,
+    ): array {
+        $cmd = [
+            $whisper,
+            '-m', $modelPath,
+            '-f', $wavPath,
+            '-l', $lang,
+            '-oj', '-ojf', '-of', $outPrefix,
+            '-t', (string) $threads,
+        ];
+        if ($isVulkan) {
+            if (is_int($devIndex) && $devIndex >= 0) {
+                array_push($cmd, '-dev', (string) $devIndex);
+            }
+        } else {
+            $cmd[] = '-ng';
+        }
+
+        return $cmd;
+    }
+
+    private function resolveVulkanIndex(string $modelPath): ?int
+    {
+        try {
+            if ($this->gpus === null) {
+                return null;
+            }
+            $vulkan = $this->gpuBinary();
+            if ($vulkan === null) {
+                return null;
+            }
+
+            return $this->gpus->preferredVulkanIndex($vulkan, $modelPath);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

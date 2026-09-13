@@ -33,10 +33,67 @@ function Section({ title, children, className }) {
 
 const inputCls = 'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
+/** GPU switch: track flips with primary, knob slides. Disabled state gets
+ *  its explanation from the wrapping Tip, not the control itself. */
+function GpuToggle({ checked, disabled, onChange, label }) {
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={checked}
+            aria-label={label}
+            disabled={disabled}
+            onClick={() => onChange(!checked)}
+            className={cn(
+                'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                checked ? 'bg-primary' : 'bg-input',
+                disabled && 'cursor-not-allowed opacity-50',
+            )}
+        >
+            <span
+                aria-hidden
+                className={cn(
+                    'absolute top-0.5 left-0.5 size-4 rounded-full bg-background shadow transition-transform',
+                    'motion-safe:duration-200 motion-safe:ease-out',
+                    checked ? 'translate-x-4' : 'translate-x-0',
+                )}
+            />
+        </button>
+    );
+}
+
+/** GPU transcription row: switch + plain-language state. The device list
+ *  comes from the backend detector (best first); with several GPUs the
+ *  strongest transcribes. No GPU → switch disabled, reason in a tooltip. */
+function GpuRow({ gpu, checked, onChange }) {
+    const available = !!gpu?.available;
+    const reason = gpu?.reason ?? 'No compatible GPU detected — CPU transcription only';
+    const best = gpu?.best;
+    const count = gpu?.devices?.length ?? 0;
+    const mem = best?.memory_mb ? ` · ${best.memory_mb >= 1024 ? `${(best.memory_mb / 1024).toFixed(0)}GB` : `${best.memory_mb}MB`}` : '';
+    const hint = !available
+        ? reason
+        : checked
+            ? `Using ${best?.name ?? 'GPU'}${mem}${count > 1 ? ` — fastest of ${count} GPUs` : ''}. Turn off for CPU.`
+            : 'Using CPU. Turn on for faster transcription.';
+
+    return (
+        <div className="flex items-center gap-3">
+            <Tip label={available ? null : reason}>
+                <GpuToggle checked={checked && available} disabled={!available} onChange={onChange} label="GPU transcription" />
+            </Tip>
+            <div className="min-w-0">
+                <p className="text-sm font-medium">GPU transcription</p>
+                <p className="text-xs text-muted-foreground">{hint}</p>
+            </div>
+        </div>
+    );
+}
+
 /** Number input with always-visible custom steppers (native spinners
  *  hide cross-browser and can't be styled). */
-function Stepper({ label, value, min = 1, max = 10, onChange }) {
-    const clamp = (v) => Math.min(max, Math.max(min, Number.isFinite(+v) ? +v : min));
+function Stepper({ label, value, min = 1, max = 10, onChange }) {    const clamp = (v) => Math.min(max, Math.max(min, Number.isFinite(+v) ? +v : min));
     const stepCls = 'flex flex-1 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-accent/60';
     return (
         <div className="flex h-9 w-full overflow-hidden rounded-md border border-input bg-background transition-shadow focus-within:ring-2 focus-within:ring-ring">
@@ -67,6 +124,7 @@ export default function Settings({ settings, model_presets }) {
         openrouter_key: '',
         openrouter_model: settings.openrouter_model,
         stt_model: settings.stt_model,
+        stt_gpu: !!settings.stt_gpu,
         clips_count: settings.clips_count,
         caption_default: settings.caption_default,
     });
@@ -128,6 +186,7 @@ export default function Settings({ settings, model_presets }) {
         openrouter_key: '',
         openrouter_model: settings.openrouter_model,
         stt_model: settings.stt_model,
+        stt_gpu: !!settings.stt_gpu,
         clips_count: settings.clips_count,
         caption_default: settings.caption_default,
     };
@@ -191,6 +250,11 @@ export default function Settings({ settings, model_presets }) {
                                     />
                                 </Field>
                             </div>
+                            <GpuRow
+                                gpu={settings.gpu}
+                                checked={form.stt_gpu}
+                                onChange={(v) => setForm({ ...form, stt_gpu: v })}
+                            />
                         </Section>
                         <Section title="Output" className="stagger-4">
                             <div className="grid grid-cols-2 gap-4">
@@ -263,9 +327,9 @@ export default function Settings({ settings, model_presets }) {
                             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                                 <p className="text-xs text-muted-foreground">Reviewed by Kebir Çesko and Arianit Tërshnjaku.</p>
                                 <p className="font-mono text-[11px] text-muted-foreground">Local-first · stays on this machine.</p>
+                                </div>
                             </div>
-                        </div>
-                    </Section>
+                        </Section>
                     </div>
                 </CardContent>
                 <div className="shrink-0 px-4 pb-3">

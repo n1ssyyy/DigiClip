@@ -137,6 +137,53 @@ jobs:
           curl -sfL -o resources/models/ggml-base.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin
           ls -la resources/models/
 
+      - name: Build Vulkan whisper-cli (linux-x64 sidecar)
+        # GPU transcription needs a Vulkan-enabled whisper-cli. The repo
+        # carries a prebuilt linux-x64 binary, but CI rebuilds it from the
+        # pinned whisper.cpp commit so installers never go stale silently.
+        # Needs: Vulkan headers/loader + glslc for shader compilation.
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libvulkan-dev glslang-tools cmake g++
+          git clone https://github.com/ggerganov/whisper.cpp /tmp/whisper.cpp
+          git -C /tmp/whisper.cpp checkout 927cfce34f31707e17f2bff35c349632fb9e2c3a
+          cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build \
+            -DGGML_VULKAN=1 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/whisper.cpp/build -j$(nproc) --target whisper-cli --config Release
+          cp /tmp/whisper.cpp/build/bin/whisper-cli resources/bin/linux-x64/whisper-cli-vulkan
+          chmod 755 resources/bin/linux-x64/whisper-cli-vulkan
+          ./resources/bin/linux-x64/whisper-cli-vulkan --version
+          ls -la resources/bin/linux-x64/
+
+      - name: Build Windows media binaries (ffmpeg + whisper CPU/Vulkan)
+        # win-x64/ is empty in git (binaries are platform-built). Fetch
+        # ffmpeg from gyan.dev, compile whisper.cpp (CPU + Vulkan sidecar)
+        # from the same pinned commit as the linux sidecar. The windows
+        # runners ship the Vulkan SDK (VULKAN_SDK) with glslc included.
+        if: matrix.target == 'win'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:VULKAN_SDK) { throw 'VULKAN_SDK not found on runner — Vulkan SDK preinstall missing' }
+          "$env:VULKAN_SDK\Bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          glslc --version
+          git clone https://github.com/ggerganov/whisper.cpp C:\whisper.cpp
+          git -C C:\whisper.cpp checkout 927cfce34f31707e17f2bff35c349632fb9e2c3a
+          cmake -S C:\whisper.cpp -B C:\whisper-cpu -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build C:\whisper-cpu --target whisper-cli --config Release -j $env:NUMBER_OF_PROCESSORS
+          cmake -S C:\whisper.cpp -B C:\whisper-vk -DGGML_VULKAN=1 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build C:\whisper-vk --target whisper-cli --config Release -j $env:NUMBER_OF_PROCESSORS
+          Copy-Item C:\whisper-cpu\bin\Release\whisper-cli.exe resources\bin\win-x64\whisper-cli.exe
+          Copy-Item C:\whisper-vk\bin\Release\whisper-cli.exe resources\bin\win-x64\whisper-cli-vulkan.exe
+          curl.exe -sfL -o $env:TEMP\ffmpeg.zip https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+          Expand-Archive $env:TEMP\ffmpeg.zip -DestinationPath $env:TEMP\ffzip
+          Copy-Item "$env:TEMP\ffzip\ffmpeg-*-essentials_build\bin\ffmpeg.exe" resources\bin\win-x64\ffmpeg.exe
+          Copy-Item "$env:TEMP\ffzip\ffmpeg-*-essentials_build\bin\ffprobe.exe" resources\bin\win-x64\ffprobe.exe
+          Get-ChildItem resources\bin\win-x64\
+          .\resources\bin\win-x64\whisper-cli.exe --version
+
       - name: Build ${{ matrix.target }} installer
         # NativePHP emits installers to nativephp/electron/dist (not ./build).
         # Pin arch=x64: the default linux target also builds arm64 and the
