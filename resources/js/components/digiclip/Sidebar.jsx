@@ -17,10 +17,10 @@ function SideLink({ href, label, active, children }) {
                 'group relative ml-[6.5px] flex h-10 w-10 items-center overflow-hidden rounded-md whitespace-nowrap',
                 'text-muted-foreground',
                 'motion-safe:transition-[width,background-color,color,box-shadow] motion-safe:duration-200 motion-safe:ease-out',
-                // Hover: anchored left, grows to a fixed 160px pill; label centers
-                // in the space between the icon box and the pill's right edge.
-                // No background wash on hover: the glyph just brightens.
-                'hover:w-40 hover:text-foreground',
+                // Hover: anchored left, grows to a fixed 160px pill with a solid
+                // background so the label stays readable over page content;
+                // label centers in the space between icon box and right edge.
+                'hover:w-40 hover:bg-accent hover:text-foreground hover:shadow-xl hover:ring-1 hover:ring-border',
                 'focus-visible:outline-2 focus-visible:outline-ring',
                 active && 'bg-accent/60 text-foreground',
             )}

@@ -51,4 +51,19 @@ class ElectronBuildEnvTest extends TestCase
 
         $this->assertSame('log', config('broadcasting.default'));
     }
+
+    public function test_linux_icon_set_covers_taskbar_sizes(): void
+    {
+        // v1.0.3 shipped only a 512px hicolor icon, but hicolor declares
+        // 512x512/apps as Scalable MinSize=64 — taskbar lookups (16-48px)
+        // never matched and the app showed a generic gear icon. The deb
+        // must carry small sizes too (wired via linux.icon = build/icons).
+        foreach ([16, 24, 32, 48, 64, 128, 256, 512] as $size) {
+            $path = base_path("nativephp/electron/build/icons/{$size}x{$size}.png");
+            $this->assertFileExists($path, "Missing {$size}x{$size} Linux icon");
+            [$w, $h] = getimagesize($path);
+            $this->assertSame($size, $w);
+            $this->assertSame($size, $h);
+        }
+    }
 }

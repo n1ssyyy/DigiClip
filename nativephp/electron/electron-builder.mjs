@@ -146,6 +146,13 @@ export default {
         category: 'AudioVideo',
         description: 'Drop a video, get TikTok-ready clips. Offline transcription, AI clip picking, captioned 9:16 renders.',
         executableName: fileName,
+        // DIGICLIP: full PNG icon set (16-512px). A single 512px icon is NOT
+        // enough: hicolor declares 512x512/apps as Scalable MinSize=64, so a
+        // 512-only icon never matches taskbar-sized (16-48px) lookups and
+        // the running app falls back to the generic gear icon (v1.0.3).
+        // Verified: `app-builder icon --format set` resolves this dir to all
+        // 8 sizes, which FpmTarget installs to hicolor/*/apps/.
+        icon: 'build/icons',
         // DIGICLIP: Electron sets WM_CLASS from package.json `name`
         // (extraMetadata below), which is the lowercase slug, while the
         // default StartupWMClass is the display `productName`. The case
