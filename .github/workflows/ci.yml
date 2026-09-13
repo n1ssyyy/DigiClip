@@ -141,14 +141,14 @@ jobs:
         # GPU transcription needs a Vulkan-enabled whisper-cli. The repo
         # carries a prebuilt linux-x64 binary, but CI rebuilds it from the
         # pinned whisper.cpp commit so installers never go stale silently.
-        # Needs: Vulkan headers/loader + glslc (via glslang-tools or the
-        # Vulkan SDK's /usr/local/bin/glslc). Ubuntu's glslang-tools alone
-        # may miss FindVulkan's glslc check, so add it explicitly if present.
+        # Needs: Vulkan headers/loader + glslc (Ubuntu's glslc lives in the
+        # `shaderc` package; glslang-tools alone is not enough). A LunarG
+        # SDK glslc at /usr/local/bin is symlinked as a fallback.
         if: matrix.target == 'linux'
         shell: bash
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y libvulkan-dev glslang-tools cmake g++
+          sudo apt-get install -y libvulkan-dev glslang-tools shaderc cmake g++
           if [ -f /usr/local/bin/glslc ] && [ ! -x /usr/bin/glslc ]; then
             sudo ln -s /usr/local/bin/glslc /usr/bin/glslc
           fi
