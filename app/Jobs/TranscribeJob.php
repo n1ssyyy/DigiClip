@@ -21,6 +21,11 @@ class TranscribeJob implements ShouldQueue
     // inside handle() via the transcribe() timeout option.
     public int $timeout = 14400;
 
+    // Queue re-reservation guard: default retry_after=90s would re-reserve
+    // a running TranscribeJob (takes 5-60+ min). Override per-job so the
+    // job stays reserved until it finishes or the worker timeout fires.
+    public int $retryAfter = 15000;
+
     public int $tries = 1;
 
     public function __construct(public int $projectId) {}
