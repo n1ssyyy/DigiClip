@@ -19,7 +19,8 @@ function SideLink({ href, label, active, children }) {
                 'motion-safe:transition-[width,background-color,color,box-shadow] motion-safe:duration-200 motion-safe:ease-out',
                 // Hover: anchored left, grows to a fixed 160px pill; label centers
                 // in the space between the icon box and the pill's right edge.
-                'hover:w-40 hover:bg-accent hover:text-foreground hover:shadow-xl hover:ring-1 hover:ring-border',
+                // No background wash on hover: the glyph just brightens.
+                'hover:w-40 hover:text-foreground',
                 'focus-visible:outline-2 focus-visible:outline-ring',
                 active && 'bg-accent/60 text-foreground',
             )}

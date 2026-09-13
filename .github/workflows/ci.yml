@@ -108,11 +108,11 @@ jobs:
         run: npm ci
 
       - name: Install Electron dependencies
-        working-directory: vendor/nativephp/desktop/resources/electron
+        working-directory: nativephp/electron
         run: npm ci
 
       - name: Rebuild stale electron-plugin dist (upstream workaround)
-        working-directory: vendor/nativephp/desktop/resources/electron
+        working-directory: nativephp/electron
         run: npm run plugin:build
 
       - name: Prepare environment
