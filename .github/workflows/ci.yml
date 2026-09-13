@@ -141,12 +141,18 @@ jobs:
         # GPU transcription needs a Vulkan-enabled whisper-cli. The repo
         # carries a prebuilt linux-x64 binary, but CI rebuilds it from the
         # pinned whisper.cpp commit so installers never go stale silently.
-        # Needs: Vulkan headers/loader + glslc for shader compilation.
+        # Needs: Vulkan headers/loader + glslc (via glslang-tools or the
+        # Vulkan SDK's /usr/local/bin/glslc). Ubuntu's glslang-tools alone
+        # may miss FindVulkan's glslc check, so add it explicitly if present.
         if: matrix.target == 'linux'
         shell: bash
         run: |
           sudo apt-get update -y
           sudo apt-get install -y libvulkan-dev glslang-tools cmake g++
+          if [ -f /usr/local/bin/glslc ] && [ ! -x /usr/bin/glslc ]; then
+            sudo ln -s /usr/local/bin/glslc /usr/bin/glslc
+          fi
+          glslc --version
           git clone https://github.com/ggerganov/whisper.cpp /tmp/whisper.cpp
           git -C /tmp/whisper.cpp checkout 927cfce34f31707e17f2bff35c349632fb9e2c3a
           cmake -S /tmp/whisper.cpp -B /tmp/whisper.cpp/build \
@@ -160,23 +166,37 @@ jobs:
       - name: Build Windows media binaries (ffmpeg + whisper CPU/Vulkan)
         # win-x64/ is empty in git (binaries are platform-built). Fetch
         # ffmpeg from gyan.dev, compile whisper.cpp (CPU + Vulkan sidecar)
-        # from the same pinned commit as the linux sidecar. The windows
-        # runners ship the Vulkan SDK (VULKAN_SDK) with glslc included.
+        # from the same pinned commit as the linux sidecar. Vulkan borrows
+        # the runner's Vulkan SDK when present; when absent, the Windows
+        # installer still ships a CPU-only whisper-cli and GPU toggle stays
+        # disabled with a clear Health/Settings reason (no build break).
         if: matrix.target == 'win'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not $env:VULKAN_SDK) { throw 'VULKAN_SDK not found on runner — Vulkan SDK preinstall missing' }
-          "$env:VULKAN_SDK\Bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          glslc --version
+          $hasVulkan = $false
+          if ($env:VULKAN_SDK -and (Test-Path "$env:VULKAN_SDK\Bin\glslc.exe")) {
+            "$env:VULKAN_SDK\Bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            glslc --version
+            $hasVulkan = $true
+          } elseif (Get-Command glslc -ErrorAction SilentlyContinue) {
+            glslc --version
+            $hasVulkan = $true
+          } else {
+            Write-Host '::warning::Vulkan SDK / glslc not found — win-x64 GPU sidecar will be skipped (CPU only)'
+          }
           git clone https://github.com/ggerganov/whisper.cpp C:\whisper.cpp
           git -C C:\whisper.cpp checkout 927cfce34f31707e17f2bff35c349632fb9e2c3a
           cmake -S C:\whisper.cpp -B C:\whisper-cpu -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build C:\whisper-cpu --target whisper-cli --config Release -j $env:NUMBER_OF_PROCESSORS
-          cmake -S C:\whisper.cpp -B C:\whisper-vk -DGGML_VULKAN=1 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
-          cmake --build C:\whisper-vk --target whisper-cli --config Release -j $env:NUMBER_OF_PROCESSORS
           Copy-Item C:\whisper-cpu\bin\Release\whisper-cli.exe resources\bin\win-x64\whisper-cli.exe
-          Copy-Item C:\whisper-vk\bin\Release\whisper-cli.exe resources\bin\win-x64\whisper-cli-vulkan.exe
+          if ($hasVulkan) {
+            cmake -S C:\whisper.cpp -B C:\whisper-vk -DGGML_VULKAN=1 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release
+            cmake --build C:\whisper-vk --target whisper-cli --config Release -j $env:NUMBER_OF_PROCESSORS
+            Copy-Item C:\whisper-vk\bin\Release\whisper-cli.exe resources\bin\win-x64\whisper-cli-vulkan.exe
+          } else {
+            Write-Host 'Skipping whisper-cli-vulkan.exe (no Vulkan)'
+          }
           curl.exe -sfL -o $env:TEMP\ffmpeg.zip https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
           Expand-Archive $env:TEMP\ffmpeg.zip -DestinationPath $env:TEMP\ffzip
           Copy-Item "$env:TEMP\ffzip\ffmpeg-*-essentials_build\bin\ffmpeg.exe" resources\bin\win-x64\ffmpeg.exe
