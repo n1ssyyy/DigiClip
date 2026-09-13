@@ -32,7 +32,7 @@
 
 <p align="center">
   <a href="https://github.com/n1ssyyy"><img src="https://shieldcn.dev/badge/Author-n1ssyyy-181717.svg?logo=github&variant=default&size=default" alt="n1ssyyy" /></a>
-  <a href="https://shkolladigjitale.com/"><img src="https://shieldcn.dev/badge/Partner-Shkolla_Digjitale-1e40af.svg?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIj48cGF0aCBkPSJNMTIgMkM2LjQ4IDIgMiA2LjQ4IDIgMTJzNC40OCAxMCAxMCAxMCAxMC00LjQ4IDEwLTEwUzE3LjUyIDIgMTIgMnpNMTMgMTdINVYxNUgxM1YxN1pNMTkgMTdIMTZ2LTJoM3YyeiIgZmlsbD0iI2ZmZiIvPjwvc3ZnPg==&variant=default&size=default" alt="Shkolla Digjitale" /></a>
+  <a href="https://shkolladigjitale.com/"><img src="https://shieldcn.dev/badge/Partner-Shkolla_Digjitale-1e40af.svg?labelColor=ffffff&color=1e40af&labelTextColor=1e40af&variant=default&size=default" alt="Shkolla Digjitale" /></a>
 </p>
 
 ---
@@ -58,9 +58,9 @@
 ```mermaid
 flowchart LR
     A[📥 Upload] --> B[🎵 Extract Audio]
-    B --> C[🗣️ Transcribe\n(whisper.cpp)]
-    C --> D[🧠 Analyze Clips\n(OpenRouter / Heuristic)]
-    D --> E[🎞️ Render Clips\n(ffmpeg + libass)]
+    B --> C[🗣️ Transcribe]
+    C --> D[🧠 Analyze Clips]
+    D --> E[🎞️ Render Clips]
     E --> F[✅ Done]
 
     style A fill:#e8f5e9,stroke:#2e7d32
