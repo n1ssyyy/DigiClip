@@ -107,9 +107,19 @@ php artisan native:build linux         # AppImage + deb
 php artisan native:build win           # NSIS installer (wine needed when cross-compiling from Linux)
 ```
 
+The Electron shell project is published into `nativephp/electron/` (custom
+`electron-builder.mjs`: app icon, `.desktop` entry with matching
+`StartupWMClass`, deb metadata). After `composer install/update`, refresh its
+deps once — `native:build` / `native:run` run `npm ci` there themselves:
+
+```bash
+npm ci --prefix nativephp/electron
+npm run plugin:build --prefix nativephp/electron   # stale-dist workaround, see below
+```
+
 > **Known upstream wrinkle** (nativephp/desktop 2.3.0): the shipped `electron-plugin/dist/` can be stale and fail the Electron main build. Workaround after every `composer install/update`:
 > ```bash
-> npm run plugin:build --prefix vendor/nativephp/desktop/resources/electron
+> npm run plugin:build --prefix nativephp/electron
 > ```
 > CI does this automatically.
 

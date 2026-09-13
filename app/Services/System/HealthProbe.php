@@ -21,9 +21,29 @@ class HealthProbe
             'encoder' => $this->encoder(),
             'whisper' => $this->binaryVersion('whisper-cli', ['--version']),
             'storage' => $this->writable('app storage', storage_path('app')),
-            'database' => $this->writable('sqlite file', database_path('database.sqlite'), touch: true),
+            'database' => $this->database(),
             'queue' => ['connection' => config('queue.default'), 'ok' => config('queue.default') === 'database'],
         ]);
+    }
+
+    /**
+     * Probe the EFFECTIVE database file (default connection), not a
+     * hardcoded path: inside the native runtime NativePHP rewrites the
+     * default connection to a user-writable sqlite file, while the
+     * repo-relative database.sqlite stays an untouched stub in /opt.
+     */
+    private function database(): array
+    {
+        $conn = (string) config('database.default', 'sqlite');
+        $file = config("database.connections.{$conn}.database");
+        if (! is_string($file) || $file === '') {
+            $file = database_path('database.sqlite');
+        }
+        if ($file === ':memory:') {
+            return ['ok' => true, 'path' => ':memory:', 'hint' => null];
+        }
+
+        return $this->writable('sqlite file', $file, touch: true);
     }
 
     private function extensions(): array

@@ -33,6 +33,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->rememberState();
 
         $this->ensureReverb();
+        $this->ensureDatabase();
     }
 
     /**
@@ -51,6 +52,33 @@ class NativeAppServiceProvider implements ProvidesPhpIni
                 'reverb',
                 persistent: true,
             );
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * Zero-setup first launch: the packaged app keeps SQLite in the
+     * user-writable data dir (NativePHP `rewriteDatabase`), but nothing
+     * creates the file or its tables out of the box. Touch + migrate here
+     * (idempotent, ~ms when already current). Runs in the native runtime
+     * only (main process, queue workers, php children all boot this
+     * provider); never break boot over it — HealthProbe reports DB state.
+     */
+    private function ensureDatabase(): void
+    {
+        try {
+            if (! config('nativephp-internal.running')) {
+                return;
+            }
+            $path = config('nativephp-internal.database_path');
+            if (! is_string($path) || $path === '') {
+                return;
+            }
+            if (! is_file($path)) {
+                @mkdir(dirname($path), 0755, true);
+                @touch($path);
+            }
+            \Illuminate\Support\Facades\Artisan::call('native:migrate', ['--force' => true]);
         } catch (\Throwable) {
         }
     }
