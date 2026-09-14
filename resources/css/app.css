@@ -480,3 +480,22 @@ header [data-no-drag] {
         opacity: 0;
     }
 }
+
+/* Tile mount: new clips rise into the grid (FLIP-lite: mount-only, so
+   polls never replay it). The source strip glides to its new cell via
+   the grid's own transition since it never remounts. */
+@keyframes tile-in {
+    from {
+        transform: translateY(14px) scale(0.97);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .tile-in {
+        animation: tile-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+}
