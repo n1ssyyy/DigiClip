@@ -535,7 +535,10 @@ export default function Home({ projects, limits }) {
         return () => { if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current); };
     }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
     useEffect(() => () => { if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current); }, []);
-    const activeLive = projects.some((p) => ACTIVE.includes(p.status) || p.status === 'paused');
+    const activeLive = projects.some((p) => ACTIVE.includes(p.status) || p.status === 'paused')
+        // Also poll while any clip render is still in progress (project may
+        // already be clips_ready but renders run asynchronously on the render queue).
+        || projects.some((p) => (p.clip_candidates ?? []).some((c) => (c.renders ?? []).some((r) => r.status !== 'done' && r.status !== 'failed')));
     const ids = projects.map((p) => p.id);
     const shownIdx = Math.max(0, ids.indexOf(shownId));
     const shown = projects[shownIdx] ?? null;

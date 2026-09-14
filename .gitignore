@@ -2,6 +2,7 @@
 .DS_Store
 .env
 .env.backup
+.env.local-backup
 .env.production
 # NativePHP Electron build envs: electron-vite inlines
 # MAIN_VITE_NATIVEPHP_BUILD_PATH from these at build time. Without

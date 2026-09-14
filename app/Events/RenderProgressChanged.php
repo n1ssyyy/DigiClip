@@ -2,10 +2,13 @@
 
 namespace App\Events;
 
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 
+/**
+ * NOTE: broadcastOn returns a plain string channel name, not a Channel
+ * object — see ProjectStatusChanged for why.
+ */
 class RenderProgressChanged implements ShouldBroadcastNow
 {
     use Dispatchable;
@@ -18,9 +21,9 @@ class RenderProgressChanged implements ShouldBroadcastNow
         public string $status,
     ) {}
 
-    public function broadcastOn(): Channel
+    public function broadcastOn(): array
     {
-        return new Channel("project.{$this->projectId}");
+        return ["project.{$this->projectId}"];
     }
 
     public function broadcastAs(): string
