@@ -1,9 +1,10 @@
 import { Link, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Clapperboard } from 'lucide-react';
+import { Clapperboard, HelpCircle } from 'lucide-react';
 import Sidebar from '../components/digiclip/Sidebar';
 import PageLine from '../components/digiclip/PageLine';
 import Toasts from '../components/digiclip/Toasts';
+import Onboarding, { shouldShowOnboarding } from '../components/digiclip/Onboarding';
 import { useNotifications } from '../components/digiclip/useNotifications';
 import WindowControls, { isNativeWindow, sendWindowAction } from '../components/digiclip/Titlebar';
 
@@ -41,6 +42,42 @@ export default function AppLayout({ children }) {
     const motionCls = stage.leaving
         ? (stage.dir >= 0 ? 'page-leave-down' : 'page-leave-up')
         : (stage.dir >= 0 ? 'page-enter-down' : 'page-enter-up');
+
+    // First-run onboarding: welcome by device username + 4-step tour.
+    // useState initializer (not an effect) so the first paint already
+    // knows — no flash of the tour on repeat visits, no late pop-in.
+    const [tourOpen, setTourOpen] = useState(() => shouldShowOnboarding());
+    const [tourLeaving, setTourLeaving] = useState(false);
+    const tourTimer = useRef(null);
+    useEffect(() => () => { if (tourTimer.current) clearTimeout(tourTimer.current); }, []);
+    const openTour = useCallback(() => {
+        if (tourTimer.current) clearTimeout(tourTimer.current);
+        setTourLeaving(false);
+        setTourOpen(true);
+    }, []);
+    const closeTour = useCallback(() => {
+        setTourLeaving(true);
+        if (tourTimer.current) clearTimeout(tourTimer.current);
+        // Must cover the fade-out/pop-out exit (180ms).
+        tourTimer.current = setTimeout(() => {
+            setTourOpen(false);
+            setTourLeaving(false);
+        }, 200);
+    }, []);
+
+    // Replay hooks: header Tour button uses openTour directly; Settings
+    // and Health fire a window event (they live below this layout).
+    useEffect(() => {
+        const replay = () => {
+            try {
+                localStorage.removeItem('digiclip.onboardingDone');
+            } catch {
+            }
+            openTour();
+        };
+        window.addEventListener('digiclip:tour', replay);
+        return () => window.removeEventListener('digiclip:tour', replay);
+    }, [openTour]);
 
     const toggleMaximize = useCallback(() => {
         setMaximized((prev) => {
@@ -146,6 +183,17 @@ export default function AppLayout({ children }) {
                     DigiClip
                 </Link>
                 <div className="flex-1" aria-hidden />
+                <button
+                    type="button"
+                    aria-label="Take the tour"
+                    title="Take the tour"
+                    data-no-drag
+                    style={noDrag}
+                    onClick={openTour}
+                    className="mr-1 flex items-center justify-center self-center rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                    <HelpCircle className="size-4" aria-hidden />
+                </button>
                 <WindowControls maximized={maximized} onToggleMaximize={toggleMaximize} />
             </header>
             <div className="flex flex-1 items-start">
@@ -164,6 +212,14 @@ export default function AppLayout({ children }) {
                 </div>
             </div>
             <Toasts toasts={toasts} onDismiss={dismiss} />
+            {tourOpen && (
+                <Onboarding
+                    username={props.username}
+                    open={tourOpen}
+                    leaving={tourLeaving}
+                    onClose={closeTour}
+                />
+            )}
         </div>
     );
 }

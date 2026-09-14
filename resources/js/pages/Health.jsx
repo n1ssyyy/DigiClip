@@ -184,6 +184,13 @@ export default function Health({ report }) {
                         </div>
                     </Swap>
                     <div className="flex-1" aria-hidden />
+                    <button
+                        type="button"
+                        onClick={() => window.dispatchEvent(new CustomEvent('digiclip:tour'))}
+                        className="shrink-0 font-mono text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    >
+                        Take the tour again
+                    </button>
                     <ul className="flex shrink-0 flex-col divide-y divide-border">
                         {checks.map((c) => <Row key={c.label} {...c} />)}
                     </ul>

@@ -334,7 +334,14 @@ export default function Settings({ settings, model_presets }) {
                 </CardContent>
                 <div className="shrink-0 px-4 pb-3">
                     <div aria-hidden className="border-t border-border" />
-                    <div className="flex items-center justify-end pt-3">
+                    <div className="flex items-center justify-between gap-2 pt-3">
+                        <button
+                            type="button"
+                            onClick={() => window.dispatchEvent(new CustomEvent('digiclip:tour'))}
+                            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                            Take the tour again
+                        </button>
                         <Button type="submit" form="settings-form" disabled={saving || !dirty}>
                             <span key={saveLabel} className="skel-fade-in block">
                                 {saveLabel}
