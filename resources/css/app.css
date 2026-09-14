@@ -272,7 +272,7 @@ header [data-no-drag] {
     }
     /* Mount fade-and-grow for dropdown panels and dialog boxes. */
     .pop {
-        animation: pop 150ms ease-out;
+        animation: pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
     }
     /* Dropdown exit beat: retreats the way it came before unmount. */
     .menu-out {
@@ -280,14 +280,14 @@ header [data-no-drag] {
     }
     /* Plain mount fade for overlays. */
     .fade {
-        animation: fade 150ms ease-out;
+        animation: fade 200ms ease-out;
     }
     /* Overlay exit: entrance in reverse, held mounted by ExitBeat. */
     .fade-out {
-        animation: fade 130ms ease-in forwards reverse;
+        animation: fade 180ms ease-in forwards reverse;
     }
     .pop-out {
-        animation: pop 130ms ease-in forwards reverse;
+        animation: pop 180ms ease-in forwards reverse;
     }
     /* Staggered main panels: 1 lands with the page, each next 70ms later.
        Backwards fill for the same reason as .rise above. */
@@ -485,6 +485,24 @@ header [data-no-drag] {
     to {
         transform: translateY(18px);
         opacity: 0;
+    }
+}
+
+/* Queue row enter: new rows drop in from above (slide down).
+   Distinct from .rise (up from below, used by tiles/panels). */
+@keyframes queue-in {
+    from {
+        transform: translateY(-18px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .queue-in {
+        animation: queue-in 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
     }
 }
 
