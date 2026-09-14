@@ -367,9 +367,9 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
                     <span className="shrink-0 text-red-500">failed</span>
                 ) : (
                     <Tip label="Clip is being made" side="top">
-                        <span className="flex shrink-0 items-center gap-1">
-                            <Loader2 className="size-3 animate-spin" aria-hidden />
+                        <span className="flex shrink-0 items-center gap-1 justify-end">
                             making
+                            <Loader2 className="size-3 animate-spin" aria-hidden />
                         </span>
                     </Tip>
                 )}

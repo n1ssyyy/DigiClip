@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Events\RenderProgressChanged;
 use App\Models\ClipCandidate;
 use App\Services\Notifications\Notifier;
 use App\Services\Render\RenderService;
@@ -25,11 +26,27 @@ class RenderClipJob implements ShouldQueue
         $existing = $this->renderId ? \App\Models\Render::find($this->renderId) : null;
         $render = $renderer->render($clip, function (int $pct) {
             if ($this->renderId) {
-                \App\Models\Render::whereKey($this->renderId)->update(['progress' => $pct]);
+                $r = \App\Models\Render::whereKey($this->renderId)->first();
+                if ($r) {
+                    $r->update(['progress' => $pct]);
+                    broadcast(new RenderProgressChanged(
+                        $clip->project_id, $clip->id, $r->id, $pct, 'rendering'
+                    ));
+                }
             }
         }, $existing);
         if ($this->renderId && $render->id !== $this->renderId) {
             $this->renderId = $render->id;
+        }
+
+        if ($this->renderId) {
+            $r = \App\Models\Render::whereKey($this->renderId)->first();
+            if ($r) {
+                $r->update(['progress' => 100, 'status' => 'done']);
+                broadcast(new RenderProgressChanged(
+                    $clip->project_id, $clip->id, $r->id, 100, 'done'
+                ));
+            }
         }
 
         // One ping per project, not per clip: only when every render landed.
@@ -52,6 +69,9 @@ class RenderClipJob implements ShouldQueue
                 'status' => 'failed',
                 'error' => mb_substr($e->getMessage(), 0, 500),
             ]);
+            broadcast(new RenderProgressChanged(
+                $clip->project_id ?? 0, $clip->id ?? 0, $this->renderId, 0, 'failed'
+            ));
         }
         app(Notifier::class)->send('error', 'Render failed', ($clip ? "{$clip->title} — " : '').mb_substr($e->getMessage(), 0, 160), $clip?->project_id ? ['project_id' => $clip->project_id] : []);
     }
