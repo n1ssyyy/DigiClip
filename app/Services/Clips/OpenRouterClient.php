@@ -95,11 +95,55 @@ class OpenRouterClient
             ->post('/chat/completions', [
                 'model' => $options['model'] ?? $this->model,
                 'temperature' => 0.3,
-                'response_format' => ['type' => 'json_object'],
                 'messages' => [
                     ['role' => 'system', 'content' => $system],
                     ['role' => 'user', 'content' => $user],
                 ],
+                'tools' => [
+                    [
+                        'type' => 'function',
+                        'function' => [
+                            'name' => 'submit_clips',
+                            'description' => 'Submit the ranked clip candidates for the video.',
+                            'parameters' => [
+                                'type' => 'object',
+                                'required' => ['clips'],
+                                'properties' => [
+                                    'clips' => [
+                                        'type' => 'array',
+                                        'items' => [
+                                            'type' => 'object',
+                                            'required' => ['start_s', 'end_s', 'hook_line', 'why_it_works', 'scores', 'title', 'hashtags', 'caption_style'],
+                                            'properties' => [
+                                                'start_s' => ['type' => 'number'],
+                                                'end_s' => ['type' => 'number'],
+                                                'hook_line' => ['type' => 'string'],
+                                                'why_it_works' => ['type' => 'string'],
+                                                'scores' => [
+                                                    'type' => 'object',
+                                                    'required' => ['hook', 'retention', 'value', 'share'],
+                                                    'properties' => [
+                                                        'hook' => ['type' => 'integer'],
+                                                        'retention' => ['type' => 'integer'],
+                                                        'value' => ['type' => 'integer'],
+                                                        'share' => ['type' => 'integer'],
+                                                    ],
+                                                ],
+                                                'title' => ['type' => 'string'],
+                                                'hashtags' => [
+                                                    'type' => 'array',
+                                                    'items' => ['type' => 'string'],
+                                                ],
+                                                'caption_style' => ['type' => 'string', 'enum' => ['tiktok', 'karaoke', 'hormozi', 'minimal']],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'tool_choice' => ['type' => 'function', 'function' => ['name' => 'submit_clips']],
             ]);
 
         if (! $res->successful()) {
@@ -108,14 +152,36 @@ class OpenRouterClient
                 $res->status()
             );
         }
-        $content = $res->json('choices.0.message.content', '');
-        $data = json_decode(is_string($content) ? $content : '', true);
-        if (! is_array($data)) {
+
+        $message = $res->json('choices.0.message', []);
+
+        // Extract tool call arguments.
+        $toolArgs = null;
+        if (! empty($message['tool_calls'][0]['function']['arguments'])) {
+            $raw = $message['tool_calls'][0]['function']['arguments'];
+            $toolArgs = json_decode(is_string($raw) ? $raw : json_encode($raw), true);
+        }
+
+        // Fallback: some models return content instead of tool_calls.
+        if (! is_array($toolArgs)) {
+            $content = $message['content'] ?? '';
+            $raw = is_string($content) ? $content : '';
+            if (preg_match('/```(?:json)?\s*\n?(.*?)\n?\s*```/s', $raw, $m)) {
+                $raw = trim($m[1]);
+            }
+            $toolArgs = json_decode($raw, true);
+        }
+
+        if (! is_array($toolArgs)) {
+            \Log::warning('OpenRouter non-JSON response', [
+                'model' => $options['model'] ?? $this->model,
+                'content' => mb_substr($message['content'] ?? '', 0, 500),
+            ]);
             throw new RuntimeException('OpenRouter returned non-JSON content.');
         }
 
         return [
-            'clips' => $data['clips'] ?? [],
+            'clips' => $toolArgs['clips'] ?? [],
             'usage' => [
                 'prompt_tokens' => (int) $res->json('usage.prompt_tokens', 0),
                 'completion_tokens' => (int) $res->json('usage.completion_tokens', 0),

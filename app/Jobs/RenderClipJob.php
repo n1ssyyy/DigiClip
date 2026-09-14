@@ -24,14 +24,17 @@ class RenderClipJob implements ShouldQueue
     {
         $clip = ClipCandidate::findOrFail($this->clipId);
         $existing = $this->renderId ? \App\Models\Render::find($this->renderId) : null;
-        $render = $renderer->render($clip, function (int $pct) {
+        $render = $renderer->render($clip, function (int $pct) use ($clip) {
             if ($this->renderId) {
                 $r = \App\Models\Render::whereKey($this->renderId)->first();
                 if ($r) {
                     $r->update(['progress' => $pct]);
-                    broadcast(new RenderProgressChanged(
-                        $clip->project_id, $clip->id, $r->id, $pct, 'rendering'
-                    ));
+                    try {
+                        broadcast(new RenderProgressChanged(
+                            $clip->project_id, $clip->id, $r->id, $pct, 'rendering'
+                        ));
+                    } catch (\Throwable) {
+                    }
                 }
             }
         }, $existing);
@@ -43,9 +46,12 @@ class RenderClipJob implements ShouldQueue
             $r = \App\Models\Render::whereKey($this->renderId)->first();
             if ($r) {
                 $r->update(['progress' => 100, 'status' => 'done']);
-                broadcast(new RenderProgressChanged(
-                    $clip->project_id, $clip->id, $r->id, 100, 'done'
-                ));
+                try {
+                    broadcast(new RenderProgressChanged(
+                        $clip->project_id, $clip->id, $r->id, 100, 'done'
+                    ));
+                } catch (\Throwable) {
+                }
             }
         }
 
@@ -69,9 +75,12 @@ class RenderClipJob implements ShouldQueue
                 'status' => 'failed',
                 'error' => mb_substr($e->getMessage(), 0, 500),
             ]);
-            broadcast(new RenderProgressChanged(
-                $clip->project_id ?? 0, $clip->id ?? 0, $this->renderId, 0, 'failed'
-            ));
+            try {
+                broadcast(new RenderProgressChanged(
+                    $clip->project_id ?? 0, $clip->id ?? 0, $this->renderId, 0, 'failed'
+                ));
+            } catch (\Throwable) {
+            }
         }
         app(Notifier::class)->send('error', 'Render failed', ($clip ? "{$clip->title} — " : '').mb_substr($e->getMessage(), 0, 160), $clip?->project_id ? ['project_id' => $clip->project_id] : []);
     }
