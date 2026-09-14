@@ -385,7 +385,7 @@ function QueueExitBeat({ id, ids, project, onCancel }) {
  *  from byte zero, which read as a flash/cutout. State also resets only
  *  when the src actually changes, so the parent's 10s reloads can't yank
  *  a playing video back to its skeleton. */
-function PlayerDialog({ title, sub, src, poster, onClose, leaving }) {
+function PlayerDialog({ title, sub, src, poster, tall, onClose, leaving }) {
     const videoRef = useRef(null);
     const [waiting, setWaiting] = useState(true);
     const [ready, setReady] = useState(false);
@@ -429,7 +429,13 @@ function PlayerDialog({ title, sub, src, poster, onClose, leaving }) {
                 role="dialog"
                 aria-modal="true"
                 aria-label={title}
-                className={cn('w-[min(760px,100%)] rounded-lg border bg-card p-4 shadow-2xl', leaving ? 'pop-out' : 'pop')}
+                className={cn(
+                    'rounded-lg border bg-card p-4 shadow-2xl',
+                    // Generated clips are 9:16 vertical: narrow portrait box.
+                    // Source playback stays a wide landscape box.
+                    tall ? 'w-[min(400px,100%)]' : 'w-[min(760px,100%)]',
+                    leaving ? 'pop-out' : 'pop',
+                )}
             >
                 <div className="flex items-center gap-2 pb-3">
                     <p className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</p>
@@ -464,7 +470,10 @@ function PlayerDialog({ title, sub, src, poster, onClose, leaving }) {
                     <video
                         ref={videoRef}
                         className={cn(
-                            'aspect-video w-full rounded-md bg-black motion-safe:transition-opacity motion-safe:duration-300',
+                            'rounded-md bg-black motion-safe:transition-opacity motion-safe:duration-300',
+                            // Portrait clips letterbox inside a capped 9:16
+                            // frame; landscape source fills the wide box.
+                            tall ? 'mx-auto aspect-[9/16] max-h-[62dvh] w-auto' : 'aspect-video w-full',
                             ready ? 'opacity-100' : 'opacity-0',
                         )}
                         controls
@@ -512,6 +521,7 @@ function ClipTile({ clip, tall, projectName, onPlay, fresh }) {
                 title: clip.title || `Clip #${clip.rank}`,
                 sub: projectName,
                 src: `/renders/${render.id}/stream`,
+                tall: true,
             }) : undefined}
             onKeyDown={playable ? (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -520,6 +530,7 @@ function ClipTile({ clip, tall, projectName, onPlay, fresh }) {
                         title: clip.title || `Clip #${clip.rank}`,
                         sub: projectName,
                         src: `/renders/${render.id}/stream`,
+                        tall: true,
                     });
                 }
             } : undefined}
@@ -1079,6 +1090,7 @@ export default function Home({ projects, limits }) {
                                         sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
                                         src: `/projects/${shown.id}/stream`,
                                         poster: `/projects/${shown.id}/poster`,
+                                        tall: false,
                                     })}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' || e.key === ' ') {
@@ -1088,6 +1100,7 @@ export default function Home({ projects, limits }) {
                                                 sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
                                                 src: `/projects/${shown.id}/stream`,
                                                 poster: `/projects/${shown.id}/poster`,
+                                                tall: false,
                                             });
                                         }
                                     }}
