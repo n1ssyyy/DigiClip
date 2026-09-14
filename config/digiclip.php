@@ -21,7 +21,7 @@ return [
             'default' => ['in' => 1.50, 'out' => 5.00],
         ],
         'token_cap' => (int) env('OPENROUTER_TOKEN_CAP', 120000),
-        'timeout_s' => (int) env('OPENROUTER_TIMEOUT_S', 90),
+        'timeout_s' => (int) env('OPENROUTER_TIMEOUT_S', 300),
     ],
 
     // Transcription (whisper.cpp sidecar)
