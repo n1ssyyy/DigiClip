@@ -68,11 +68,39 @@ class HomeTest extends TestCase
         $this->post("/projects/{$p->id}/resume")->assertRedirect();
 
         $this->assertSame('queued', $p->fresh()->status);
+        // Fresh project: nothing done yet, full chain from the top.
         Bus::assertChained([
             \App\Jobs\ExtractAudioJob::class,
             \App\Jobs\TranscribeJob::class,
             \App\Jobs\AnalyzeClipsJob::class,
         ]);
+    }
+
+    public function test_resume_skips_finished_steps(): void
+    {
+        Bus::fake();
+        // audio.wav + probe data + transcript all exist: only analysis left.
+        \Illuminate\Support\Facades\Storage::disk('local')->put('projects-sources/keep.mp4', 'x');
+        $p = $this->makeProject(['status' => 'paused', 'source_path' => 'projects-sources/keep.mp4', 'duration_s' => 42.0]);
+        @mkdir(storage_path("app/projects/{$p->id}"), 0755, true);
+        file_put_contents(storage_path("app/projects/{$p->id}/audio.wav"), 'RIFF');
+        $p->transcript()->create(['model' => 'test', 'lang' => 'en', 'full_text' => 'x', 'words_json' => '[]', 'segments_json' => '[]', 'status' => 'done']);
+
+        $this->post("/projects/{$p->id}/resume")->assertRedirect();
+
+        Bus::assertChained([\App\Jobs\AnalyzeClipsJob::class]);
+    }
+
+    public function test_retry_skips_transcribe_when_transcript_exists(): void
+    {
+        Bus::fake();
+        $p = $this->makeProject(['status' => 'failed', 'error' => 'boom']);
+        $p->transcript()->create(['model' => 'test', 'lang' => 'en', 'full_text' => 'x', 'words_json' => '[]', 'segments_json' => '[]', 'status' => 'done']);
+
+        $this->post("/projects/{$p->id}/retry")->assertRedirect();
+
+        // No audio.wav: extract still runs, transcribe is skipped.
+        Bus::assertChained([\App\Jobs\ExtractAudioJob::class, \App\Jobs\AnalyzeClipsJob::class]);
     }
 
     public function test_cancel_removes_project_completely(): void

@@ -155,8 +155,10 @@ function Stepper({ status }) {
     );
 }
 
-/** Cancel confirmation: replaces window.confirm with an in-app dialog. */
-function CancelDialog({ project, onClose }) {
+/** Cancel confirmation: replaces window.confirm with an in-app dialog.
+ *  Exit plays the entrance in reverse (pop-out + fade-out) before
+ *  unmounting, so open and close feel like one motion. */
+function CancelDialog({ project, onClose, leaving }) {
     const keepRef = useRef(null);
 
     useEffect(() => {
@@ -172,7 +174,7 @@ function CancelDialog({ project, onClose }) {
 
     return (
         <div
-            className="fade fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            className={cn('fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
             onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div
@@ -180,7 +182,7 @@ function CancelDialog({ project, onClose }) {
                 aria-modal="true"
                 aria-labelledby="cancel-title"
                 aria-describedby="cancel-desc"
-                className="pop w-[min(400px,calc(100vw-3rem))] rounded-lg border bg-card p-5 shadow-2xl"
+                className={cn('w-[min(400px,calc(100vw-3rem))] rounded-lg border bg-card p-5 shadow-2xl', leaving ? 'pop-out' : 'pop')}
             >
                 <h2 id="cancel-title" className="text-sm font-semibold">Cancel and remove?</h2>
                 <p id="cancel-desc" className="mt-1.5 text-sm text-muted-foreground">
@@ -201,15 +203,23 @@ function CancelDialog({ project, onClose }) {
 }
 
 /** One queue row: top half (name left, status center, buttons right),
- *  bottom half (thicker live stepper). */
-function QueueRow({ project, onCancel }) {
+ *  bottom half (thicker live stepper). Exits via `leaving` (slide toward
+ *  the nearest edge when the row sits at the top/bottom of the list,
+ *  plain fade for middle rows), held mounted by the parent's ExitBeat. */
+function QueueRow({ project, onCancel, leaving, edge }) {
     const pausable = ACTIVE.includes(project.status);
     const paused = project.status === 'paused';
     const failed = project.status === 'failed';
     const label = LIVE_LABEL[project.status] ?? project.status;
 
     return (
-        <div className="rise flex items-center gap-3 rounded-lg border bg-card p-2.5">
+        <div className={cn(
+            'flex items-center gap-3 rounded-lg border bg-card p-2.5',
+            !leaving && 'rise',
+            leaving && edge === 'top' && 'row-out-top',
+            leaving && edge === 'bottom' && 'row-out-bottom',
+            leaving && !edge && 'row-out-fade',
+        )}>
             <div className="relative h-16 w-28 shrink-0 overflow-hidden rounded-md bg-muted">
                 <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
                 <FadeImg src={`/projects/${project.id}/poster`} />
@@ -287,6 +297,86 @@ function QueueRow({ project, onCancel }) {
     );
 }
 
+/** Delayed unmount: keeps children mounted for the exit beat after
+ *  `open` flips false, passing `leaving` down so the dialog can play
+ *  its entrance in reverse. Mounts instantly when `open` flips true.
+ *  `ms` must cover the exit animation (dialogs 150ms, rows 240ms). */
+function ExitBeat({ open, ms = 150, children }) {
+    const [held, setHeld] = useState(open);
+    const [leaving, setLeaving] = useState(false);
+    const timer = useRef(null);
+    const heldRef = useRef(null);
+    if (open) heldRef.current = children;
+
+    useEffect(() => {
+        if (timer.current) clearTimeout(timer.current);
+        if (open) {
+            setHeld(true);
+            setLeaving(false);
+        } else if (held) {
+            setLeaving(true);
+            timer.current = setTimeout(() => {
+                setHeld(false);
+                setLeaving(false);
+            }, ms);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
+    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+    if (!held) return null;
+    const kids = open ? children : heldRef.current;
+    if (!kids) return null;
+    const only = Array.isArray(kids) ? kids[0] : kids;
+    if (only && typeof only === 'object' && 'props' in only) {
+        return { ...only, props: { ...only.props, leaving } };
+    }
+    return kids;
+}
+
+/** One queue row with a graceful delete: when the row's id disappears
+ *  from `ids` (server confirmed the delete via poll), the row plays its
+ *  exit (slide toward the nearest edge for top/bottom rows, fade for
+ *  middle rows) while the surviving rows ease into place, then unmounts.
+ *  New rows still mount with .rise. */
+function QueueExitBeat({ id, ids, project, onCancel }) {
+    const [gone, setGone] = useState(false);
+    const [leaving, setLeaving] = useState(false);
+    const [edge, setEdge] = useState(null);
+    const timer = useRef(null);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        if (ids.includes(id)) return;
+        setLeaving(true);
+        timer.current = setTimeout(() => setGone(true), 240);
+        return () => { if (timer.current) clearTimeout(timer.current); };
+    }, [ids, id]);
+    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+    // Edge from live position: measure once when the exit starts.
+    useEffect(() => {
+        if (!leaving || !ref.current) return;
+        try {
+            const list = ref.current.closest('[data-queue-list]');
+            if (!list) return;
+            const rows = [...list.querySelectorAll('[data-queue-row]')];
+            const at = rows.indexOf(ref.current);
+            if (at === 0) setEdge('top');
+            else if (at === rows.length - 1) setEdge('bottom');
+            else setEdge(null);
+        } catch {
+        }
+    }, [leaving]);
+
+    if (gone) return null;
+    return (
+        <div ref={ref} data-queue-row>
+            <QueueRow project={project} onCancel={onCancel} leaving={leaving} edge={edge} />
+        </div>
+    );
+}
+
 /** One generated clip: title, time range, and its render state, a download
  *  button the moment the video file exists. */
 /** In-app video player: same overlay language as the cancel dialog.
@@ -295,7 +385,7 @@ function QueueRow({ project, onCancel }) {
  *  from byte zero, which read as a flash/cutout. State also resets only
  *  when the src actually changes, so the parent's 10s reloads can't yank
  *  a playing video back to its skeleton. */
-function PlayerDialog({ title, sub, src, poster, onClose }) {
+function PlayerDialog({ title, sub, src, poster, onClose, leaving }) {
     const videoRef = useRef(null);
     const [waiting, setWaiting] = useState(true);
     const [ready, setReady] = useState(false);
@@ -332,14 +422,14 @@ function PlayerDialog({ title, sub, src, poster, onClose }) {
 
     return (
         <div
-            className="fade fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            className={cn('fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
             onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div
                 role="dialog"
                 aria-modal="true"
                 aria-label={title}
-                className="pop w-[min(760px,100%)] rounded-lg border bg-card p-4 shadow-2xl"
+                className={cn('w-[min(760px,100%)] rounded-lg border bg-card p-4 shadow-2xl', leaving ? 'pop-out' : 'pop')}
             >
                 <div className="flex items-center gap-2 pb-3">
                     <p className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</p>
@@ -481,12 +571,11 @@ function ClipTile({ clip, tall, projectName, onPlay, fresh }) {
     );
 }
 
-/** Project scroller: edge-pinned strip, never centered. The selected
- *  project pins to the nearest edge (top when it sits in the first half
- *  of the list, bottom when in the second) and the next two projects
- *  trail behind it, shrinking with distance — no dead gap at either
- *  end, no centering. Project names float over the grid as clickthrough
- *  labels. Scroll the panel (or tap a pill) to rotate. */
+/** Project scroller: clamped-centering strip. The selected project sits
+ *  in the middle row, except the first/last which pin to the top/bottom
+ *  edge so no dead gap appears at either end. Project names float over
+ *  the grid as clickthrough labels. Scroll the panel (or tap a pill) to
+ *  rotate. */
 function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds }) {
     const n = projects.length;
     const idx = Math.max(0, projects.findIndex((p) => p.id === activeId));
@@ -530,12 +619,12 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds })
     if (n === 0) return null;
     const rowH = 24;
     const rows = 3;
-    // Fixed 3-row window, pinned: the active project sits on the nearest
-    // edge (top half -> row 0, bottom half -> row 2) with the next two
-    // trailing behind it. Short lists hug their content (no dead space).
+    // Clamped centering: the active project sits in the middle row,
+    // except at the ends where it pins to the edge so no dead gap
+    // appears — idx 0 shows rows 0-2 with active on top, idx n-1
+    // shows n-3..n-1 with active on bottom. Short lists hug content.
     const viewH = Math.min(n, rows) * rowH;
-    const topHalf = n <= 1 ? true : idx < n / 2;
-    const first = n <= rows ? 0 : topHalf ? idx : idx - (rows - 1);
+    const first = n <= rows ? 0 : Math.min(Math.max(idx - 1, 0), n - rows);
     const y = -first * rowH;
     const slide = {
         transform: `translateY(${y}px)`,
@@ -592,8 +681,8 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds })
                             const d = Math.abs(i - idx);
                             const current = p.id === activeId;
                             return (
+                                <PillExitBeat key={p.id} id={p.id} ids={projects.map((q) => q.id)} top={i === 0} bottom={i === projects.length - 1}>
                                 <div
-                                    key={p.id}
                                     className="flex shrink-0 items-center justify-center"
                                     style={{ height: rowH }}
                                 >
@@ -611,11 +700,41 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds })
                                             />
                                         </button>
                                 </div>
+                                </PillExitBeat>
                             );
                         })}
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** Scroller pill with a graceful delete: when the pill's id leaves
+ *  `ids`, it slides toward its edge (top pills up, bottom pills down,
+ *  middle pills fade) then unmounts while survivors ease into place. */
+function PillExitBeat({ id, ids, top, bottom, children }) {
+    const [gone, setGone] = useState(false);
+    const [leaving, setLeaving] = useState(false);
+    const timer = useRef(null);
+
+    useEffect(() => {
+        if (ids.includes(id)) return;
+        setLeaving(true);
+        timer.current = setTimeout(() => setGone(true), 240);
+        return () => { if (timer.current) clearTimeout(timer.current); };
+    }, [ids, id]);
+    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+    if (gone) return null;
+    if (!leaving) return children;
+    return (
+        <div className={cn(
+            top && 'row-out-top',
+            bottom && !top && 'row-out-bottom',
+            !top && !bottom && 'row-out-fade',
+        )}>
+            {children}
         </div>
     );
 }
@@ -670,7 +789,6 @@ export default function Home({ projects, limits }) {
         hideNamesTimer.current = setTimeout(() => setNamesVisible(false), 1600);
         return () => { if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current); };
     }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
-    useEffect(() => () => { if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current); }, []);
     const activeLive = projects.some((p) => ACTIVE.includes(p.status) || p.status === 'paused')
         // Also poll while any clip render is still in progress (project may
         // already be clips_ready but renders run asynchronously on the render queue).
@@ -867,8 +985,16 @@ export default function Home({ projects, limits }) {
                             </p>
                             </div>
                         ) : (
-                            <div className="space-y-2">
-                                {projects.map((p) => <QueueRow key={p.id} project={p} onCancel={setConfirmTarget} />)}
+                            <div className="space-y-2" data-queue-list>
+                                {projects.map((p) => (
+                                    <QueueExitBeat
+                                        key={p.id}
+                                        id={p.id}
+                                        ids={projects.map((q) => q.id)}
+                                        project={p}
+                                        onCancel={setConfirmTarget}
+                                    />
+                                ))}
                             </div>
                         )}
                     </CardContent>
@@ -997,12 +1123,16 @@ export default function Home({ projects, limits }) {
                     )}
                 </CardContent>
             </Card>
-            {confirmTarget && (
-                <CancelDialog project={confirmTarget} onClose={() => setConfirmTarget(null)} />
-            )}
-            {player && (
-                <PlayerDialog {...player} onClose={() => setPlayer(null)} />
-            )}
+            <ExitBeat open={confirmTarget != null} ms={150}>
+                {confirmTarget && (
+                    <CancelDialog project={confirmTarget} onClose={() => setConfirmTarget(null)} />
+                )}
+            </ExitBeat>
+            <ExitBeat open={player != null} ms={150}>
+                {player && (
+                    <PlayerDialog {...player} onClose={() => setPlayer(null)} />
+                )}
+            </ExitBeat>
         </div>
     );
 }
