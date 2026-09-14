@@ -156,8 +156,9 @@ function Stepper({ status }) {
 }
 
 /** Cancel confirmation: replaces window.confirm with an in-app dialog.
- *  Exit plays the entrance in reverse (pop-out + fade-out) before
- *  unmounting, so open and close feel like one motion. */
+ *  Overlay fades (fade/fade-out), box pops (pop/pop-out). Exit plays
+ *  the entrance in reverse before unmounting, so open and close feel
+ *  like one motion. Held mounted by the parent's ExitBeat (ms=200). */
 function CancelDialog({ project, onClose, leaving }) {
     const keepRef = useRef(null);
 
@@ -203,9 +204,10 @@ function CancelDialog({ project, onClose, leaving }) {
 }
 
 /** One queue row: top half (name left, status center, buttons right),
- *  bottom half (thicker live stepper). Exits via `leaving` (slide toward
- *  the nearest edge when the row sits at the top/bottom of the list,
- *  plain fade for middle rows), held mounted by the parent's ExitBeat. */
+ *  bottom half (thicker live stepper). Enters by dropping in from above
+ *  (.queue-in); exits via `leaving` (slide toward the nearest edge when
+ *  the row sits at the top/bottom of the list, plain fade for middle
+ *  rows), held mounted by the parent's ExitBeat. */
 function QueueRow({ project, onCancel, leaving, edge }) {
     const pausable = ACTIVE.includes(project.status);
     const paused = project.status === 'paused';
@@ -215,7 +217,7 @@ function QueueRow({ project, onCancel, leaving, edge }) {
     return (
         <div className={cn(
             'flex items-center gap-3 rounded-lg border bg-card p-2.5',
-            !leaving && 'rise',
+            !leaving && 'queue-in',
             leaving && edge === 'top' && 'row-out-top',
             leaving && edge === 'bottom' && 'row-out-bottom',
             leaving && !edge && 'row-out-fade',
@@ -299,9 +301,11 @@ function QueueRow({ project, onCancel, leaving, edge }) {
 
 /** Delayed unmount: keeps children mounted for the exit beat after
  *  `open` flips false, passing `leaving` down so the dialog can play
- *  its entrance in reverse. Mounts instantly when `open` flips true.
- *  `ms` must cover the exit animation (dialogs 150ms, rows 240ms). */
-function ExitBeat({ open, ms = 150, children }) {
+ *  its entrance in reverse (overlay fade-out + box pop-out). Renders
+ *  immediately when `open` flips true so the enter animation starts on
+ *  the same commit, no one-frame flash of nothing. `ms` must cover the
+ *  exit animation (dialogs 180ms -> hold 200ms, rows 240ms). */
+function ExitBeat({ open, ms = 200, children }) {
     const [held, setHeld] = useState(open);
     const [leaving, setLeaving] = useState(false);
     const timer = useRef(null);
@@ -324,7 +328,10 @@ function ExitBeat({ open, ms = 150, children }) {
     }, [open]);
     useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-    if (!held) return null;
+    // Render on the same commit `open` turns true (held may still be
+    // false until the effect above runs) so the fade/pop enter starts
+    // instantly; keep rendering while held during the exit beat.
+    if (!held && !open) return null;
     const kids = open ? children : heldRef.current;
     if (!kids) return null;
     const only = Array.isArray(kids) ? kids[0] : kids;
@@ -338,7 +345,7 @@ function ExitBeat({ open, ms = 150, children }) {
  *  from `ids` (server confirmed the delete via poll), the row plays its
  *  exit (slide toward the nearest edge for top/bottom rows, fade for
  *  middle rows) while the surviving rows ease into place, then unmounts.
- *  New rows still mount with .rise. */
+ *  New rows drop in from above with .queue-in. */
 function QueueExitBeat({ id, ids, project, onCancel }) {
     const [gone, setGone] = useState(false);
     const [leaving, setLeaving] = useState(false);
@@ -379,12 +386,13 @@ function QueueExitBeat({ id, ids, project, onCancel }) {
 
 /** One generated clip: title, time range, and its render state, a download
  *  button the moment the video file exists. */
-/** In-app video player: same overlay language as the cancel dialog.
- *  The <video> element is mounted once and only its src/poster swap per
- *  selection: remounting on every poll (or mid-load) restarted buffering
- *  from byte zero, which read as a flash/cutout. State also resets only
- *  when the src actually changes, so the parent's 10s reloads can't yank
- *  a playing video back to its skeleton. */
+/** In-app video player: same overlay language as the cancel dialog
+ *  (overlay fade/fade-out, box pop/pop-out). The <video> element is
+ *  mounted once and only its src/poster swap per selection: remounting
+ *  on every poll (or mid-load) restarted buffering from byte zero,
+ *  which read as a flash/cutout. State also resets only when the src
+ *  actually changes, so the parent's 10s reloads can't yank a playing
+ *  video back to its skeleton. */
 function PlayerDialog({ title, sub, src, poster, tall, onClose, leaving }) {
     const videoRef = useRef(null);
     const [waiting, setWaiting] = useState(true);
@@ -1136,12 +1144,12 @@ export default function Home({ projects, limits }) {
                     )}
                 </CardContent>
             </Card>
-            <ExitBeat open={confirmTarget != null} ms={150}>
+            <ExitBeat open={confirmTarget != null} ms={200}>
                 {confirmTarget && (
                     <CancelDialog project={confirmTarget} onClose={() => setConfirmTarget(null)} />
                 )}
             </ExitBeat>
-            <ExitBeat open={player != null} ms={150}>
+            <ExitBeat open={player != null} ms={200}>
                 {player && (
                     <PlayerDialog {...player} onClose={() => setPlayer(null)} />
                 )}
