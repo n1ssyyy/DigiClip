@@ -16,6 +16,15 @@ const appPath = path.join(buildPath, 'app');
 
 let splashWindow;
 
+// Software rendering only: on machines where Chromium's GPU process
+// cannot initialize (e.g. NVIDIA on Linux: gbm_bo_import fails,
+// exit_code=8704, GPU process respawns in a loop), hardware video
+// decode dies with PIPELINE_ERROR_DISCONNECTED on every <video> and
+// each GPU restart flickers the whole window. Software decode plays
+// 1080x1920 H.264 first-try with negligible CPU cost. Must run before
+// app.whenReady().
+app.disableHardwareAcceleration();
+
 app.whenReady().then(() => {
     try {
         splashWindow = createSplash(appPath, import.meta.dirname);
