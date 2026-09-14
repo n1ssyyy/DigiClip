@@ -21,6 +21,9 @@ class HandleInertiaRequests extends Middleware
             'app' => [
                 'name' => config('app.name', 'DigiClip'),
             ],
+            // Device owner's login for the onboarding greeting.
+            // Null when unresolvable (frontend falls back to nameless).
+            'username' => \App\Services\System\DeviceUser::name(),
         ];
     }
 }

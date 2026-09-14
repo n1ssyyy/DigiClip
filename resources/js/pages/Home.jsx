@@ -158,7 +158,10 @@ function Stepper({ status }) {
 /** Cancel confirmation: replaces window.confirm with an in-app dialog.
  *  Overlay fades (fade/fade-out), box pops (pop/pop-out) — the outs use
  *  dedicated keyframes so Chromium restarts the animation on close.
- *  Held mounted by the parent's ExitBeat (ms=200). */
+ *  Pinned below the window header (top-[53px]) with a sidebar-width
+ *  left offset (pl-[53px]): the header stays sharp/clickable, the box
+ *  centers in the content page, not the viewport. Held mounted by the
+ *  parent's ExitBeat (ms=200). */
 function CancelDialog({ project, onClose, leaving }) {
     const keepRef = useRef(null);
 
@@ -175,7 +178,7 @@ function CancelDialog({ project, onClose, leaving }) {
 
     return (
         <div
-            className={cn('fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
+            className={cn('fixed inset-x-0 bottom-0 top-[53px] z-50 flex items-center justify-center bg-black/60 pl-[53px] backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
             onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div
@@ -208,8 +211,7 @@ function CancelDialog({ project, onClose, leaving }) {
  *  (.queue-in); exits via `leaving` (slide toward the nearest edge when
  *  the row sits at the top/bottom of the list, plain fade for middle
  *  rows), held mounted by the parent's ExitBeat. */
-function QueueRow({ project, onCancel, leaving, edge }) {
-    const pausable = ACTIVE.includes(project.status);
+function QueueRow({ project, onCancel, leaving, edge }) {    const pausable = ACTIVE.includes(project.status);
     const paused = project.status === 'paused';
     const failed = project.status === 'failed';
     const label = LIVE_LABEL[project.status] ?? project.status;
@@ -387,8 +389,8 @@ function QueueExitBeat({ id, ids, project, onCancel }) {
 /** One generated clip: title, time range, and its render state, a download
  *  button the moment the video file exists. */
 /** In-app video player: same overlay language as the cancel dialog
- *  (overlay fade/fade-out, box pop/pop-out). The <video> element is
- *  mounted once and only its src/poster swap per selection: remounting
+ *  (overlay fade/fade-out, box pop/pop-out; pinned below the header,
+ *  centered in the content page). The <video> element is mounted once and only its src/poster swap per selection: remounting
  *  on every poll (or mid-load) restarted buffering from byte zero,
  *  which read as a flash/cutout. State also resets only when the src
  *  actually changes, so the parent's 10s reloads can't yank a playing
@@ -430,7 +432,7 @@ function PlayerDialog({ title, sub, src, poster, tall, onClose, leaving }) {
 
     return (
         <div
-            className={cn('fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
+            className={cn('fixed inset-x-0 bottom-0 top-[53px] z-50 flex items-center justify-center bg-black/70 p-4 pl-[calc(53px+1rem)] backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
             onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
         >
             <div
