@@ -25,7 +25,7 @@ class BroadcastTest extends TestCase
 
         Event::assertDispatched(ProjectStatusChanged::class,
             fn ($e) => $e->projectId === $project->id
-                && $e->broadcastOn()->name === "project.{$project->id}"
+                && $e->broadcastOn() === ["project.{$project->id}"]
                 && $e->broadcastAs() === 'project.status');
     }
 
@@ -46,7 +46,7 @@ class BroadcastTest extends TestCase
     {
         $e = new RenderProgressChanged(7, 3, 9, 45, 'rendering');
 
-        $this->assertSame('project.7', $e->broadcastOn()->name);
+        $this->assertSame(['project.7'], $e->broadcastOn());
         $this->assertSame('render.progress', $e->broadcastAs());
         $this->assertSame(['clip_id' => 3, 'render_id' => 9, 'progress' => 45, 'status' => 'rendering'], $e->broadcastWith());
     }
