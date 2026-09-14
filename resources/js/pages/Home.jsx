@@ -48,8 +48,8 @@ const LIVE_LABEL = {
 };
 
 // Status signal, one language everywhere: green done, orange working,
-// red broken. (The scroller's active pill is the single exception: it
-// reads white when ready so it pops against the dots.)
+// red broken. Colors crossfade (background-color + color transitions)
+// so status changes melt instead of snapping.
 function statusDot(status) {
     if (status === 'failed') return 'bg-red-500';
     if (status === 'clips_ready') return 'bg-emerald-500';
@@ -62,6 +62,38 @@ function statusText(status) {
     if (status === 'failed') return 'text-red-500';
     if (status === 'clips_ready') return 'text-white';
     return 'text-orange-500';
+}
+
+/** Crossfading label: old text fades out, new text fades in, and the
+ *  wrapper width animates so the pill breathes with its content. */
+function SwapLabel({ text, className }) {
+    const [shown, setShown] = useState(text);
+    const [phase, setPhase] = useState('in');
+    const timer = useRef(null);
+
+    useEffect(() => {
+        if (text === shown) return;
+        setPhase('out');
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => {
+            setShown(text);
+            setPhase('in');
+        }, 140);
+        return () => { if (timer.current) clearTimeout(timer.current); };
+    }, [text, shown]);
+    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+    return (
+        <span
+            className={cn(
+                'inline-block motion-safe:transition-all motion-safe:duration-150',
+                phase === 'out' ? 'opacity-0' : 'opacity-100',
+                className,
+            )}
+        >
+            {shown}
+        </span>
+    );
 }
 
 function fmtDur(s) {
@@ -98,7 +130,7 @@ function Stepper({ status }) {
                         <Tip label={s.label} side="top" className="shrink-0">
                             <span
                                 className={cn(
-                                'size-2.5 shrink-0 rounded-full',
+                                'size-2.5 shrink-0 rounded-full motion-safe:transition-colors motion-safe:duration-500',
                                 done && !failedDot && tone.dot,
                                 active && cn('animate-pulse ring-4', tone.dot, tone.ring),
                                 failedDot && cn(tone.dot, 'ring-4', tone.ring),
@@ -108,7 +140,13 @@ function Stepper({ status }) {
                         />
                         </Tip>
                         {i < STEPS.length - 1 && (
-                            <span className={cn('mx-1 h-0.5 flex-1 rounded-full', i + 1 <= st.done ? tone.line : 'bg-border')} aria-hidden />
+                            <span className={cn('relative mx-1 h-0.5 flex-1 overflow-hidden rounded-full bg-border')} aria-hidden>
+                                <span className={cn(
+                                    'absolute inset-0 origin-left rounded-full motion-safe:transition-transform motion-safe:duration-700 motion-safe:ease-out',
+                                    tone.line,
+                                    i + 1 <= st.done ? 'scale-x-100' : 'scale-x-0',
+                                )} />
+                            </span>
                         )}
                     </div>
                 );
@@ -184,11 +222,11 @@ function QueueRow({ project, onCancel }) {
                     </Tip>
                     <span className="flex flex-1 items-center justify-center">
                         <Badge variant="secondary" className={cn(
-                            'whitespace-nowrap',
+                            'whitespace-nowrap motion-safe:transition-all motion-safe:duration-500',
                             failed ? 'text-red-500' : project.status === 'clips_ready' ? 'text-emerald-500' : 'text-orange-500',
                         )}
                         >
-                            {label}
+                            <SwapLabel text={label} />
                         </Badge>
                     </span>
                     <span className="flex shrink-0 items-center justify-end gap-0.5">
@@ -251,10 +289,40 @@ function QueueRow({ project, onCancel }) {
 
 /** One generated clip: title, time range, and its render state, a download
  *  button the moment the video file exists. */
-/** In-app video player: same overlay language as the cancel dialog. */
+/** In-app video player: same overlay language as the cancel dialog.
+ *  The <video> element is mounted once and only its src/poster swap per
+ *  selection: remounting on every poll (or mid-load) restarted buffering
+ *  from byte zero, which read as a flash/cutout. State also resets only
+ *  when the src actually changes, so the parent's 10s reloads can't yank
+ *  a playing video back to its skeleton. */
 function PlayerDialog({ title, sub, src, poster, onClose }) {
+    const videoRef = useRef(null);
     const [waiting, setWaiting] = useState(true);
     const [ready, setReady] = useState(false);
+    const [failed, setFailed] = useState(false);
+    const srcRef = useRef(src);
+
+    // New selection: show the loader behind the incoming video, keep the
+    // old frame visible underneath until the new one can play.
+    if (srcRef.current !== src) {
+        srcRef.current = src;
+        setWaiting(true);
+        setFailed(false);
+    }
+
+    useEffect(() => {
+        const el = videoRef.current;
+        if (!el) return;
+        if (el.getAttribute('src') !== src) el.setAttribute('src', src);
+        el.load();
+    }, [src]);
+
+    useEffect(() => {
+        const el = videoRef.current;
+        if (!el) return;
+        if (poster != null) el.setAttribute('poster', poster);
+        else el.removeAttribute('poster');
+    }, [poster]);
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -286,25 +354,37 @@ function PlayerDialog({ title, sub, src, poster, onClose }) {
                 </div>
                 <div className="relative">
                     {!ready && <span aria-hidden className="skel absolute inset-0 rounded-md" />}
-                    {waiting && (
+                    {waiting && !failed && (
                         <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" aria-hidden>
                             <Loader2 className="size-6 animate-spin text-muted-foreground" />
                         </span>
                     )}
+                    {failed && (
+                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-md bg-black/60 p-4 text-center">
+                            <p className="text-sm font-medium text-white">Couldn't load this video</p>
+                            <button
+                                type="button"
+                                onClick={() => { setFailed(false); setWaiting(true); videoRef.current?.load(); }}
+                                className="rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20"
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    )}
                     <video
-                        key={src}
+                        ref={videoRef}
                         className={cn(
                             'aspect-video w-full rounded-md bg-black motion-safe:transition-opacity motion-safe:duration-300',
                             ready ? 'opacity-100' : 'opacity-0',
                         )}
-                        src={src}
-                        poster={poster}
                         controls
                         playsInline
                         preload="auto"
-                        onCanPlay={() => { setWaiting(false); setReady(true); }}
-                        onPlaying={() => { setWaiting(false); setReady(true); }}
-                        onWaiting={() => setWaiting(true)}
+                        onCanPlay={() => { setWaiting(false); setFailed(false); setReady(true); }}
+                        onPlaying={() => { setWaiting(false); setFailed(false); setReady(true); }}
+                        onWaiting={() => { if (!failed) setWaiting(true); }}
+                        onStalled={() => { if (!ready && !failed) setWaiting(true); }}
+                        onError={() => { setWaiting(false); setFailed(true); }}
                     />
                 </div>
             </div>
@@ -312,10 +392,27 @@ function PlayerDialog({ title, sub, src, poster, onClose }) {
     );
 }
 
-function ClipTile({ clip, tall, projectName, onPlay }) {
+function ClipTile({ clip, tall, projectName, onPlay, fresh }) {
     const renders = clip.renders ?? [];
     const render = renders[renders.length - 1] ?? null;
     const playable = render?.status === 'done';
+    // making -> done crossfade: the render pill melts between states
+    // instead of snapping, and the poster fades in over the tile.
+    const [pillShown, setPillShown] = useState(playable ? 'done' : render?.status === 'failed' ? 'failed' : 'making');
+    const [pillPhase, setPillPhase] = useState('in');
+    const pillTimer = useRef(null);
+    const pillTarget = playable ? 'done' : render?.status === 'failed' ? 'failed' : 'making';
+    useEffect(() => {
+        if (pillTarget === pillShown) return;
+        setPillPhase('out');
+        if (pillTimer.current) clearTimeout(pillTimer.current);
+        pillTimer.current = setTimeout(() => {
+            setPillShown(pillTarget);
+            setPillPhase('in');
+        }, 140);
+        return () => { if (pillTimer.current) clearTimeout(pillTimer.current); };
+    }, [pillTarget, pillShown]);
+    useEffect(() => () => { if (pillTimer.current) clearTimeout(pillTimer.current); }, []);
     return (
         <div
             role={playable ? 'button' : undefined}
@@ -337,7 +434,8 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
                 }
             } : undefined}
             className={cn(
-                'rise flex min-h-0 flex-col justify-between overflow-hidden rounded-md border bg-card p-2',
+                'flex min-h-0 flex-col justify-between overflow-hidden rounded-md border bg-card p-2',
+                fresh && 'tile-in',
                 tall && 'row-span-2',
                 playable && 'cursor-pointer transition-colors hover:border-muted-foreground/40',
             )}
@@ -352,7 +450,11 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
             </span>
             <span className="flex items-center justify-between font-mono text-[10px] text-muted-foreground">
                 <span className="truncate">#{clip.rank}{fmtRange(clip.start_s, clip.end_s) ? ` · ${fmtRange(clip.start_s, clip.end_s)}` : ''}</span>
-                {render?.status === 'done' ? (
+                <span className={cn(
+                    'inline-flex shrink-0 motion-safe:transition-opacity motion-safe:duration-150',
+                    pillPhase === 'out' ? 'opacity-0' : 'opacity-100',
+                )}>
+                {pillShown === 'done' ? (
                     <Tip label={`Download clip #${clip.rank}`} side="top">
                         <a
                             href={`/renders/${render.id}/download`}
@@ -363,7 +465,7 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
                             <Download className="size-3.5" aria-hidden />
                         </a>
                     </Tip>
-                ) : render?.status === 'failed' ? (
+                ) : pillShown === 'failed' ? (
                     <span className="shrink-0 text-red-500">failed</span>
                 ) : (
                     <Tip label="Clip is being made" side="top">
@@ -373,41 +475,68 @@ function ClipTile({ clip, tall, projectName, onPlay }) {
                         </span>
                     </Tip>
                 )}
+                </span>
             </span>
         </div>
     );
 }
 
-/** Project scroller: the pill strip sits in flow at the panel edge so it
- *  never covers the grid; project names float over the grid as
- *  clickthrough labels. Current project centered and full-size; the rest
- *  shrink and fade with distance. Scroll the panel (or tap a pill) to
- *  rotate. */
-function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
+/** Project scroller: edge-pinned strip, never centered. The selected
+ *  project pins to the nearest edge (top when it sits in the first half
+ *  of the list, bottom when in the second) and the next two projects
+ *  trail behind it, shrinking with distance — no dead gap at either
+ *  end, no centering. Project names float over the grid as clickthrough
+ *  labels. Scroll the panel (or tap a pill) to rotate. */
+function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds }) {
     const n = projects.length;
     const idx = Math.max(0, projects.findIndex((p) => p.id === activeId));
-    // Pill signal per project: white = done and selected, green = done,
-    // orange = still working, red = error. Inactive pills keep their own
-    // status color, dimmed with distance.
-    function pillClsFor(status, current, d) {
-        if (current) {
-            if (status === 'failed') return 'h-5 w-2 bg-red-500';
-            if (status === 'clips_ready') return 'h-5 w-2 bg-white ring-1 ring-black/30';
-            return 'h-5 w-2 bg-orange-500';
-        }
+    // Signal per project: white = opened, green = fresh/unviewed,
+    // orange = still working, red = error. Seen-ness is local UI state
+    // (a Set of ids mirrored from localStorage), not server status.
+    function pillClsFor(p, current, d) {
+        const fresh = p.status === 'clips_ready' && !seenIds?.has(p.id);
+        const tone = p.status === 'failed' ? 'red'
+            : p.status !== 'clips_ready' ? 'orange'
+            : fresh ? 'green' : 'white';
+        const base = {
+            red: 'bg-red-500',
+            orange: 'bg-orange-500',
+            green: 'bg-emerald-500',
+            white: 'bg-white ring-1 ring-black/30',
+        }[tone];
+        if (current) return `h-5 w-2 ${base}`;
+        const dim = {
+            red: ['bg-red-500/70', 'bg-red-500/45', 'bg-red-500/25'],
+            orange: ['bg-orange-500/70', 'bg-orange-500/45', 'bg-orange-500/25'],
+            green: ['bg-emerald-500/80', 'bg-emerald-500/50', 'bg-emerald-500/30'],
+            white: ['bg-white/80', 'bg-white/50', 'bg-white/30'],
+        }[tone][Math.min(d - 1, 2)];
         const size = d === 1 ? 'size-2' : d === 2 ? 'size-1.5' : 'size-1';
-        if (status === 'failed') return `${size} ${d === 1 ? 'bg-red-500/70' : d === 2 ? 'bg-red-500/45' : 'bg-red-500/25'}`;
-        if (status === 'clips_ready') return `${size} ${d === 1 ? 'bg-emerald-500/80' : d === 2 ? 'bg-emerald-500/50' : 'bg-emerald-500/30'}`;
-        return `${size} ${d === 1 ? 'bg-orange-500/70' : d === 2 ? 'bg-orange-500/45' : 'bg-orange-500/25'}`;
+        return `${size} ${dim}`;
+    }
+
+    function nameClsFor(p, current) {
+        const fresh = p.status === 'clips_ready' && !seenIds?.has(p.id);
+        if (current) {
+            if (p.status === 'failed') return 'font-semibold text-red-500';
+            if (p.status !== 'clips_ready') return 'font-semibold text-orange-500';
+            return fresh ? 'font-semibold text-emerald-500' : 'font-semibold text-white';
+        }
+        if (p.status === 'failed') return 'text-red-500';
+        if (p.status !== 'clips_ready') return 'text-orange-500';
+        return fresh ? 'text-emerald-500' : 'text-white';
     }
 
     if (n === 0) return null;
     const rowH = 24;
     const rows = 3;
-    // Hug the content: a short list gets a short viewport (no dead space),
-    // a long list centers the active row in a 3-row window.
+    // Fixed 3-row window, pinned: the active project sits on the nearest
+    // edge (top half -> row 0, bottom half -> row 2) with the next two
+    // trailing behind it. Short lists hug their content (no dead space).
     const viewH = Math.min(n, rows) * rowH;
-    const y = n <= rows ? 0 : (viewH - rowH) / 2 - idx * rowH;
+    const topHalf = n <= 1 ? true : idx < n / 2;
+    const first = n <= rows ? 0 : topHalf ? idx : idx - (rows - 1);
+    const y = -first * rowH;
     const slide = {
         transform: `translateY(${y}px)`,
         transition: snap ? 'none' : 'transform 350ms cubic-bezier(0.22, 1, 0.36, 1)',
@@ -442,13 +571,7 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
                                     style={{ opacity: nameOpacity }}
                                     className={cn(
                                         'block max-w-36 truncate text-right text-sm transition-all motion-safe:duration-300',
-                                        current
-                                            ? `font-semibold ${statusText(p.status)}`
-                                            : p.status === 'failed'
-                                                ? 'text-red-500'
-                                                : p.status === 'clips_ready'
-                                                    ? 'text-emerald-500'
-                                                    : 'text-orange-500',
+                                        nameClsFor(p, current),
                                     )}
                                 >
                                     {p.name}
@@ -483,7 +606,7 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible }) {
                                         >
                                             <span className={cn(
                                                 'block rounded-full transition-all motion-safe:duration-300',
-                                                pillClsFor(p.status, current, d),
+                                                pillClsFor(p, current, d),
                                             )}
                                             />
                                         </button>
@@ -510,6 +633,19 @@ export default function Home({ projects, limits }) {
     const [dir, setDir] = useState(null);
     // snap: far jumps (wrap-around, distant tap) cut instead of sweeping.
     const [snap, setSnap] = useState(false);
+    // Fresh-vs-opened projects (scroller green -> white): local UI state,
+    // persisted per browser. A project counts as opened only once its
+    // clips have actually been on screen (shownId), not when merely
+    // scrolled past (activeId).
+    const [seenIds, setSeenIds] = useState(() => {
+        try {
+            const raw = localStorage.getItem('digiclip.seenProjects');
+            const arr = raw ? JSON.parse(raw) : [];
+            return new Set(Array.isArray(arr) ? arr : []);
+        } catch {
+            return new Set();
+        }
+    });
     // shownId trails activeId: the outgoing videos fade out first, then the
     // incoming project fades in, never a crossfade overlap.
     const [shownId, setShownId] = useState(projects[0]?.id ?? null);
@@ -583,9 +719,23 @@ export default function Home({ projects, limits }) {
     useEffect(() => {
         if (snap) setSnap(false);
     }, [activeId, snap]);
-    // New project in view: clips start on page one.
+    // New project in view: clips start on page one, and the project
+    // counts as opened (scroller green -> white) once its clips land.
     useEffect(() => {
         setClipPage(0);
+    }, [shownId]);
+    useEffect(() => {
+        if (shownId == null) return;
+        setSeenIds((prev) => {
+            if (prev.has(shownId)) return prev;
+            const next = new Set(prev);
+            next.add(shownId);
+            try {
+                localStorage.setItem('digiclip.seenProjects', JSON.stringify([...next].slice(-200)));
+            } catch {
+            }
+            return next;
+        });
     }, [shownId]);
 
     // The scroller is the control: wheel (or swipe) anywhere on the right
@@ -778,8 +928,10 @@ export default function Home({ projects, limits }) {
                             {/* Dynamic grid: fixed outer height, but the
                                 arrangement follows the clip count, vertical
                                 tiles for a few videos, source strip + grid
-                                once there are more. Only the grid animates;
-                                the pill strip stays put. */}
+                                once there are more. Tiles animate in place:
+                                new clips rise in, the source strip eases to
+                                its new cell, nothing remounts on poll. Only
+                                the grid animates; the pill strip stays put. */}
                             <div
                                 key={shown.id}
                                 className={cn(
@@ -828,7 +980,7 @@ export default function Home({ projects, limits }) {
                                 </div>
                                 </Tip>
                                 {visClips.map((c) => (
-                                    <ClipTile key={c.id} clip={c} tall={tallClip} projectName={shown.name} onPlay={setPlayer} />
+                                    <ClipTile key={c.id} clip={c} tall={tallClip} projectName={shown.name} onPlay={setPlayer} fresh />
                                 ))}
                                 {clipCount > 5 && (
                                     <button
@@ -840,7 +992,7 @@ export default function Home({ projects, limits }) {
                                     </button>
                                 )}
                             </div>
-                            <ProjectScroller projects={projects} activeId={activeId} onJump={(id) => goTo(id)} snap={snap} visible={namesVisible} />
+                            <ProjectScroller projects={projects} activeId={activeId} onJump={(id) => goTo(id)} snap={snap} visible={namesVisible} seenIds={seenIds} />
                         </div>
                     )}
                 </CardContent>
