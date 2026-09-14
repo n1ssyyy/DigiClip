@@ -156,9 +156,9 @@ function Stepper({ status }) {
 }
 
 /** Cancel confirmation: replaces window.confirm with an in-app dialog.
- *  Overlay fades (fade/fade-out), box pops (pop/pop-out). Exit plays
- *  the entrance in reverse before unmounting, so open and close feel
- *  like one motion. Held mounted by the parent's ExitBeat (ms=200). */
+ *  Overlay fades (fade/fade-out), box pops (pop/pop-out) — the outs use
+ *  dedicated keyframes so Chromium restarts the animation on close.
+ *  Held mounted by the parent's ExitBeat (ms=200). */
 function CancelDialog({ project, onClose, leaving }) {
     const keepRef = useRef(null);
 
@@ -301,10 +301,10 @@ function QueueRow({ project, onCancel, leaving, edge }) {
 
 /** Delayed unmount: keeps children mounted for the exit beat after
  *  `open` flips false, passing `leaving` down so the dialog can play
- *  its entrance in reverse (overlay fade-out + box pop-out). Renders
- *  immediately when `open` flips true so the enter animation starts on
- *  the same commit, no one-frame flash of nothing. `ms` must cover the
- *  exit animation (dialogs 180ms -> hold 200ms, rows 240ms). */
+ *  its exit (overlay fade-out + box pop-out). Renders immediately when
+ *  `open` flips true so the enter animation starts on the same commit,
+ *  no one-frame flash of nothing. `ms` must cover the exit animation
+ *  (dialogs 180ms -> hold 200ms, rows 240ms). */
 function ExitBeat({ open, ms = 200, children }) {
     const [held, setHeld] = useState(open);
     const [leaving, setLeaving] = useState(false);

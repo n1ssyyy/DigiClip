@@ -233,6 +233,18 @@ header [data-no-drag] {
         opacity: 1;
     }
 }
+/* Dedicated exit keyframes, same reason as fade-out above: a distinct
+   name is what makes Chromium restart the animation on close. */
+@keyframes pop-out {
+    from {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: scale(0.97) translateY(3px);
+        opacity: 0;
+    }
+}
 @keyframes menu-out {
     from {
         transform: scale(1) translateY(0);
@@ -249,6 +261,19 @@ header [data-no-drag] {
     }
     to {
         opacity: 1;
+    }
+}
+/* Dedicated exit keyframes (NOT `reverse` of the enter ones): swapping
+   between two classes that reference the same @keyframes name does not
+   restart the animation in Chromium — the finished enter state sticks
+   and the `reverse` fill snaps the dialog to invisible on the first
+   frame. A new name guarantees the exit genuinely replays. */
+@keyframes fade-out {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
     }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -282,12 +307,13 @@ header [data-no-drag] {
     .fade {
         animation: fade 200ms ease-out;
     }
-    /* Overlay exit: entrance in reverse, held mounted by ExitBeat. */
+    /* Overlay exit: dedicated fade-out/pop-out keyframes (see above),
+       held mounted by ExitBeat. */
     .fade-out {
-        animation: fade 180ms ease-in forwards reverse;
+        animation: fade-out 180ms ease-in forwards;
     }
     .pop-out {
-        animation: pop 180ms ease-in forwards reverse;
+        animation: pop-out 180ms ease-in forwards;
     }
     /* Staggered main panels: 1 lands with the page, each next 70ms later.
        Backwards fill for the same reason as .rise above. */
