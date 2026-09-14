@@ -38,11 +38,16 @@ class AppServiceProvider extends ServiceProvider
     private function pinNativeAppKey(): void
     {
         try {
-            // 1) NativePHP sets these in the main process; queue workers
-            //    inherit them only if explicitly passed. Be permissive:
-            //    also check the known user-data path directly.
+            // Only run in native context (packaged app). NativePHP sets
+            // nativephp-internal.running in all native processes (main,
+            // queue workers, php children). NATIVEPHP_RUNNING is an env
+            // fallback. We do NOT fall back in test/dev web contexts.
             $isNative = (bool) env('NATIVEPHP_RUNNING', false)
                 || config('nativephp-internal.running', false);
+
+            if (! $isNative) {
+                return;
+            }
 
             $dir = env('NATIVEPHP_USER_DATA_PATH');
             if (! is_string($dir) || $dir === '' || ! is_dir($dir)) {
