@@ -14,9 +14,20 @@ class OpenRouterClientTest extends TestCase
         Http::fake([
             '*' => Http::response([
                 'choices' => [[
-                    'message' => ['content' => json_encode(['clips' => [
-                        ['start_s' => 1.0, 'end_s' => 30.0, 'hook_line' => 'Hook'],
-                    ]])],
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'tool_calls' => [[
+                            'id' => 'call_test123',
+                            'type' => 'function',
+                            'function' => [
+                                'name' => 'submit_clips',
+                                'arguments' => json_encode(['clips' => [
+                                    ['start_s' => 1.0, 'end_s' => 30.0, 'hook_line' => 'Hook'],
+                                ]]),
+                            ],
+                        ]],
+                    ],
                 ]],
                 'usage' => ['prompt_tokens' => 100, 'completion_tokens' => 20],
             ], 200),
@@ -27,7 +38,8 @@ class OpenRouterClientTest extends TestCase
         $this->assertCount(1, $res['clips']);
         $this->assertSame(100, $res['usage']['prompt_tokens']);
         Http::assertSent(fn ($req) => $req->url() === 'https://openrouter.ai/api/v1/chat/completions'
-            && ($req->data()['response_format'] ?? []) === ['type' => 'json_object']);
+            && isset($req->data()['tools'])
+            && $req->data()['tools'][0]['function']['name'] === 'submit_clips');
     }
 
     public function test_requires_key(): void
@@ -42,12 +54,52 @@ class OpenRouterClientTest extends TestCase
     {
         config(['digiclip.openrouter.key' => 'test-key']);
         Http::fake(['*' => Http::response([
-            'choices' => [['message' => ['content' => 'not json']]],
+            'choices' => [['message' => ['content' => 'not json', 'tool_calls' => null]]],
             'usage' => [],
         ], 200)]);
 
         $this->expectException(\RuntimeException::class);
         (new OpenRouterClient)->analyze('sys', 'user');
+    }
+
+    public function test_falls_back_to_content_json(): void
+    {
+        config(['digiclip.openrouter.key' => 'test-key']);
+        Http::fake(['*' => Http::response([
+            'choices' => [[
+                'message' => [
+                    'content' => json_encode(['clips' => [
+                        ['start_s' => 5.0, 'end_s' => 25.0, 'hook_line' => 'Fallback'],
+                    ]]),
+                    'tool_calls' => null,
+                ],
+            ]],
+            'usage' => ['prompt_tokens' => 50, 'completion_tokens' => 10],
+        ], 200)]);
+
+        $res = (new OpenRouterClient)->analyze('sys', 'user');
+
+        $this->assertCount(1, $res['clips']);
+        $this->assertSame('Fallback', $res['clips'][0]['hook_line']);
+    }
+
+    public function test_extracts_json_from_markdown(): void
+    {
+        config(['digiclip.openrouter.key' => 'test-key']);
+        Http::fake(['*' => Http::response([
+            'choices' => [[
+                'message' => [
+                    'content' => "Here are the clips:\n```json\n".json_encode(['clips' => [['start_s' => 10.0, 'end_s' => 30.0, 'hook_line' => 'Fenced']]])."\n```",
+                    'tool_calls' => null,
+                ],
+            ]],
+            'usage' => [],
+        ], 200)]);
+
+        $res = (new OpenRouterClient)->analyze('sys', 'user');
+
+        $this->assertCount(1, $res['clips']);
+        $this->assertSame('Fenced', $res['clips'][0]['hook_line']);
     }
 
     public function test_models_endpoint_maps_and_caches(): void

@@ -90,7 +90,10 @@ class RenderService
                     $pct = (int) min(100, ((int) end($m[1]) / 1000000) / $dur * 100);
                     if ($pct >= $lastPct + 5) {
                         $lastPct = $pct;
-                        $render->update(['progress' => $pct]);
+                        try {
+                            $render->update(['progress' => $pct]);
+                        } catch (\Throwable) {
+                        }
                         try {
                             event(new \App\Events\RenderProgressChanged($projectId, $clipId, $renderId, $pct, 'rendering'));
                         } catch (\Throwable) {
@@ -105,7 +108,9 @@ class RenderService
                 event(new \App\Events\RenderProgressChanged($projectId, $clipId, $renderId, $lastPct, 'failed'));
             } catch (\Throwable) {
             }
-            throw new RuntimeException('Render failed: '.mb_substr($p->getErrorOutput(), -400));
+            $stderr = $p->getErrorOutput();
+            $exitCode = $p->getExitCode();
+            throw new RuntimeException("Render failed (exit code {$exitCode}): {$e->getMessage()}\n--- stderr (last 400):\n".mb_substr($stderr, -400));
         }
         if (! is_file($mp4Abs)) {
             $render->update(['status' => 'failed', 'error' => 'ffmpeg produced no file.']);

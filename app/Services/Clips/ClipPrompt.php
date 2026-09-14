@@ -18,13 +18,10 @@ class ClipPrompt
             - Each clip {$minS}-{$maxS}s, cold-open hook inside the first 2s, payoff before the end.
             - Never cut mid-sentence; prefer complete thoughts.
             - Prefer questions, contrarian takes, numbers, stories, concrete payoffs.
-            - Score hook/retention/value/share 0-100 honestly (most clips are 55-80, not 95+).
+            -             Score hook/retention/value/share 0-100 honestly (most clips are 55-80, not 95+).
             - caption_style: one of tiktok, karaoke, hormozi, minimal.
 
-            Return STRICT JSON only, exactly this shape:
-            {"clips": [{"start_s": 304.2, "end_s": 354.0, "hook_line": "...",
-            "why_it_works": "...", "scores": {"hook": 90, "retention": 80, "value": 75, "share": 70},
-            "title": "...", "hashtags": ["#x"], "caption_style": "tiktok"}]}
+            Use the submit_clips tool to return your results.
             PROMPT;
     }
 
