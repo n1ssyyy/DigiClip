@@ -53,7 +53,7 @@
 - **Smart clip picking** — bring-your-own-key [OpenRouter](https://openrouter.ai) LLM scores viral moments (hook, payoff, self-containment), with an offline heuristic fallback when no key is set.
 - **Vertical renders** — 1080×1920 H.264 + faststart, center-crop 9:16, loudness-normalized mobile audio (`loudnorm`), hardware encoder auto-pick (VideoToolbox / NVENC / libx264).
 - **8 caption presets** — `tiktok`, `karaoke`, `hormozi`, `minimal`, `beast`, `neon`, `highlight`, `ghost`, burned in via libass (plus downloadable `.srt`).
-- **Live UI, no refresh buttons** — project status and render progress stream over Laravel Reverb websockets (autostarted inside the desktop app).
+- **Live UI, no refresh buttons** — project status and render progress auto-refresh (live sockets in dev via Reverb + Echo, polling in the packaged app).
 - **Queue-resilient pipeline** — pause, resume, retry, cancel; failed jobs report inline. Media jobs run on a dedicated queue worker (1 GB / 30 min).
 - **Desktop-native** — [NativePHP Desktop v2](https://nativephp.com) (Electron shell, frameless dark-first UI, system health probe at `/health`).
 - **Private by default** — video, transcripts and renders stay in local SQLite + `storage/`; only clip *scoring* optionally calls OpenRouter.
@@ -62,12 +62,12 @@
 
 ```mermaid
 flowchart LR
-    Upload --> ExtractAudio --> Transcribe --> AnalyzeClips --> RenderClips["RenderClip(s)"]
-    ExtractAudio -. "ffmpeg · 16kHz mono WAV" .-> Transcribe
-    Transcribe -. "whisper.cpp · word timings" .-> AnalyzeClips
-    AnalyzeClips -. "OpenRouter LLM or heuristic fallback" .-> RenderClips
-    RenderClips -. "ffmpeg 9:16 + libass burn" .-> Done
-    Transcribe & AnalyzeClips & RenderClips -. "queues: transcribe · default · render\nrealtime: Reverb → Echo → React" .-> UI["Live UI"]
+    Upload(["Drop video"]) --> Extract["Extract audio\nffmpeg · 16 kHz mono"]
+    Extract --> Transcribe["Transcribe\nwhisper.cpp · queue: transcribe"]
+    Transcribe --> Analyze["Pick clips\nLLM or heuristic · queue: default"]
+    Analyze --> Render["Render vertical\nffmpeg · queue: render"]
+    Render --> Done(["Watch and download"])
+    Transcribe & Analyze & Render -. polling · progress events .-> UI["Live UI"]
 ```
 
 1. **Upload** (`POST /projects`) stores the source and chains `ExtractAudio → Transcribe → AnalyzeClips`.
@@ -81,8 +81,8 @@ flowchart LR
 | Layer      | Choice |
 |------------|--------|
 | App        | Laravel 13, Inertia.js + React 19, Tailwind 4, shadcn/ui (neutral, dark-first) |
-| Desktop    | NativePHP Desktop v2 (Electron), auto-started Reverb + queue workers |
-| Realtime   | Laravel Reverb (localhost) + Laravel Echo / pusher-js |
+| Desktop    | NativePHP Desktop v2 (Electron), auto-started queue workers |
+| Realtime   | Laravel Echo / pusher-js over Reverb in dev; polling in the packaged app |
 | STT        | whisper.cpp sidecar via `BinaryManager` + `ModelManager` |
 | Clip AI    | OpenRouter (BYOK, default `nvidia/nemotron-3-ultra-550b-a55b:free`) with offline heuristic fallback |
 | Render     | ffmpeg (bundled or system) + libass captions, loudnorm audio |
@@ -152,7 +152,7 @@ npm run plugin:build --prefix nativephp/electron   # stale-dist workaround, see 
 | `DIGICLIP_STT_MODEL` | `base.en` | `tiny.en`, `base.en`, `large-v3-turbo(-q5_0)`, `large-v3`. |
 | `DIGICLIP_UPLOAD_MAX_MB` | `500` | Upload cap (desktop `php.ini` allows 512 MB). |
 | `NATIVEPHP_APP_VERSION` | `1.0.0` | **Bump every release** — drives updater + installer filenames. |
-| Reverb `REVERB_*` / `VITE_REVERB_*` | localhost:8080 | Realtime socket; packaged app autostarts it. |
+| Reverb `REVERB_*` / `VITE_REVERB_*` | localhost:8080 | Realtime socket for dev (`reverb:start`); packaged app polls instead. |
 
 In-app **Settings** page additionally controls OpenRouter key/model, STT model, clip count and default caption style.
 
