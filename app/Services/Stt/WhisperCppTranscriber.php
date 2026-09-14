@@ -101,7 +101,35 @@ class WhisperCppTranscriber implements Transcriber
             $vulkan !== null, $devIndex,
         ));
         $p->setTimeout($options['timeout'] ?? 1800);
-        $p->mustRun();
+        // Cooperative cancellation: the job passes `should_cancel`, polled
+        // from the process output callback. whisper.cpp streams progress to
+        // stderr, so the callback fires for the whole run; returning false
+        // stops the process. Without it a pause/delete waits out the full
+        // transcription while holding the only media worker.
+        $shouldCancel = $options['should_cancel'] ?? null;
+        if ($shouldCancel === null) {
+            $p->mustRun();
+        } else {
+            try {
+                $p->mustRun(function () use ($shouldCancel, $p) {
+                    try {
+                        if ($shouldCancel()) {
+                            $p->stop(5);
+                        }
+                    } catch (\Throwable) {
+                    }
+                });
+            } catch (\Throwable $e) {
+                try {
+                    if ($shouldCancel()) {
+                        throw new TranscriptionCancelled('Transcription cancelled.');
+                    }
+                } catch (TranscriptionCancelled $cancelled) {
+                    throw $cancelled;
+                }
+                throw $e;
+            }
+        }
 
         $jsonPath = $outPrefix.'.json';
         if (! is_file($jsonPath)) {

@@ -66,14 +66,32 @@ class ProjectController extends Controller
     /** Re-run the full chain (extract → transcribe → analyze) after a failure. */
     public function retry(Project $project)
     {
-        $project->update(['status' => 'queued', 'error' => null]);
-        Bus::chain([
-            (new ExtractAudioJob($project->id))->onQueue('transcribe'),
-            (new TranscribeJob($project->id))->onQueue('transcribe'),
-            (new AnalyzeClipsJob($project->id))->onQueue('default'),
-        ])->dispatch();
+        self::dispatchFromStep($project);
+        $project->refresh();
 
         return back()->with('flash', "Re-queued {$project->name}.");
+    }
+
+    /**
+     * Smart retry: resume from the latest finished step instead of the
+     * top. Extract is cheap but pointless when audio.wav + probe data
+     * already exist; transcription is the expensive one and is skipped
+     * when a transcript row is stored. Anything else re-runs fully.
+     */
+    public static function dispatchFromStep(Project $project): void
+    {
+        $jobs = [];
+        $wav = storage_path("app/projects/{$project->id}/audio.wav");
+        if (! is_file($wav) || $project->duration_s === null) {
+            $jobs[] = (new ExtractAudioJob($project->id))->onQueue('transcribe');
+        }
+        if (! $project->transcript()->exists()) {
+            $jobs[] = (new TranscribeJob($project->id))->onQueue('transcribe');
+        }
+        $jobs[] = (new AnalyzeClipsJob($project->id))->onQueue('default');
+
+        $project->update(['status' => 'queued', 'error' => null]);
+        Bus::chain($jobs)->dispatch();
     }
 
     /** Pause queued/future pipeline steps. A step already running finishes its
@@ -87,29 +105,56 @@ class ProjectController extends Controller
         return back()->with('flash', "Paused {$project->name}.");
     }
 
-    /** Resume a paused project by re-dispatching the full chain. */
+    /** Resume a paused project from the latest finished step. Queued
+     *  leftovers from before the pause are purged first: without this the
+     *  old chain (still waiting behind a long transcription) would fire
+     *  right after resume and re-run work from the top. */
     public function resume(Project $project)
     {
         if ($project->status === 'paused') {
-            $project->update(['status' => 'queued', 'error' => null]);
-            Bus::chain([
-                (new ExtractAudioJob($project->id))->onQueue('transcribe'),
-                (new TranscribeJob($project->id))->onQueue('transcribe'),
-                (new AnalyzeClipsJob($project->id))->onQueue('default'),
-            ])->dispatch();
+            self::purgeProjectJobs($project->id);
+            self::dispatchFromStep($project);
+            $project->refresh();
         }
 
         return back()->with('flash', "Resumed {$project->name}.");
+    }
+
+    /** Drop this project's still-waiting jobs so pause/resume/delete
+     *  can't resurrect stale chain steps. The currently-reserved
+     *  (running) job is untouched — it exits on its own via the
+     *  paused/missing guards. */
+    public static function purgeProjectJobs(int $projectId): void
+    {
+        $db = \Illuminate\Support\Facades\DB::connection(
+            config('queue.connections.database.connection')
+        );
+        foreach ($db->table(config('queue.connections.database.table', 'jobs'))->whereNull('reserved_at')->get() as $row) {
+            try {
+                $payload = json_decode($row->payload, true);
+                $command = @unserialize($payload['data']['command'] ?? '');
+                if ($command instanceof ExtractAudioJob
+                    || $command instanceof TranscribeJob
+                    || $command instanceof AnalyzeClipsJob) {
+                    if ($command->projectId === $projectId) {
+                        $db->table(config('queue.connections.database.table', 'jobs'))->whereKey($row->id)->delete();
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /** Cancel completely: drop the source file, work dir, and the row.
      *  Chain jobs still queued exit quietly via the missing-project guard. */
     public function destroy(Project $project)
     {
+        $id = $project->id;
+        self::purgeProjectJobs($id);
         if ($project->source_path) {
             \Illuminate\Support\Facades\Storage::disk('local')->delete($project->source_path);
         }
-        \Illuminate\Support\Facades\File::deleteDirectory(storage_path("app/projects/{$project->id}"));
+        \Illuminate\Support\Facades\File::deleteDirectory(storage_path("app/projects/{$id}"));
         $name = $project->name;
         $project->transcript()->delete();
         $project->clipCandidates()->delete();

@@ -282,6 +282,13 @@ header [data-no-drag] {
     .fade {
         animation: fade 150ms ease-out;
     }
+    /* Overlay exit: entrance in reverse, held mounted by ExitBeat. */
+    .fade-out {
+        animation: fade 130ms ease-in forwards reverse;
+    }
+    .pop-out {
+        animation: pop 130ms ease-in forwards reverse;
+    }
     /* Staggered main panels: 1 lands with the page, each next 70ms later.
        Backwards fill for the same reason as .rise above. */
     .stagger-1, .stagger-2, .stagger-3, .stagger-4 {
@@ -478,6 +485,39 @@ header [data-no-drag] {
     to {
         transform: translateY(18px);
         opacity: 0;
+    }
+}
+
+/* Queue row exit: top rows slide up out, bottom rows slide down out,
+   middle rows fade in place. Surviving rows ease shut via the list's
+   own layout (no FLIP needed — space-y collapses with a transition on
+   the exiting row's margin/height). ExitBeat holds 240ms. */
+@keyframes row-out-top {
+    to {
+        transform: translateY(-16px);
+        opacity: 0;
+    }
+}
+@keyframes row-out-bottom {
+    to {
+        transform: translateY(16px);
+        opacity: 0;
+    }
+}
+@keyframes row-out-fade {
+    to {
+        opacity: 0;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .row-out-top {
+        animation: row-out-top 220ms ease-in forwards;
+    }
+    .row-out-bottom {
+        animation: row-out-bottom 220ms ease-in forwards;
+    }
+    .row-out-fade {
+        animation: row-out-fade 200ms ease-in forwards;
     }
 }
 

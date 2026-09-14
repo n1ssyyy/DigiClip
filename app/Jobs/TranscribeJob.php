@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Project;
 use App\Models\Transcript;
 use App\Services\Notifications\Notifier;
+use App\Services\Stt\TranscriptionCancelled;
 use App\Services\Stt\WhisperCppTranscriber;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -51,10 +52,26 @@ class TranscribeJob implements ShouldQueue
         // Resolve the budget from the model actually in use (not the value
         // at dispatch time — the user may have switched models since).
         $timeout = self::timeoutForModel($stt->modelId());
-        $result = $stt->transcribe($wav, [
-            'out_prefix' => storage_path("app/projects/{$project->id}/whisper"),
-            'timeout' => $timeout,
-        ]);
+        try {
+            $result = $stt->transcribe($wav, [
+                'out_prefix' => storage_path("app/projects/{$project->id}/whisper"),
+                'timeout' => $timeout,
+                // Cooperative cancellation: abort the sidecar within
+                // seconds of a pause/delete instead of holding the only
+                // media worker for the rest of the run.
+                'should_cancel' => fn () => Project::whereKey($this->projectId)->value('status') === 'paused'
+                    || ! Project::whereKey($this->projectId)->exists(),
+            ]);
+        } catch (TranscriptionCancelled) {
+            return;
+        }
+        // Lost the race with a pause/delete that landed after the last
+        // cancel check: had the stop come earlier there would be no
+        // transcript, so don't mark it done now.
+        $fresh = Project::find($this->projectId);
+        if (! $fresh || $fresh->status === 'paused') {
+            return;
+        }
 
         $confs = array_filter(array_column($result->words, 'conf'), fn ($c) => $c !== null);
         Transcript::updateOrCreate(
