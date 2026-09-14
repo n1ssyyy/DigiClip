@@ -20,12 +20,18 @@
   <a href="https://github.com/n1ssyyy/DigiClip/blob/main/LICENSE">
     <img src="https://shieldcn.dev/github/n1ssyyy/DigiClip/license.svg?variant=default&size=default" alt="MIT License" />
   </a>
+</p>
+
+<p align="center">
   <img src="https://shieldcn.dev/badge/PHP-8.3-777BB4.svg?logo=php&variant=default&size=default" alt="PHP 8.3" />
   <img src="https://shieldcn.dev/badge/Laravel-13-FF2D20.svg?logo=laravel&variant=default&size=default" alt="Laravel 13" />
   <img src="https://shieldcn.dev/badge/NativePHP-Desktop-000000.svg?logo=electron&variant=default&size=default" alt="NativePHP Desktop" />
   <img src="https://shieldcn.dev/badge/React-19-61DAFB.svg?logo=react&variant=default&size=default" alt="React 19" />
   <img src="https://shieldcn.dev/badge/Tailwind-4-06B6D4.svg?logo=tailwindcss&variant=default&size=default" alt="Tailwind 4" />
   <img src="https://shieldcn.dev/badge/SQLite-Local-003B57.svg?logo=sqlite&variant=default&size=default" alt="SQLite" />
+</p>
+
+<p align="center">
   <img src="https://shieldcn.dev/badge/whisper.cpp-STT-000000.svg?logo=huggingface&variant=default&size=default" alt="whisper.cpp" />
   <img src="https://shieldcn.dev/badge/OpenRouter-LLM-000000.svg?logo=openrouter&variant=default&size=default" alt="OpenRouter" />
   <img src="https://shieldcn.dev/badge/ffmpeg-Render-00A8E8.svg?logo=ffmpeg&variant=default&size=default" alt="ffmpeg" />
@@ -34,7 +40,7 @@
 <p align="center">
   <a href="https://github.com/n1ssyyy"><img src="https://shieldcn.dev/badge/Author-n1ssyyy-181717.svg?logo=github&variant=default&size=default" alt="n1ssyyy" /></a>
   <a href="https://shkolladigjitale.com/">
-    <img src="https://shieldcn.dev/badge/Partner-Shkolla_Digjitale-1e40af.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMTUgMTI4Ij48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik01NS41LDBMNTgsLTAuNUw2Niw2LjVMNzgsMTEuNUw5MiwxMi41TDkzLDExLjVMMTAyLDEwLjVMMTA5LDcuNUwxMTEuNSwxMEwxMTAuNSwxMTFMMTA2LjUsMTE4TDEwMiwxMjEuNUw5MiwxMjMuNUw5MSwxMjIuNUw4NiwxMjIuNUw3OCwxMTkuNUw2NywxMTkuNUw2MSwxMjIuNUw1OCwxMjcuNUw1NiwxMjcuNUw1MywxMjIuNUw0NywxMTkuNUwzNiwxMTkuNUwyOSwxMjIuNUwyNCwxMjIuNUwyMywxMjMuNUwxNCwxMjIuNUwxMCwxMjAuNUw0LjUsMTE0TDQuNSwxMTJMMy41LDExMUwzLjUsOTBMMi41LDg5TDIuNSwxMkwzLjUsMTFMMi41LDEwTDUsNy41TDEyLDEwLjVMMjEsMTEuNUwyMiwxMi41TDM2LDExLjVMNDgsNi41TDU1LjUsMFoiLz48L3N2Zz4%3D&variant=outline&color=1e40af&logoColor=1e40af&labelTextColor=1e40af&gradient=ffffff,ffffff&size=default" alt="Shkolla Digjitale" />
+    <img src="https://shieldcn.dev/badge/Partner-Shkolla_Digjitale-1e40af.svg?logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMTUgMTI4Ij48cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik01NS41LDBMNTgsLTAuNUw2Niw2LjVMNzgsMTEuNUw5MiwxMi41TDkzLDExLjVMMTAyLDEwLjVMMTA5LDcuNUwxMTEuNSwxMEwxMTAuNSwxMTFMMTA2LjUsMTE4TDEwMiwxMjEuNUw5MiwxMjMuNUw5MSwxMjIuNUw4NiwxMjIuNUw3OCwxMTkuNUw2NywxMTkuNUw2MSwxMjIuNUw1OCwxMjcuNUw1NiwxMjcuNUw1MywxMjIuNUw0NywxMTkuNUwzNiwxMTkuNUwyOSwxMjIuNUwyNCwxMjIuNUwyMywxMjMuNUwxNCwxMjIuNUwxMCwxMjAuNUw0LjUsMTE0TDQuNSwxMTJMMy41LDExMUwzLjUsOTBMMi41LDg5TDIuNSwxMkwzLjUsMTFMMi41LDEwTDUsNy41TDEyLDEwLjVMMjEsMTEuNUwyMiwxMi41TDM2LDExLjVMNDgsNi41TDU1LjUsMFoiLz48L3N2Zz4%3D&variant=default&color=1e40af&logoColor=1e40af&labelColor=ffffff&labelTextColor=1e40af&size=default" alt="Shkolla Digjitale" />
   </a>
 </p>
 
