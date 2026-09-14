@@ -21,15 +21,29 @@ class DeviceUser
             }
         } catch (\Throwable) {
         }
+        // get_current_user() returns the php.ini owner (usually "root"
+        // for bundled runtimes), not the device login — only trust it
+        // when it looks like a real login name.
         $owner = @get_current_user();
-        if (is_string($owner) && $owner !== '') {
+        if (is_string($owner) && $owner !== '' && $owner !== 'root') {
             return $owner;
         }
         foreach (['USER', 'USERNAME', 'LOGNAME'] as $key) {
             $v = getenv($key);
-            if (is_string($v) && $v !== '') {
+            if (is_string($v) && $v !== '' && $v !== 'root') {
                 return $v;
             }
+        }
+        // Last resort: first entry of /etc/passwd with uid >= 1000.
+        try {
+            foreach (file('/etc/passwd', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+                $parts = explode(':', $line);
+                if (count($parts) > 2 && (int) $parts[2] >= 1000 && (int) $parts[2] < 60000
+                    && ! empty($parts[0]) && $parts[0] !== 'nobody') {
+                    return $parts[0];
+                }
+            }
+        } catch (\Throwable) {
         }
 
         return null;
