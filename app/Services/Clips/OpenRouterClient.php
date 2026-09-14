@@ -90,7 +90,7 @@ class OpenRouterClient
         $res = Http::baseUrl($base)
             ->withToken($this->apiKey)
             ->withHeaders(['HTTP-Referer' => 'https://digiclip.app', 'X-Title' => 'DigiClip'])
-            ->timeout((int) config('digiclip.openrouter.timeout_s', 90))
+            ->timeout((int) config('digiclip.openrouter.timeout_s', 300))
             ->retry(2, 2000, throw: false)
             ->post('/chat/completions', [
                 'model' => $options['model'] ?? $this->model,
