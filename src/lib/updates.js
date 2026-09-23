@@ -18,7 +18,8 @@ const AUTO_KEY = 'digiclip.updates.auto';
 
 const U = {
     phase: 'idle', // idle | checking | uptodate | available | downloading | ready | installing | error | unsupported
-    current: null, // installed version string
+    current: null, // installed app version (confirmed by an update check)
+    appVersion: null, // installed app version (lazy, no check needed) string
     available: null, // { version, notes, date }
     total: 0, // expected download bytes (0 = unknown)
     done: 0, // downloaded bytes so far
@@ -66,6 +67,24 @@ export function useUpdates(sel) {
 
 export function updateAutoEnabled() {
     return U.auto;
+}
+
+/**
+ * App (shell) version for display — the Settings header badge, anywhere the
+ * engine version would be the wrong number. Cached after first read.
+ * Null outside the Tauri shell (browser dev).
+ */
+export async function ensureAppVersion() {
+    if (U.appVersion) return U.appVersion;
+    if (!isTauri()) return null;
+    try {
+        const { getVersion } = await import('@tauri-apps/api/app');
+        const v = await getVersion();
+        set({ appVersion: v, current: U.current ?? v });
+        return v;
+    } catch {
+        return null;
+    }
 }
 
 export function setAutoUpdate(on) {

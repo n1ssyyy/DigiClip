@@ -11,7 +11,7 @@ import { GpuToggle } from '../components/digiclip/controls';
 import Tip from '../components/digiclip/Tooltip';
 import { cn } from '../lib/utils';
 import { deleteModel, downloadModel, saveSettings, useStore } from '../lib/socket';
-import { checkForUpdates, downloadAndInstall, restartToUpdate, setAutoUpdate, updateProgress, useUpdates } from '../lib/updates';
+import { checkForUpdates, downloadAndInstall, ensureAppVersion, restartToUpdate, setAutoUpdate, updateProgress, useUpdates } from '../lib/updates';
 import ProgressRing from '../components/digiclip/ProgressRing';
 
 function Field({ label, aside, hint, children }) {
@@ -154,7 +154,13 @@ export default function Settings() {
     const settings = useStore((s) => s.settings);
     const health = useStore((s) => s.health);
     const liveModels = useStore((s) => s.models);
+    const appVersion = useUpdates((s) => s.appVersion);
     const [saving, setSaving] = useState(false);
+    // Header badge is the APP version (shell), never the engine version
+    // from health — the two diverge (engine 2.0.1 vs app 2.2.x).
+    useEffect(() => {
+        ensureAppVersion().catch(() => {});
+    }, []);
     // Hovering the header or the form lights both borders together so the
     // pair reads as one unit without touching.
     const [hot, setHot] = useState(false);
@@ -247,9 +253,9 @@ export default function Settings() {
                 <CardHeader className="h-10 justify-center px-4 py-0">
                     <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-[13px]">Settings</CardTitle>
-                        {health?.version && (
+                        {appVersion && (
                             <Badge variant="secondary" className="font-mono text-[10px] text-muted-foreground">
-                                v{health.version}
+                                v{appVersion}
                             </Badge>
                         )}
                     </div>
