@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { KeyRound } from 'lucide-react';
+import { Download, KeyRound, RefreshCw, RotateCcw } from 'lucide-react';
 import shkollaIcon from '../assets/shkolla-icon.png';
 import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
@@ -11,6 +11,8 @@ import { GpuToggle } from '../components/digiclip/controls';
 import Tip from '../components/digiclip/Tooltip';
 import { cn } from '../lib/utils';
 import { deleteModel, downloadModel, saveSettings, useStore } from '../lib/socket';
+import { checkForUpdates, downloadAndInstall, restartToUpdate, setAutoUpdate, updateProgress, useUpdates } from '../lib/updates';
+import ProgressRing from '../components/digiclip/ProgressRing';
 
 function Field({ label, aside, hint, children }) {
     return (
@@ -56,6 +58,93 @@ function GpuRow({ gpu, checked, onChange }) {
             <div className="min-w-0">
                 <p className="text-[13px] font-medium">GPU transcription</p>
                 <p className="text-[11px] text-muted-foreground">{hint}</p>
+            </div>
+        </div>
+    );
+}
+
+/** App updates row: auto-check switch + status line + the action for
+ *  whatever phase the updater is in (check / download / restart). */
+function UpdatesRow() {
+    const phase = useUpdates((s) => s.phase);
+    const current = useUpdates((s) => s.current);
+    const available = useUpdates((s) => s.available);
+    const auto = useUpdates((s) => s.auto);
+    const error = useUpdates((s) => s.error);
+    const [working, setWorking] = useState(false);
+    const pct = updateProgress();
+
+    async function run(fn) {
+        if (working) return;
+        setWorking(true);
+        try {
+            await fn();
+        } catch {
+        } finally {
+            setWorking(false);
+        }
+    }
+
+    const status = (() => {
+        switch (phase) {
+            case 'checking':
+                return 'Checking for updates…';
+            case 'uptodate':
+                return current ? `You're on the latest — v${current}.` : 'You’re on the latest.';
+            case 'available':
+                return available ? `v${available.version} is out${current ? ` — you're on v${current}` : ''}.` : 'A newer build is out.';
+            case 'downloading':
+                return `Downloading v${available?.version ?? ''}… ${pct !== null ? `${pct}%` : ''}`;
+            case 'installing':
+                return 'Installing… hang tight.';
+            case 'ready':
+                return `v${available?.version ?? ''} installed — restart to finish.`;
+            case 'error':
+                return error ? `Couldn't check: ${error}` : 'Update check failed.';
+            case 'unsupported':
+                return 'Updates need the desktop app, not the browser.';
+            default:
+                return 'Never checked this session.';
+        }
+    })();
+
+    return (
+        <div className="space-y-2.5">
+            <div className="flex items-center gap-3">
+                <GpuToggle checked={auto} onChange={setAutoUpdate} label="Check for updates on launch" />
+                <div className="min-w-0">
+                    <p className="text-[13px] font-medium">App updates</p>
+                    <p className="text-[11px] text-muted-foreground">{auto ? 'Checked on launch, installed on your call.' : 'Automatic checks off — check by hand.'}</p>
+                </div>
+                {current && (
+                    <Badge variant="secondary" className="ml-auto font-mono text-[10px] text-muted-foreground">
+                        v{current}
+                    </Badge>
+                )}
+            </div>
+            <div className="flex items-center gap-2">
+                {(phase === 'downloading' || phase === 'installing') && pct !== null && phase === 'downloading' ? (
+                    <ProgressRing value={pct} size={16} label="Update download" />
+                ) : null}
+                <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={status}>{status}</p>
+                {(phase === 'idle' || phase === 'uptodate' || phase === 'error') && (
+                    <Button type="button" variant="secondary" size="sm" disabled={working} onClick={() => run(() => checkForUpdates())}>
+                        <RefreshCw className="size-3.5" aria-hidden />
+                        {working ? 'Checking…' : 'Check now'}
+                    </Button>
+                )}
+                {phase === 'available' && (
+                    <Button type="button" size="sm" disabled={working} onClick={() => run(downloadAndInstall)}>
+                        <Download className="size-3.5" aria-hidden />
+                        {working ? 'Starting…' : `Update to v${available?.version ?? ''}`}
+                    </Button>
+                )}
+                {phase === 'ready' && (
+                    <Button type="button" size="sm" onClick={() => restartToUpdate().catch(() => {})}>
+                        <RotateCcw className="size-3.5" aria-hidden />
+                        Restart now
+                    </Button>
+                )}
             </div>
         </div>
     );
@@ -219,6 +308,9 @@ export default function Settings() {
                             />
                         </Section>
                     </form>
+                    <Section title="Updates" className="stagger-4">
+                        <UpdatesRow />
+                    </Section>
                     <Section title="About" className="stagger-4">
                         <div className="space-y-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-muted/40 px-3 py-2.5">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

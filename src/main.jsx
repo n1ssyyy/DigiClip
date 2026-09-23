@@ -7,7 +7,7 @@ import Home from './pages/Home';
 import Health from './pages/Health';
 import Settings from './pages/Settings';
 import { connect, useStore, whenSynced } from './lib/socket';
-import { getServe, onServeFailed, onServeReady } from './lib/native';
+import { getServe, isTauri, onServeFailed, onServeReady } from './lib/native';
 
 /** The shell boots the sidecar before first paint: either it is already
  *  up (`get_serve`) or the `serve-ready` event lands. No UI until then. */
@@ -87,6 +87,13 @@ function Boot() {
             .then((synced) => {
                 if (dead || !synced) return;
                 setPhase({ name: 'ready', error: null });
+                // Silent boot check for app updates (own channel, not the
+                // engine socket): no toast when up to date or offline.
+                if (isTauri()) {
+                    import('./lib/updates.js').then((m) => {
+                        if (m.updateAutoEnabled()) m.checkForUpdates({ silent: true }).catch(() => {});
+                    }).catch(() => {});
+                }
             })
             .catch((error) => {
                 if (dead) return;
