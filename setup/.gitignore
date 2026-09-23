@@ -1,0 +1,22 @@
+# Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust / Tauri shell
+src-tauri/target/
+src-tauri/gen/
+**/*.rs.bk
+**/*.pdb
+
+# Local dev overrides
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

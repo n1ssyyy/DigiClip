@@ -1,0 +1,23 @@
+[package]
+name = "digiclip-setup"
+version = "1.0.0"
+description = "DigiClip Setup: custom installer wizard (detect, install, update, repair, uninstall)."
+authors = ["n1ssyyy"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1.0.104"
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+futures-util = "0.3"
+winreg = "0.55"
+tokio = { version = "1", features = ["rt", "fs", "io-util"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

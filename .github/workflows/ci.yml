@@ -155,9 +155,55 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  setup:
+    name: Setup stub (Windows)
+    # DigiClip Setup: the custom installer wizard (own Tauri app, no
+    # engine). Windows-only — other platforms use their native packages.
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: setup/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: setup/src-tauri -> target
+
+      - name: Install JS dependencies
+        working-directory: setup
+        run: npm ci
+
+      - name: Build setup stub
+        working-directory: setup
+        run: npm run tauri build
+
+      - name: Stage setup exe
+        shell: bash
+        run: |
+          cp setup/src-tauri/target/release/digiclip-setup.exe DigiClip-Setup.exe
+          ls -la DigiClip-Setup.exe
+
+      - name: Upload setup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digiclip-setup
+          path: DigiClip-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
+
   release:
     name: Release
-    needs: build
+    needs: [build, setup]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -180,6 +226,12 @@ jobs:
         with:
           name: digiclip-macos-latest
           path: artifacts/macos
+
+      - name: Download setup stub
+        uses: actions/download-artifact@v4
+        with:
+          name: digiclip-setup
+          path: artifacts/setup
 
       - name: Generate updater latest.json
         # Nothing in the toolchain writes latest.json — the v2 updater just
@@ -246,6 +298,7 @@ jobs:
             artifacts/win/**/*
             artifacts/linux/**/*
             artifacts/macos/**/*
+            artifacts/setup/**/*
             dist/latest.json
           generate_release_notes: true
           fail_on_unmatched_files: false
