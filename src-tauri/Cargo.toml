@@ -1,6 +1,6 @@
 [package]
 name = "digiclip-app"
-version = "2.0.0"
+version = "2.0.1"
 description = "DigiClip desktop shell (Tauri): spawns the digiclip serve sidecar and hosts the React UI."
 authors = ["n1ssyyy"]
 edition = "2021"

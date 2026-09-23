@@ -130,17 +130,18 @@ jobs:
         run: npm run tauri build
 
       - name: Upload installer artifact
+        # No `**/*.app`: uploading the raw .app dir makes the release
+        # step re-attach its loose contents (Info.plist, icon.icns, bare
+        # binaries — seen live in v2.0.0). The .dmg already carries the app.
         uses: actions/upload-artifact@v4
         with:
           name: digiclip-${{ matrix.os }}
           path: |
-            src-tauri/target/release/bundle/**/*.nsis
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.app
           if-no-files-found: error
           retention-days: 14
 
