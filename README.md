@@ -188,7 +188,8 @@ cargo check --manifest-path src-tauri/Cargo.toml  # shell
 | `frontend` | `ubuntu-latest` | `npm ci`, `npm run build` |
 | `engine` | `ubuntu-latest` | engine `cargo test` from the submodule |
 | `build` | `windows-latest`, `ubuntu-latest`, `macos-latest` | build engine (release) → stage into `src-tauri/resources/` → `tauri build` → installer artifacts |
-| `release` | `ubuntu-latest` | on `v*` tags only: attaches all three platforms' installers to the GitHub Release |
+| `setup` | `windows-latest` | build the Setup stub wizard → `DigiClip-Setup.exe` artifact |
+| `release` | `ubuntu-latest` | on `v*` tags only: attaches installers + setup stub + generated `latest.json` to the GitHub Release |
 
 Cut a release (engine first, then app so the submodule pin is exact):
 
@@ -228,6 +229,28 @@ git tag v2.2.0 && git push origin main v2.2.0
   updater, so they can't self-update into it. Install v2.2.0+ once from
   the releases page; every release after that arrives in-app.
 
+## 🧙 Setup (Windows)
+
+`DigiClip-Setup.exe` (per release, next to the full installers) is the
+custom installer — a small Tauri wizard in the app's own design language,
+not a native NSIS page. It detects the machine and offers exactly what
+fits: **Install** (fresh), **Update** (older build found), **Reinstall** /
+**Repair** (same build), **Uninstall** — with download progress, a
+close-the-running-app guard (silent installers fail on locked files), and
+a launch-on-finish goodbye. The native NSIS installer does the file work
+silently underneath (`/S`); the wizard is the whole visible setup.
+
+```bash
+cd setup
+npm install
+npm run tauri dev    # wizard dev loop (port 1430, no engine needed)
+```
+
+Source: `setup/src/` (React state machine) + `setup/src-tauri/` (detect
+via the uninstall registry key, GitHub release lookup, streaming download,
+hidden silent install/uninstall). Windows-only by design — macOS/Linux
+keep their native packages.
+
 ## 🗺 Project map
 
 ```
@@ -240,6 +263,7 @@ src/lib/socket.js         whole backend over one WebSocket (no polling)
 src/lib/native.js         Tauri bridge (window, dialogs, drag-drop, save flow)
 src/lib/updates.js        updater store (check/download/install/restart state)
 src/components/digiclip/UpdateNotice.jsx  update banner + release-notes dialog
+setup/                   custom installer wizard (own Tauri app, Windows-only)
 src/pages/                Home (dropzone + pipeline + clips) · Health · Settings
 src/components/digiclip/  Titlebar, dropzone, job cards, clip tiles, settings forms
 engine/                   submodule -> DigiClip-CLI (the clipping pipeline)

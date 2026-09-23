@@ -1,0 +1,175 @@
+@import 'tailwindcss';
+
+/* House face: JetBrains Mono everywhere, weights from one variable file. */
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('./fonts/JetBrainsMono-Variable.ttf') format('truetype');
+    font-weight: 100 800;
+    font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --font-sans: 'JetBrains Mono', ui-monospace, monospace;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Setup is dark-first, same video-tool dark room as the main app. */
+:root,
+.dark {
+    --background: hsl(0 0% 7%);
+    --foreground: hsl(0 0% 93%);
+    --card: hsl(0 0% 10%);
+    --card-foreground: hsl(0 0% 93%);
+    --popover: hsl(0 0% 10%);
+    --popover-foreground: hsl(0 0% 93%);
+    --primary: hsl(0 0% 98%);
+    --primary-foreground: hsl(0 0% 9%);
+    --secondary: hsl(0 0% 15%);
+    --secondary-foreground: hsl(0 0% 93%);
+    --muted: hsl(0 0% 15%);
+    --muted-foreground: hsl(0 0% 64%);
+    --accent: hsl(0 0% 15%);
+    --accent-foreground: hsl(0 0% 93%);
+    --destructive: hsl(0 62% 50%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(0 0% 16%);
+    --input: hsl(0 0% 16%);
+    --ring: hsl(0 0% 83%);
+    --radius: 0.625rem;
+    --viral: #a3e635;
+}
+
+@layer base {
+    * {
+        border-color: var(--border);
+    }
+    body {
+        background-color: var(--background);
+        color: var(--foreground);
+        font-family: var(--font-sans);
+    }
+}
+
+/* Frameless rounded shell: transparent window, #app paints the card. */
+html,
+body {
+    background-color: transparent !important;
+}
+
+#app {
+    height: 100vh;
+    overflow: hidden;
+    border-radius: 12px;
+    background-color: var(--background);
+    color: var(--foreground);
+}
+
+/* Same motion language as the main app: rise for rows, pop for the card,
+   fade for overlays. Reduced motion gets instant cuts. */
+@keyframes rise {
+    from {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes pop {
+    from {
+        transform: scale(0.97) translateY(3px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .rise {
+        animation: rise 260ms ease-out backwards;
+    }
+    .pop {
+        animation: pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .fade {
+        animation: fade 200ms ease-out;
+    }
+    button:not([class*='transition']),
+    a:not([class*='transition']) {
+        transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out, opacity 150ms ease-out;
+    }
+}
+
+/* Determinate download bar: hairline track, white fill, comet tip. */
+.dl-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--muted);
+    overflow: hidden;
+}
+.dl-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.55), #fff);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.45);
+    transition: width 160ms linear;
+}
+
+/* Indeterminate barber-pole for silent install/uninstall (NSIS gives no
+   progress back — the room's shimmer voice instead of a lying percent). */
+.indet {
+    position: relative;
+    overflow: hidden;
+    background: var(--muted);
+}
+.indet::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.25) 50%, transparent 80%);
+    animation: indet-sweep 1.4s linear infinite;
+}
+@keyframes indet-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .indet::after {
+        animation: none;
+    }
+}
