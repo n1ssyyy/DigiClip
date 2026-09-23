@@ -101,13 +101,24 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
             .unwrap_or(0),
         TOKEN_COUNTER.fetch_add(1, Ordering::SeqCst) ^ (std::process::id() as u64),
     );
-    let mut child = tokio::process::Command::new(&bin)
+    // Hidden subprocess: the engine is a console binary, and on Windows a
+    // plain spawn opens a visible terminal next to the app. Build a std
+    // command with CREATE_NO_WINDOW first, then hand it to tokio.
+    let mut std_cmd = std::process::Command::new(&bin);
+    std_cmd
         .args(["--serve", "--port", &port.to_string(), "--token", &token])
         .stdout(Stdio::piped())
         // Piped (not null): on a pre-banner exit the tail below becomes
         // the boot error instead of silence.
         .stderr(Stdio::piped())
-        .stdin(Stdio::null())
+        .stdin(Stdio::null());
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NO_WINDOW: no console window for the engine.
+        std_cmd.creation_flags(0x08000000);
+    }
+    let mut child = tokio::process::Command::from(std_cmd)
         .kill_on_drop(true)
         .spawn()?;
 
@@ -228,7 +239,14 @@ fn open_url(url: String) -> Result<(), String> {
     }
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("cmd").args(["/C", "start", "", &url]).spawn().map(|_| ()).map_err(|e| e.to_string())
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", "start", "", &url]);
+        {
+            use std::os::windows::process::CommandExt;
+            // Hide the one-shot `cmd /C start` helper (no console flash).
+            cmd.creation_flags(0x08000000);
+        }
+        cmd.spawn().map(|_| ()).map_err(|e| e.to_string())
     }
     #[cfg(target_os = "macos")]
     {
