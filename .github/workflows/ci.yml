@@ -189,29 +189,44 @@ jobs:
         # install), signature = the bundler's .sig contents. The updater
         # tries `{os}-{arch}-{installer}` then `{os}-{arch}`, so MSI users
         # match their key first and everyone else falls to the default.
+        # NOTE: no apostrophes inside the jq program (it is single-quoted).
+        # Downloaded artifacts keep their bundle/ paths — locate via find.
         shell: bash
         run: |
           mkdir -p dist
           TAG="${GITHUB_REF_NAME}"
           VER="${TAG#v}"
           BASE="https://github.com/n1ssyyy/DigiClip/releases/download/${TAG}"
+          pick() { find artifacts -name "$1" | sort | head -1; }
           sig() { tr -d '\n\r ' < "$1"; }
-          NSIS_ZIP=$(basename artifacts/win/*.nsis.zip)
-          MSI_ZIP=$(basename artifacts/win/*.msi.zip)
-          APPIMAGE_TZ=$(basename artifacts/linux/*.AppImage.tar.gz)
-          APP_TZ=$(basename artifacts/macos/*.app.tar.gz)
+          NSIS_ZIP_PATH=$(pick '*.nsis.zip')
+          MSI_ZIP_PATH=$(pick '*.msi.zip')
+          APPIMAGE_TZ_PATH=$(pick '*.AppImage.tar.gz')
+          APP_TZ_PATH=$(pick '*.app.tar.gz')
+          test -n "$NSIS_ZIP_PATH" || { echo "missing nsis.zip"; exit 1; }
+          test -n "$MSI_ZIP_PATH" || { echo "missing msi.zip"; exit 1; }
+          test -n "$APPIMAGE_TZ_PATH" || { echo "missing AppImage.tar.gz"; exit 1; }
+          test -n "$APP_TZ_PATH" || { echo "missing app.tar.gz"; exit 1; }
+          test -f "$NSIS_ZIP_PATH.sig" || { echo "missing nsis.zip.sig"; exit 1; }
+          test -f "$MSI_ZIP_PATH.sig" || { echo "missing msi.zip.sig"; exit 1; }
+          test -f "$APPIMAGE_TZ_PATH.sig" || { echo "missing AppImage.tar.gz.sig"; exit 1; }
+          test -f "$APP_TZ_PATH.sig" || { echo "missing app.tar.gz.sig"; exit 1; }
+          NSIS_ZIP=$(basename "$NSIS_ZIP_PATH")
+          MSI_ZIP=$(basename "$MSI_ZIP_PATH")
+          APPIMAGE_TZ=$(basename "$APPIMAGE_TZ_PATH")
+          APP_TZ=$(basename "$APP_TZ_PATH")
           echo "nsis: $NSIS_ZIP | msi: $MSI_ZIP | appimage: $APPIMAGE_TZ | app: $APP_TZ"
           jq -n \
             --arg ver "$VER" \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg base "$BASE" \
-            --arg nsis "$NSIS_ZIP" --arg nsis_sig "$(sig artifacts/win/*.nsis.zip.sig)" \
-            --arg msi "$MSI_ZIP" --arg msi_sig "$(sig artifacts/win/*.msi.zip.sig)" \
-            --arg appimage "$APPIMAGE_TZ" --arg appimage_sig "$(sig artifacts/linux/*.AppImage.tar.gz.sig)" \
-            --arg app "$APP_TZ" --arg app_sig "$(sig artifacts/macos/*.app.tar.gz.sig)" \
+            --arg nsis "$NSIS_ZIP" --arg nsis_sig "$(sig "$NSIS_ZIP_PATH.sig")" \
+            --arg msi "$MSI_ZIP" --arg msi_sig "$(sig "$MSI_ZIP_PATH.sig")" \
+            --arg appimage "$APPIMAGE_TZ" --arg appimage_sig "$(sig "$APPIMAGE_TZ_PATH.sig")" \
+            --arg app "$APP_TZ" --arg app_sig "$(sig "$APP_TZ_PATH.sig")" \
             '{
               version: $ver,
-              notes: ("See https://github.com/n1ssyyy/DigiClip/releases/tag/v\($ver) for what's new."),
+              notes: ("Release notes: https://github.com/n1ssyyy/DigiClip/releases/tag/v\($ver)"),
               pub_date: $date,
               platforms: {
                 "windows-x86_64-nsis": { url: "\($base)/\($nsis)", signature: $nsis_sig },
