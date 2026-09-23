@@ -113,7 +113,12 @@ export async function checkForUpdates({ silent = false } = {}) {
         // Unreachable server (offline, or no published latest.json yet) is
         // routine — only loud on a manual check, never on boot.
         pending = null;
-        const msg = e?.message ?? String(e);
+        const raw = e?.message ?? String(e);
+        // No signed build published for this OS/arch (e.g. Intel Macs while
+        // only arm64 ships) — plain words, not the updater's target key.
+        const msg = /Target(?:s)?NotFound/i.test(raw)
+            ? 'No update published for this machine yet.'
+            : raw;
         set({ phase: 'error', error: msg });
         if (!silent) throw e;
         return null;

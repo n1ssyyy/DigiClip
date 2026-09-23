@@ -207,9 +207,12 @@ git tag v2.2.0 && git push origin main v2.2.0
   Updates). A newer build raises a banner (bottom-left, release notes one
   click away): Download → Install → Restart, with progress in the room's
   own ring/dialog language. No polling, no browser window, no reinstall.
-- **Signed feed** — every installer published from a `v*` tag carries
-  `.sig` updater bundles; the app verifies them against the `pubkey` in
-  `tauri.conf.json` before touching anything. The private key lives in the
+- **Signed feed** — every `v*` tag publishes v1Compatible updater bundles
+  (`.nsis.zip` / `.msi.zip`, `.AppImage.tar.gz`, `.app.tar.gz`, each with a
+  minisign `.sig`) plus a generated `latest.json` mapping each
+  `{os}-{arch}[-{installer}]` target to its bundle + signature; the app
+  verifies the download against the `pubkey` in `tauri.conf.json` before
+  touching anything. The private key lives in the
   `TAURI_SIGNING_PRIVATE_KEY` repo secret (keypair at `~/.tauri/digiclip.key`
   — back it up; rotating keys strands installs that only know the old one).
   Unsigned local builds simply report "couldn't check".

@@ -137,8 +137,9 @@ jobs:
         # No `**/*.app`: uploading the raw .app dir makes the release
         # step re-attach its loose contents (Info.plist, icon.icns, bare
         # binaries — seen live in v2.0.0). The .dmg already carries the app.
-        # The .zip/.tar.gz/.sig/latest.json set is the signed updater feed
-        # (only present when the signing secret exists).
+        # The .zip/.tar.gz/.sig set is the signed updater feed
+        # (`createUpdaterArtifacts: v1Compatible` — only present when the
+        # signing secret exists). latest.json is generated in release.
         uses: actions/upload-artifact@v4
         with:
           name: digiclip-${{ matrix.os }}
@@ -151,7 +152,6 @@ jobs:
             src-tauri/target/release/bundle/**/*.zip
             src-tauri/target/release/bundle/**/*.tar.gz
             src-tauri/target/release/bundle/**/*.sig
-            src-tauri/target/release/bundle/**/latest.json
           if-no-files-found: error
           retention-days: 14
 
@@ -181,19 +181,48 @@ jobs:
           name: digiclip-macos-latest
           path: artifacts/macos
 
-      - name: Merge updater latest.json
-        # Each OS build emits a latest.json holding only its own platform.
-        # The in-app updater reads ONE file, so merge the `platforms` maps.
-        # Per-platform copies are deleted — same basename would collide on
-        # upload and only one would survive (the v2.0.1 CLI lesson).
+      - name: Generate updater latest.json
+        # Nothing in the toolchain writes latest.json — the v2 updater just
+        # reads `{version, notes, pub_date, platforms: {target: {url,
+        # signature}}}`. Each entry points at the signed v1Compatible
+        # bundle for that target (zips/tarballs the updater knows how to
+        # install), signature = the bundler's .sig contents. The updater
+        # tries `{os}-{arch}-{installer}` then `{os}-{arch}`, so MSI users
+        # match their key first and everyone else falls to the default.
         shell: bash
         run: |
           mkdir -p dist
-          files=$(find artifacts -name latest.json | sort)
-          echo "merging: $files"
-          jq -s '{version: .[0].version, notes: .[0].notes, pub_date: .[0].pub_date, platforms: (map(.platforms) | add)}' $files > dist/latest.json
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          BASE="https://github.com/n1ssyyy/DigiClip/releases/download/${TAG}"
+          sig() { tr -d '\n\r ' < "$1"; }
+          NSIS_ZIP=$(basename artifacts/win/*.nsis.zip)
+          MSI_ZIP=$(basename artifacts/win/*.msi.zip)
+          APPIMAGE_TZ=$(basename artifacts/linux/*.AppImage.tar.gz)
+          APP_TZ=$(basename artifacts/macos/*.app.tar.gz)
+          echo "nsis: $NSIS_ZIP | msi: $MSI_ZIP | appimage: $APPIMAGE_TZ | app: $APP_TZ"
+          jq -n \
+            --arg ver "$VER" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg base "$BASE" \
+            --arg nsis "$NSIS_ZIP" --arg nsis_sig "$(sig artifacts/win/*.nsis.zip.sig)" \
+            --arg msi "$MSI_ZIP" --arg msi_sig "$(sig artifacts/win/*.msi.zip.sig)" \
+            --arg appimage "$APPIMAGE_TZ" --arg appimage_sig "$(sig artifacts/linux/*.AppImage.tar.gz.sig)" \
+            --arg app "$APP_TZ" --arg app_sig "$(sig artifacts/macos/*.app.tar.gz.sig)" \
+            '{
+              version: $ver,
+              notes: ("See https://github.com/n1ssyyy/DigiClip/releases/tag/v\($ver) for what's new."),
+              pub_date: $date,
+              platforms: {
+                "windows-x86_64-nsis": { url: "\($base)/\($nsis)", signature: $nsis_sig },
+                "windows-x86_64-msi": { url: "\($base)/\($msi)", signature: $msi_sig },
+                "windows-x86_64": { url: "\($base)/\($nsis)", signature: $nsis_sig },
+                "linux-x86_64-appimage": { url: "\($base)/\($appimage)", signature: $appimage_sig },
+                "linux-x86_64": { url: "\($base)/\($appimage)", signature: $appimage_sig },
+                "darwin-aarch64": { url: "\($base)/\($app)", signature: $app_sig }
+              }
+            }' > dist/latest.json
           cat dist/latest.json
-          rm $files
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
