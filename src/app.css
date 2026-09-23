@@ -1,0 +1,632 @@
+@import 'tailwindcss';
+
+/* Caption-preview display faces (same files ffmpeg burns with). */
+@font-face {
+    font-family: 'Archivo Black';
+    src: url('./fonts/ArchivoBlack-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Anton';
+    src: url('./fonts/Anton-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+/* House face: JetBrains Mono everywhere, weights from one variable file. */
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('./fonts/JetBrainsMono-Variable.ttf') format('truetype');
+    font-weight: 100 800;
+    font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --font-sans: 'JetBrains Mono', 'Inter', ui-monospace, monospace;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* shadcn neutral - light */
+:root {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(0 0% 9%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(0 0% 9%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(0 0% 9%);
+    --primary: hsl(0 0% 9%);
+    --primary-foreground: hsl(0 0% 98%);
+    --secondary: hsl(0 0% 96%);
+    --secondary-foreground: hsl(0 0% 9%);
+    --muted: hsl(0 0% 96%);
+    --muted-foreground: hsl(0 0% 45%);
+    --accent: hsl(0 0% 96%);
+    --accent-foreground: hsl(0 0% 9%);
+    --destructive: hsl(0 84% 60%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(0 0% 90%);
+    --input: hsl(0 0% 90%);
+    --ring: hsl(0 0% 9%);
+    --radius: 0.625rem;
+    --viral: #65a30d;
+    /* Window chrome thickness: 42px rail + header (was 53px). Every
+       53px-derived offset in the app reads this var, so the shell
+       resizes from one place. */
+    --chrome: 42px;
+}
+
+/* shadcn neutral - dark (DigiClip default: video-tool dark room) */
+.dark {
+    --background: hsl(0 0% 7%);
+    --foreground: hsl(0 0% 93%);
+    --card: hsl(0 0% 10%);
+    --card-foreground: hsl(0 0% 93%);
+    --popover: hsl(0 0% 10%);
+    --popover-foreground: hsl(0 0% 93%);
+    --primary: hsl(0 0% 98%);
+    --primary-foreground: hsl(0 0% 9%);
+    --secondary: hsl(0 0% 15%);
+    --secondary-foreground: hsl(0 0% 93%);
+    --muted: hsl(0 0% 15%);
+    --muted-foreground: hsl(0 0% 64%);
+    --accent: hsl(0 0% 15%);
+    --accent-foreground: hsl(0 0% 93%);
+    --destructive: hsl(0 62% 50%);
+    --destructive-foreground: hsl(0 0% 98%);
+    --border: hsl(0 0% 16%);
+    --input: hsl(0 0% 16%);
+    --ring: hsl(0 0% 83%);
+    --viral: #a3e635;
+}
+
+@layer base {
+    * {
+        border-color: var(--border);
+    }
+    body {
+        background-color: var(--background);
+        color: var(--foreground);
+        font-family: var(--font-sans);
+    }
+    code,
+    .font-mono {
+        font-family: var(--font-mono);
+    }
+}
+
+/* Neutral thin scrollbars for overlay lists (dropdowns, transcript). */
+.digi-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+.digi-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.digi-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.digi-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+.digi-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+    background-clip: content-box;
+}
+
+/* Frameless rounded shell: the Electron window itself is transparent (see
+   NativeAppServiceProvider::transparent()); #app paints the background as a
+   rounded viewport-filling card and owns the scroll, so the corners stay
+   rounded and the sticky header/sidebar keep working. */
+html,
+body {
+    background-color: transparent !important;
+}
+
+#app {
+    height: 100vh;
+    overflow: auto;
+    border-radius: 12px;
+    background-color: var(--background);
+    color: var(--foreground);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+
+/* Maximized windows go edge-to-edge, no radius. Toggled from AppLayout. */
+.window-maximized #app {
+    border-radius: 0;
+}
+
+/* Frameless window chrome: the app header is the drag region (Electron
+   `-webkit-app-region`; ignored by plain browsers). Interactive children
+   opt out via [data-no-drag] / inline `no-drag` styles. */
+header[style*='app-region'] {
+    app-region: drag;
+}
+header [data-no-drag] {
+    app-region: no-drag;
+}
+
+/* App motion language: pages travel the sidebar direction (down the
+   list = new page rises from below, old page drifts up; up the list =
+   the mirror). Panels stagger behind the page. Everything runs only
+   with full motion enabled; reduced motion gets instant cuts. */
+@keyframes page-enter-down {
+    from {
+        transform: translateY(26px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes page-enter-up {
+    from {
+        transform: translateY(-26px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes page-leave-down {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(-14px);
+        opacity: 0;
+    }
+}
+@keyframes page-leave-up {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(14px);
+        opacity: 0;
+    }
+}
+@keyframes rise {
+    from {
+        transform: translateY(10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes pop {
+    from {
+        transform: scale(0.97) translateY(3px);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+}
+/* Dedicated exit keyframes, same reason as fade-out above: a distinct
+   name is what makes Chromium restart the animation on close. */
+@keyframes pop-out {
+    from {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: scale(0.97) translateY(3px);
+        opacity: 0;
+    }
+}
+@keyframes menu-out {
+    from {
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: scale(0.98) translateY(3px);
+        opacity: 0;
+    }
+}
+@keyframes fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+/* Dedicated exit keyframes (NOT `reverse` of the enter ones): swapping
+   between two classes that reference the same @keyframes name does not
+   restart the animation in Chromium — the finished enter state sticks
+   and the `reverse` fill snaps the dialog to invisible on the first
+   frame. A new name guarantees the exit genuinely replays. */
+@keyframes fade-out {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .page-enter-down {
+        animation: page-enter-down 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .page-enter-up {
+        animation: page-enter-up 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .page-leave-down {
+        animation: page-leave-down 160ms ease-in forwards;
+    }
+    .page-leave-up {
+        animation: page-leave-up 160ms ease-in forwards;
+    }
+    /* Mount fade-and-rise for rows, tiles, banners. Backwards fill:
+       hidden during the delay, then fully released (no retained
+       transform, so no stray stacking contexts trap popups). */
+    .rise {
+        animation: rise 260ms ease-out backwards;
+    }
+    /* Mount fade-and-grow for dropdown panels and dialog boxes. */
+    .pop {
+        animation: pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    /* Dropdown exit beat: retreats the way it came before unmount. */
+    .menu-out {
+        animation: menu-out 130ms ease-in forwards;
+    }
+    /* Plain mount fade for overlays. */
+    .fade {
+        animation: fade 200ms ease-out;
+    }
+    /* Overlay exit: dedicated fade-out/pop-out keyframes (see above),
+       held mounted by ExitBeat. */
+    .fade-out {
+        animation: fade-out 180ms ease-in forwards;
+    }
+    .pop-out {
+        animation: pop-out 180ms ease-in forwards;
+    }
+    /* Staggered main panels: 1 lands with the page, each next 70ms later.
+       Backwards fill for the same reason as .rise above. */
+    .stagger-1, .stagger-2, .stagger-3, .stagger-4 {
+        animation: rise 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+    .stagger-1 {
+        animation-delay: 40ms;
+    }
+    .stagger-2 {
+        animation-delay: 110ms;
+    }
+    .stagger-3 {
+        animation-delay: 180ms;
+    }
+    .stagger-4 {
+        animation-delay: 250ms;
+    }
+    /* Gap-fill: interactive elements with no tuned transition of their
+       own still ease between states. The :not guard leaves every
+       hand-tuned timing in the codebase untouched. */
+    button:not([class*='transition']),
+    a:not([class*='transition']),
+    input:not([class*='transition']),
+    select:not([class*='transition']) {
+        transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out, opacity 150ms ease-out;
+    }
+}
+
+/* Dropdown panels: same metal recipe as Card (darker surface than the
+   popover token, beveled per-side edge), in its own stacking context so
+   page content can never show through. Unlayered on purpose: this must
+   win over the `bg-popover` utility every menu also carries. */
+.digi-menu {
+    background-color: color-mix(in srgb, var(--popover, #1a1a1a) 78%, black);
+    border-top-color: rgb(255 255 255 / 0.15);
+    border-left-color: rgb(255 255 255 / 0.08);
+    border-right-color: rgb(255 255 255 / 0.08);
+    border-bottom-color: rgb(0 0 0 / 0.5);
+    isolation: isolate;
+}
+
+/* Native number spinners hide cross-browser and can't be styled;
+   the Settings stepper brings its own always-visible buttons. */
+.no-spin::-webkit-outer-spin-button,
+.no-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.no-spin {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* Page loading line: white bar with a glowing comet head that swells
+   toward the tip. Partial reloads never trigger it. */
+.pageline {
+    position: fixed;
+    top: var(--chrome);
+    right: 0;
+    left: 0;
+    z-index: 200;
+    height: 2px;
+    pointer-events: none;
+    transition: opacity 300ms ease-out;
+}
+.pageline-done {
+    opacity: 0;
+}
+.pageline-bar {
+    position: relative;
+    height: 100%;
+    transition: width 160ms linear;
+}
+/* Bright core, faint at the tail and full white at the tip. */
+.pageline-bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.3), #fff);
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.55);
+}
+/* Glow halo: starts at nothing and spreads ease-in style, staying low
+   for most of the run then rising steeply into the tip. */
+.pageline-bar::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0;
+    left: 0;
+    height: 12px;
+    transform: translateY(-50%);
+    background: linear-gradient(
+        to right,
+        transparent 0%,
+        rgba(255, 255, 255, 0.06) 45%,
+        rgba(255, 255, 255, 0.28) 72%,
+        rgba(255, 255, 255, 0.85) 100%
+    );
+    filter: blur(3px);
+}
+@media (prefers-reduced-motion: reduce) {
+    .pageline {
+        display: none;
+    }
+}
+
+/* Skeleton loaders: shimmer block + mount fade-in for the Swap
+   crossfade (skeleton out, real content in, per instance). */
+.skel {
+    position: relative;
+    overflow: hidden;
+    background: var(--muted);
+}
+.skel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.07) 50%, transparent 80%);
+    animation: skel-sweep 1.6s linear infinite;
+}
+@keyframes skel-sweep {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+@keyframes skel-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .skel-fade-in {
+        animation: skel-fade-in 300ms ease-out;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .skel::after {
+        animation: none;
+    }
+}
+
+/* Home project viewer: incoming project slides in from the travel direction
+   (down the list = rises from below, up the list = drops from above). */
+@keyframes proj-enter-down {
+    from {
+        transform: translateY(28px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@keyframes proj-enter-up {
+    from {
+        transform: translateY(-28px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .proj-enter-down {
+        animation: proj-enter-down 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .proj-enter-up {
+        animation: proj-enter-up 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .proj-leave-down {
+        animation: proj-leave-down 180ms ease-in forwards;
+    }
+    .proj-leave-up {
+        animation: proj-leave-up 180ms ease-in forwards;
+    }
+}
+@keyframes proj-leave-down {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(-18px);
+        opacity: 0;
+    }
+}
+@keyframes proj-leave-up {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(18px);
+        opacity: 0;
+    }
+}
+
+/* Queue row enter: new rows drop in from above (slide down).
+   Distinct from .rise (up from below, used by tiles/panels). */
+@keyframes queue-in {
+    from {
+        transform: translateY(-18px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .queue-in {
+        animation: queue-in 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+}
+
+/* Queue row exit: top rows slide up out, bottom rows slide down out,
+   middle rows fade in place. Surviving rows ease shut via the list's
+   own layout (no FLIP needed — space-y collapses with a transition on
+   the exiting row's margin/height). ExitBeat holds 240ms. */
+@keyframes row-out-top {
+    to {
+        transform: translateY(-16px);
+        opacity: 0;
+    }
+}
+@keyframes row-out-bottom {
+    to {
+        transform: translateY(16px);
+        opacity: 0;
+    }
+}
+@keyframes row-out-fade {
+    to {
+        opacity: 0;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .row-out-top {
+        animation: row-out-top 220ms ease-in forwards;
+    }
+    .row-out-bottom {
+        animation: row-out-bottom 220ms ease-in forwards;
+    }
+    .row-out-fade {
+        animation: row-out-fade 200ms ease-in forwards;
+    }
+}
+
+/* Tile mount: new clips rise into the grid (FLIP-lite: mount-only, so
+   polls never replay it). The source strip glides to its new cell via
+   the grid's own transition since it never remounts. */
+@keyframes tile-in {
+    from {
+        transform: translateY(14px) scale(0.97);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+/* Mirror of tile-in for the pager coming back up: drops in from above. */
+@keyframes tile-in-up {
+    from {
+        transform: translateY(-14px) scale(0.97);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .tile-in {
+        animation: tile-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+    .tile-in-up {
+        animation: tile-in-up 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+}
+
+/* Native video controls, dressed for the dark room (Chromium/WebView2
+   only — anything else ignores these and keeps its own chrome):
+   bottom-anchored scrim instead of the stock gray bar, near-white
+   icons, mono time readouts, enclosure squared to sit flush in the
+   frame's box. The player's own download item is removed via
+   controlsList (the app's save flow replaces it). */
+video::-webkit-media-controls-enclosure {
+    border-radius: 0 0 4px 4px;
+    overflow: hidden;
+}
+video::-webkit-media-controls-panel {
+    background-image: linear-gradient(transparent, rgb(0 0 0 / 0.75));
+}
+video::-webkit-media-controls-play-button,
+video::-webkit-media-controls-mute-button,
+video::-webkit-media-controls-fullscreen-button,
+video::-webkit-media-controls-seek-back-button,
+video::-webkit-media-controls-seek-forward-button {
+    filter: invert(0.85);
+}
+video::-webkit-media-controls-current-time-display,
+video::-webkit-media-controls-time-remaining-display {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: rgb(255 255 255 / 0.9);
+}

@@ -1,0 +1,34 @@
+# Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Vite / logs
+*.log
+vite.config.js.timestamp-*
+
+# Rust / Tauri shell (gen/schemas/ stays committed for editor validation)
+src-tauri/target/
+**/*.rs.bk
+**/*.pdb
+
+# Bundled engine binary (built from the engine/ submodule by CI —
+# see README "Production builds". Never committed.)
+src-tauri/resources/digiclip
+src-tauri/resources/digiclip.exe
+src-tauri/binaries/
+
+# Engine submodule build output (lives in engine/, ignored there too)
+engine/target/
+
+# Local dev overrides
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

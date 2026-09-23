@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Main window: core IPC (events, window APIs) plus the file dialog used by Browse.","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-open","dialog:allow-save","fs:allow-write-file"]}}

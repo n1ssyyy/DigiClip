@@ -1,0 +1,181 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+  engine:
+    name: Engine tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install engine build deps
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y cmake clang libclang-dev build-essential ffmpeg
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine -> target
+
+      - name: Engine format check
+        working-directory: engine
+        run: cargo fmt --all -- --check
+
+      - name: Engine tests
+        working-directory: engine
+        run: cargo test --all-targets
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: [frontend, engine]
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            engine_exe: digiclip.exe
+          - os: ubuntu-latest
+            engine_exe: digiclip
+          - os: macos-latest
+            engine_exe: digiclip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux Tauri deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            build-essential curl wget file \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            cmake clang libclang-dev
+
+      - name: Install macOS engine deps
+        if: runner.os == 'macOS'
+        run: brew install cmake llvm
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine -> target
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Build engine (release)
+        run: cargo build --release --manifest-path engine/Cargo.toml
+
+      - name: Stage engine for bundling
+        # The shell looks for resources/digiclip(.exe) beside its exe
+        # (see src-tauri/src/main.rs `engine_binary`); tauri.conf bundles
+        # the whole resources/ dir. Never committed (gitignored).
+        shell: bash
+        run: |
+          cp "engine/target/release/${{ matrix.engine_exe }}" src-tauri/resources/
+          ls -la src-tauri/resources/
+
+      - name: Build app
+        run: npm run tauri build
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digiclip-${{ matrix.os }}
+          path: |
+            src-tauri/target/release/bundle/**/*.nsis
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.app
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: digiclip-windows-latest
+          path: artifacts/win
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: digiclip-ubuntu-latest
+          path: artifacts/linux
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: digiclip-macos-latest
+          path: artifacts/macos
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/win/**/*
+            artifacts/linux/**/*
+            artifacts/macos/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false
