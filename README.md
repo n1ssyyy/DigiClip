@@ -193,11 +193,11 @@ cargo check --manifest-path src-tauri/Cargo.toml  # shell
 Cut a release (engine first, then app so the submodule pin is exact):
 
 ```bash
-# in DigiClip-CLI: git tag v0.1.0 && git push origin v0.1.0
+# in DigiClip-CLI: git tag v2.0.0 && git push origin v2.0.0
 # in DigiClip:
 git submodule update --remote engine   # pull the released engine commit
-git add engine && git commit -m "chore: bump engine to v0.1.0"
-git tag v0.1.0 && git push origin main v0.1.0
+git add engine && git commit -m "chore: bump engine to v2.0.0"
+git tag v2.0.0 && git push origin main v2.0.0
 ```
 
 Unsigned builds are the default and install fine for personal/team
