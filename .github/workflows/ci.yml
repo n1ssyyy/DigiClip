@@ -127,12 +127,18 @@ jobs:
           ls -la src-tauri/resources/
 
       - name: Build app
+        # TAURI_SIGNING_PRIVATE_KEY signs the updater bundles (.sig +
+        # latest.json). Absent on fork PRs — those builds just go unsigned.
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npm run tauri build
 
       - name: Upload installer artifact
         # No `**/*.app`: uploading the raw .app dir makes the release
         # step re-attach its loose contents (Info.plist, icon.icns, bare
         # binaries — seen live in v2.0.0). The .dmg already carries the app.
+        # The .zip/.tar.gz/.sig/latest.json set is the signed updater feed
+        # (only present when the signing secret exists).
         uses: actions/upload-artifact@v4
         with:
           name: digiclip-${{ matrix.os }}
@@ -142,6 +148,10 @@ jobs:
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.zip
+            src-tauri/target/release/bundle/**/*.tar.gz
+            src-tauri/target/release/bundle/**/*.sig
+            src-tauri/target/release/bundle/**/latest.json
           if-no-files-found: error
           retention-days: 14
 
@@ -171,6 +181,20 @@ jobs:
           name: digiclip-macos-latest
           path: artifacts/macos
 
+      - name: Merge updater latest.json
+        # Each OS build emits a latest.json holding only its own platform.
+        # The in-app updater reads ONE file, so merge the `platforms` maps.
+        # Per-platform copies are deleted — same basename would collide on
+        # upload and only one would survive (the v2.0.1 CLI lesson).
+        shell: bash
+        run: |
+          mkdir -p dist
+          files=$(find artifacts -name latest.json | sort)
+          echo "merging: $files"
+          jq -s '{version: .[0].version, notes: .[0].notes, pub_date: .[0].pub_date, platforms: (map(.platforms) | add)}' $files > dist/latest.json
+          cat dist/latest.json
+          rm $files
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -178,5 +202,6 @@ jobs:
             artifacts/win/**/*
             artifacts/linux/**/*
             artifacts/macos/**/*
+            dist/latest.json
           generate_release_notes: true
           fail_on_unmatched_files: false

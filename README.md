@@ -193,16 +193,37 @@ cargo check --manifest-path src-tauri/Cargo.toml  # shell
 Cut a release (engine first, then app so the submodule pin is exact):
 
 ```bash
-# in DigiClip-CLI: git tag v2.0.0 && git push origin v2.0.0
+# in DigiClip-CLI: git tag v2.2.0 && git push origin v2.2.0
 # in DigiClip:
 git submodule update --remote engine   # pull the released engine commit
-git add engine && git commit -m "chore: bump engine to v2.0.0"
-git tag v2.0.0 && git push origin main v2.0.0
+git add engine && git commit -m "chore: bump engine to v2.2.0"
+git tag v2.2.0 && git push origin main v2.2.0
 ```
 
-Unsigned builds are the default and install fine for personal/team
-distribution; for public auto-update + SmartScreen/Gatekeeper trust, add
-signing secrets and extend the workflow (see [Tauri signing](https://tauri.app/distribute/sign/)).
+## 🔄 Updates & setup
+
+- **In-app updates** — the shell checks `latest.json` on the releases page
+  on launch (silent when up to date or offline; toggle in Settings →
+  Updates). A newer build raises a banner (bottom-left, release notes one
+  click away): Download → Install → Restart, with progress in the room's
+  own ring/dialog language. No polling, no browser window, no reinstall.
+- **Signed feed** — every installer published from a `v*` tag carries
+  `.sig` updater bundles; the app verifies them against the `pubkey` in
+  `tauri.conf.json` before touching anything. The private key lives in the
+  `TAURI_SIGNING_PRIVATE_KEY` repo secret (keypair at `~/.tauri/digiclip.key`
+  — back it up; rotating keys strands installs that only know the old one).
+  Unsigned local builds simply report "couldn't check".
+- **First install / repair / remove** — native installers own this:
+  - Windows NSIS (`*-setup.exe`): re-running the installer upgrades in
+    place; the uninstaller is in Add/Remove Programs.
+  - Windows MSI (`*.msi`): full maintenance mode — Modify / Repair /
+    Remove, plus major upgrades. The pinned `wix.upgradeCode` is what keeps
+    upgrades landing on the same product instead of side-by-side installs —
+    never change it.
+  - Linux (AppImage / deb) and macOS (dmg): replace-and-relaunch.
+- **One reinstall to join the channel** — builds before v2.2.0 have no
+  updater, so they can't self-update into it. Install v2.2.0+ once from
+  the releases page; every release after that arrives in-app.
 
 ## 🗺 Project map
 
@@ -214,6 +235,8 @@ src-tauri/resources/      staged engine binary at build time (gitignored)
 src/main.jsx              boot gate (serve-ready -> sync -> UI)
 src/lib/socket.js         whole backend over one WebSocket (no polling)
 src/lib/native.js         Tauri bridge (window, dialogs, drag-drop, save flow)
+src/lib/updates.js        updater store (check/download/install/restart state)
+src/components/digiclip/UpdateNotice.jsx  update banner + release-notes dialog
 src/pages/                Home (dropzone + pipeline + clips) · Health · Settings
 src/components/digiclip/  Titlebar, dropzone, job cards, clip tiles, settings forms
 engine/                   submodule -> DigiClip-CLI (the clipping pipeline)

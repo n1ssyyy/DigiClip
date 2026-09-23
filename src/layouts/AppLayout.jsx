@@ -3,6 +3,7 @@ import { Clapperboard, HelpCircle } from 'lucide-react';
 import Sidebar from '../components/digiclip/Sidebar';
 import PageLine from '../components/digiclip/PageLine';
 import Toasts from '../components/digiclip/Toasts';
+import UpdateNotice from '../components/digiclip/UpdateNotice';
 import Onboarding, { shouldShowOnboarding } from '../components/digiclip/Onboarding';
 import WindowControls from '../components/digiclip/Titlebar';
 import { dismissToast, navigate, useStore } from '../lib/socket';
@@ -177,6 +178,7 @@ export default function AppLayout({ children }) {
                 </div>
             </div>
             <Toasts toasts={toasts} onDismiss={dismissToast} />
+            <UpdateNotice />
             {tourOpen && (
                 <Onboarding
                     username={null}
