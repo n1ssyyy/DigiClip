@@ -6,7 +6,6 @@ import {
     Clapperboard,
     FolderOpen,
     Loader2,
-    RefreshCw,
     RotateCcw,
     Trash2,
     Wrench,
@@ -15,27 +14,15 @@ import {
 } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import './app.css';
-import { Button, ProgressRing } from './ui';
-import {
-    appRunning,
-    closeSetup,
-    cmpVersions,
-    detect,
-    dragWindow,
-    fetchLatest,
-    installApp,
-    launchApp,
-    onDownloadProgress,
-    openExternal,
-    stopApp,
-    uninstallApp,
-} from './lib';
+import { Button } from './ui';
+import { appRunning, closeSetup, cmpVersions, detect, dragWindow, installApp, launchApp, openExternal, stopApp, uninstallApp } from './lib';
 
 /**
- * DigiClip Setup: the custom installer, from scratch. Detects this
- * machine (registry + process state) and offers exactly what fits:
- * Install / Update / Reinstall / Repair / Uninstall. File work
- * (download, extract, register, shortcuts) happens in the Rust shell.
+ * DigiClip Setup: the custom, offline installer. The app build ships
+ * inside this Setup; the wizard detects this machine (install location +
+ * process state) and offers exactly what fits: Install / Update /
+ * Reinstall / Repair / Uninstall. File work (extract, register,
+ * shortcuts) happens in the Rust shell.
  */
 
 const RELEASES_URL = 'https://github.com/n1ssyyy/DigiClip/releases';
@@ -92,39 +79,45 @@ function Glyph({ children, tone = 'default' }) {
     );
 }
 
-function InstallLocation({ dir, label, onChange }) {
+function InstallLocation({ dir, label, canChange, onChange }) {
     return (
         <div className="rise flex w-full max-w-sm items-center gap-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-3 py-2">
             <p className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-muted-foreground" title={dir}>
                 {label ?? dir}
             </p>
-            <button
-                type="button"
-                onClick={async () => {
-                    const sel = await open({ directory: true, multiple: false, defaultPath: dir }).catch(() => null);
-                    if (typeof sel === 'string') onChange(sel);
-                }}
-                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-                <FolderOpen className="size-3.5" aria-hidden />
-                Change
-            </button>
+            {canChange && (
+                <button
+                    type="button"
+                    onClick={async () => {
+                        const sel = await open({ directory: true, multiple: false, defaultPath: dir }).catch(() => null);
+                        if (typeof sel === 'string') onChange(sel);
+                    }}
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                    <FolderOpen className="size-3.5" aria-hidden />
+                    Change
+                </button>
+            )}
         </div>
     );
 }
 
-function ManageRow({ onReinstall, onRepair, onUninstall, disabled }) {
+function ManageRow({ onReinstall, onRepair, onUninstall, hideReinstall = false }) {
     return (
         <div className="rise flex items-center justify-center gap-1">
-            <Button variant="ghost" size="sm" disabled={disabled} onClick={onReinstall}>
-                <RotateCcw className="size-3.5" aria-hidden />
-                Reinstall
-            </Button>
-            <Button variant="ghost" size="sm" disabled={disabled} onClick={onRepair}>
-                <Wrench className="size-3.5" aria-hidden />
-                Repair
-            </Button>
-            <Button variant="ghost" size="sm" disabled={disabled} onClick={onUninstall}>
+            {!hideReinstall && (
+                <Button variant="ghost" size="sm" onClick={onReinstall}>
+                    <RotateCcw className="size-3.5" aria-hidden />
+                    Reinstall
+                </Button>
+            )}
+            {onRepair && (
+                <Button variant="ghost" size="sm" onClick={onRepair}>
+                    <Wrench className="size-3.5" aria-hidden />
+                    Repair
+                </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={onUninstall}>
                 <Trash2 className="size-3.5" aria-hidden />
                 Uninstall
             </Button>
@@ -136,7 +129,6 @@ function Boot() {
     const [s, setS] = useState({
         phase: 'boot',
         detect: null,
-        latest: null,
         error: null,
         work: null,
         done: null,
@@ -155,37 +147,20 @@ function Boot() {
             return;
         }
         patch({ detect: d, dir: d.installDir });
-        const latest = await fetchLatest().catch(() => null);
-        if (!latest) {
-            patch({ phase: 'offline' });
-            return;
-        }
-        patch({ latest });
-        if (!d.installed) {
+        if (!d.payloadVersion) {
+            // Payload-free copy (the Windows uninstaller, dev builds).
+            patch({ phase: 'maintenance' });
+        } else if (!d.installed) {
             patch({ phase: 'install' });
         } else {
-            patch({ phase: cmpVersions(latest.version, d.version) > 0 ? 'update' : 'current' });
+            const cmp = cmpVersions(d.payloadVersion, d.version);
+            patch({ phase: cmp > 0 ? 'update' : cmp < 0 ? 'newer' : 'current' });
         }
     }, [patch]);
 
     useEffect(() => {
         refresh();
     }, [refresh]);
-
-    useEffect(() => {
-        let off = null;
-        onDownloadProgress(({ done, total }) => {
-            const st = stateRef.current;
-            if (st.phase !== 'working' || st.work?.kind !== 'download') return;
-            const pct = total > 0 ? Math.min(99, Math.round((done / total) * 100)) : null;
-            patch({ work: { ...st.work, pct } });
-        })
-            .then((f) => {
-                off = f;
-            })
-            .catch(() => {});
-        return () => off?.();
-    }, [patch]);
 
     // External links leave the wizard via the OS browser.
     useEffect(() => {
@@ -199,11 +174,11 @@ function Boot() {
         return () => document.removeEventListener('click', onClick);
     }, []);
 
-    async function runInstall(version, kind, title) {
+    async function runInstall(kind, title, clean = false) {
         const dir = stateRef.current.dir || stateRef.current.detect?.installDir;
         try {
-            patch({ phase: 'working', work: { kind: 'download', title: `Downloading DigiClip v${version}…`, pct: null } });
-            const res = await installApp(dir, version);
+            patch({ phase: 'working', work: { kind: 'install', title } });
+            const res = await installApp(dir, clean);
             patch({
                 phase: 'done',
                 done: { kind, version: res.version, installDir: res.installDir },
@@ -214,10 +189,11 @@ function Boot() {
         }
     }
 
-    async function withStoppedApp(fn) {
+    // `action` is remembered so "Close DigiClip and continue" resumes it.
+    async function withStoppedApp(action, fn) {
         try {
             if (await appRunning().catch(() => false)) {
-                patch({ phase: 'confirm-close' });
+                patch({ phase: 'confirm-close', pending: action });
                 return false;
             }
             await fn();
@@ -228,18 +204,16 @@ function Boot() {
         }
     }
 
-    const startInstall = () =>
-        withStoppedApp(() => runInstall(stateRef.current.latest?.version, 'installed', 'Installing DigiClip…'));
-    const startUpdate = () =>
-        withStoppedApp(() => runInstall(stateRef.current.latest?.version, 'updated', 'Updating DigiClip…'));
-    // Reinstall/repair both re-apply the current build: files are restored,
-    // user data (clips, models, jobs) is never touched.
-    const startReinstall = () => withStoppedApp(() => runInstall(stateRef.current.detect?.version, 'reinstalled', 'Reinstalling DigiClip…'));
-    const startRepair = () => withStoppedApp(() => runInstall(stateRef.current.detect?.version, 'repaired', 'Repairing DigiClip…'));
+    const startInstall = () => withStoppedApp('install', () => runInstall('installed', 'Installing DigiClip…'));
+    const startUpdate = () => withStoppedApp('update', () => runInstall('updated', 'Updating DigiClip…'));
+    // Both re-apply this Setup's build; user data (clips, models, jobs) is
+    // never touched. Reinstall wipes the app folder first, Repair overwrites.
+    const startReinstall = () => withStoppedApp('reinstall', () => runInstall('reinstalled', 'Reinstalling DigiClip…', true));
+    const startRepair = () => withStoppedApp('repair', () => runInstall('repaired', 'Repairing DigiClip…'));
 
     async function startUninstall() {
         try {
-            patch({ phase: 'working', work: { kind: 'uninstall', title: 'Removing DigiClip…', pct: null } });
+            patch({ phase: 'working', work: { kind: 'uninstall', title: 'Removing DigiClip…' } });
             await uninstallApp();
             patch({ phase: 'done', done: { kind: 'uninstalled' } });
         } catch (e) {
@@ -257,8 +231,9 @@ function Boot() {
         else if (action === 'repair') await startRepair();
     }
 
-    const { phase, detect: d, latest, error, work, done, dir } = s;
+    const { phase, detect: d, error, work, done, dir } = s;
     const installedV = d?.version;
+    const payloadV = d?.payloadVersion;
 
     return (
         <div className="flex h-screen flex-col bg-background text-foreground">
@@ -276,9 +251,14 @@ function Boot() {
                     </Glyph>
                     <div className="rise space-y-1">
                         <h1 className="text-[17px] font-semibold tracking-tight">Install DigiClip</h1>
-                        <p className="font-mono text-[11px] text-muted-foreground">v{latest?.version} · drop a video, get TikTok-ready clips</p>
+                        <p className="font-mono text-[11px] text-muted-foreground">v{payloadV} · drop a video, get TikTok-ready clips</p>
                     </div>
-                    <InstallLocation dir={dir} label={d?.locationLabel} onChange={(v) => patch({ dir: v })} />
+                    <InstallLocation
+                        dir={dir}
+                        label={dir && dir !== d?.installDir ? dir : d?.locationLabel}
+                        canChange={d?.canChooseDir}
+                        onChange={(v) => patch({ dir: v })}
+                    />
                     <Button onClick={startInstall}>
                         <ArrowDownToLine className="size-4" aria-hidden />
                         Install now
@@ -292,9 +272,9 @@ function Boot() {
                     </Glyph>
                     <div className="rise space-y-1">
                         <h1 className="text-[17px] font-semibold tracking-tight">Update available</h1>
-                        <p className="font-mono text-[11px] text-muted-foreground">v{installedV} → v{latest?.version}</p>
+                        <p className="font-mono text-[11px] text-muted-foreground">v{installedV ?? '?'} → v{payloadV}</p>
                     </div>
-                    <Button onClick={startUpdate}>Update to v{latest?.version}</Button>
+                    <Button onClick={startUpdate}>Update to v{payloadV}</Button>
                     <ManageRow onReinstall={startReinstall} onRepair={startRepair} onUninstall={() => patch({ phase: 'confirm-uninstall' })} />
                 </Center>
             )}
@@ -310,21 +290,48 @@ function Boot() {
                     <ManageRow onReinstall={startReinstall} onRepair={startRepair} onUninstall={() => patch({ phase: 'confirm-uninstall' })} />
                 </Center>
             )}
-            {phase === 'offline' && (
+            {phase === 'newer' && (
                 <Center>
                     <Glyph>
-                        <XCircle className="size-7 text-destructive" aria-hidden />
+                        <CheckCircle2 className="size-7" aria-hidden />
                     </Glyph>
                     <div className="rise space-y-1">
-                        <h1 className="text-[17px] font-semibold tracking-tight">Cannot reach the releases page</h1>
-                        <p className="font-mono text-[11px] text-muted-foreground">Check your connection, then try again.</p>
+                        <h1 className="text-[17px] font-semibold tracking-tight">A newer DigiClip is installed</h1>
+                        <p className="font-mono text-[11px] text-muted-foreground">
+                            v{installedV} is installed · this Setup carries v{payloadV}
+                        </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="secondary" onClick={refresh}>
-                            <RefreshCw className="size-3.5" aria-hidden />
-                            Retry
+                        <Button variant="ghost" onClick={closeSetup}>Keep v{installedV}</Button>
+                        <Button variant="secondary" onClick={startReinstall}>Install v{payloadV} instead</Button>
+                    </div>
+                    <ManageRow hideReinstall onUninstall={() => patch({ phase: 'confirm-uninstall' })} />
+                </Center>
+            )}
+            {phase === 'maintenance' && (
+                <Center>
+                    <Glyph>
+                        <Wrench className="size-7" aria-hidden />
+                    </Glyph>
+                    <div className="rise space-y-1">
+                        <h1 className="text-[17px] font-semibold tracking-tight">
+                            {d?.installed ? `DigiClip${installedV ? ` v${installedV}` : ''} is installed` : 'DigiClip is not installed'}
+                        </h1>
+                        <p className="max-w-80 font-mono text-[11px] text-muted-foreground">
+                            This copy of Setup can only uninstall. Get the full installer to install or update.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="secondary" onClick={() => openExternal(`${RELEASES_URL}/latest`)}>
+                            <ArrowDownToLine className="size-3.5" aria-hidden />
+                            Get the installer
                         </Button>
-                        {d?.installed && <Button variant="ghost" onClick={() => patch({ phase: 'confirm-uninstall' })}>Uninstall…</Button>}
+                        {d?.installed && (
+                            <Button variant="ghost" onClick={() => patch({ phase: 'confirm-uninstall' })}>
+                                <Trash2 className="size-3.5" aria-hidden />
+                                Uninstall…
+                            </Button>
+                        )}
                     </div>
                 </Center>
             )}
@@ -353,29 +360,25 @@ function Boot() {
                         <p className="font-mono text-[11px] text-muted-foreground">It must close so its files can be replaced.</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" onClick={() => { patch({ pending: null }); refresh(); }}>Cancel</Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                patch({ pending: null });
+                                refresh();
+                            }}
+                        >
+                            Cancel
+                        </Button>
                         <Button onClick={confirmCloseAndGo}>Close DigiClip and continue</Button>
                     </div>
                 </Center>
             )}
             {phase === 'working' && work && (
                 <Center>
-                    {work.kind === 'download' && work.pct !== null ? (
-                        <ProgressRing value={work.pct} size={56} label="Setup download" />
-                    ) : (
-                        <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden />
-                    )}
+                    <Loader2 className="size-8 animate-spin text-muted-foreground" aria-hidden />
                     <div className="rise w-full max-w-72 space-y-2">
                         <p className="text-[13px] font-medium">{work.title}</p>
-                        {work.kind === 'download' && work.pct !== null && (
-                            <>
-                                <div className="dl-track" aria-hidden>
-                                    <div className="dl-fill" style={{ width: `${work.pct}%` }} />
-                                </div>
-                                <p className="font-mono text-[11px] text-muted-foreground">{work.pct}%</p>
-                            </>
-                        )}
-                        {work.kind !== 'download' && <div className="indet h-1.5 rounded-full" aria-hidden />}
+                        <div className="indet h-1.5 rounded-full" aria-hidden />
                     </div>
                 </Center>
             )}
@@ -399,7 +402,11 @@ function Boot() {
                     <div className="flex items-center gap-2">
                         {done.kind === 'uninstalled' ? (
                             <>
-                                <Button variant="secondary" onClick={refresh}>Install fresh</Button>
+                                {payloadV && (
+                                    <Button variant="secondary" onClick={refresh}>
+                                        Install again
+                                    </Button>
+                                )}
                                 <Button variant="ghost" onClick={closeSetup}>Close</Button>
                             </>
                         ) : (
@@ -429,7 +436,9 @@ function Boot() {
                 </Center>
             )}
             <footer className="flex shrink-0 items-center justify-center pb-4">
-                <p className="font-mono text-[10px] text-muted-foreground">DigiClip Setup · local-first, stays on this machine</p>
+                <p className="font-mono text-[10px] text-muted-foreground">
+                    DigiClip Setup {d?.setupVersion ? `${d.setupVersion} ` : ''}· offline installer, stays on this machine
+                </p>
             </footer>
         </div>
     );

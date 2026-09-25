@@ -1,29 +1,29 @@
 /**
  * App updates, routed through the custom DigiClip Setup wizard.
  *
- * The app itself never replaces its files: it checks the published
- * `latest.json` (one tiny GET, no plugin), and when a newer version
- * exists the "Update" action fetches the Setup wizard (once, into the
- * user-data dir), launches it, and exits. The wizard detects the
- * running app, closes it, downloads the signed payload, and lays the
- * new build in — same custom UI as a fresh install.
+ * The app itself never replaces its files. The shell asks GitHub for the
+ * latest release (Rust side — no CSP/CORS in the way), and "Update"
+ * downloads this platform's DigiClip Setup (the offline installer with
+ * the new build inside), launches it and exits. Setup closes anything
+ * still running and lays the new build in — same custom UI as a fresh
+ * install.
  *
- * Phases: idle → checking → uptodate | available → handing-off
- * (setup running) — error anywhere lands on `error` with copy.
+ * Phases: idle → checking → uptodate | available → downloading →
+ * handing-off (setup running) — error anywhere lands on `error` with copy.
  */
 
 import { useSyncExternalStore } from 'react';
 import { isTauri } from './native.js';
 
 const AUTO_KEY = 'digiclip.updates.auto';
-const MANIFEST = 'https://github.com/n1ssyyy/DigiClip/releases/latest/download/latest.json';
-const SETUP_URL = 'https://github.com/n1ssyyy/DigiClip/releases/latest/download/DigiClip-Setup.exe';
+const RELEASES_URL = 'https://github.com/n1ssyyy/DigiClip/releases/latest';
 
 const U = {
-    phase: 'idle', // idle | checking | uptodate | available | handing-off | error | unsupported
+    phase: 'idle', // idle | checking | uptodate | available | downloading | handing-off | error | unsupported
     current: null, // installed app version
     appVersion: null, // installed app version (lazy, no network)
-    available: null, // { version, notes, date }
+    available: null, // { version, notes, date, setupUrl }
+    pct: null, // Setup download progress (0-100) while `downloading`
     error: null,
     lastCheck: 0,
     dismissed: null, // version the user waved away this session (banner only)
@@ -115,7 +115,7 @@ export function dismissUpdate() {
     set({ dismissed: U.available?.version ?? null });
 }
 
-/** Silent boot check: one GET of latest.json, no plugin, no prompt. */
+/** Silent boot check: one GitHub API call, no plugin, no prompt. */
 export async function checkForUpdates({ silent = false } = {}) {
     if (!isTauri()) {
         set({ phase: 'unsupported' });
@@ -125,22 +125,21 @@ export async function checkForUpdates({ silent = false } = {}) {
     set({ phase: 'checking', error: null });
     try {
         const current = (await ensureAppVersion()) ?? U.current;
-        const res = await fetch(MANIFEST, { cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const { invoke } = await import('@tauri-apps/api/core');
+        const data = await invoke('check_update');
         const version = String(data.version ?? '').replace(/^[vV]/, '');
-        if (!version) throw new Error('Manifest has no version.');
+        if (!version) throw new Error('Latest release has no version.');
         set({ lastCheck: Date.now(), current });
         if (cmpVersions(version, current) > 0) {
-            const available = { version, notes: data.notes ?? '', date: data.pub_date ?? '' };
+            const available = { version, notes: data.notes ?? '', date: data.date ?? '', setupUrl: data.setupUrl ?? null };
             set({ phase: 'available', available });
             return available;
         }
         set({ phase: 'uptodate', available: null });
         return null;
     } catch (e) {
-        // Unreachable feed (offline, or no published latest.json yet) is
-        // routine — only loud on a manual check, never on boot.
+        // Unreachable GitHub (offline, rate-limited) is routine — only loud
+        // on a manual check, never on boot.
         set({ phase: 'error', error: e?.message ?? String(e) });
         if (!silent) throw e;
         return null;
@@ -148,26 +147,37 @@ export async function checkForUpdates({ silent = false } = {}) {
 }
 
 /**
- * Hand off to the custom Setup wizard: reuse the bundled/downloaded copy
- * when present, otherwise fetch it once. The shell launches it and exits
- * this app so files are free to replace.
+ * Hand off to the custom Setup wizard: download this platform's Setup from
+ * the release, launch it, and let the shell exit this app so its files are
+ * free to replace.
  */
 export async function runSetup() {
-    if (U.phase === 'handing-off') return;
-    set({ phase: 'handing-off', error: null });
+    if (U.phase === 'downloading' || U.phase === 'handing-off') return;
+    const url = U.available?.setupUrl;
+    if (!url) {
+        set({
+            phase: 'error',
+            error: `No DigiClip Setup for this platform in v${U.available?.version ?? '?'} — get it from ${RELEASES_URL}`,
+        });
+        return;
+    }
+    set({ phase: 'downloading', pct: 0, error: null });
+    let off = null;
     try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        let path = await invoke('get_setup').catch(() => null);
-        if (!path) {
-            path = await invoke('download_setup');
-        }
+        const [{ invoke }, { listen }] = await Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event')]);
+        off = await listen('digiclip:update-progress', (e) => {
+            const { done, total } = e.payload ?? {};
+            if (total > 0) set({ pct: Math.min(100, Math.round((done / total) * 100)) });
+        });
+        const path = await invoke('download_setup', { url });
+        set({ phase: 'handing-off', pct: null });
         await invoke('run_setup', { path });
         // The shell exits right after launching; this is only reached if
         // the launch failed.
         set({ phase: 'error', error: 'Setup could not be started.' });
     } catch (e) {
-        set({ phase: 'error', error: e?.message ?? String(e) });
+        set({ phase: 'error', pct: null, error: e?.message ?? String(e) });
+    } finally {
+        off?.();
     }
 }
-
-export { SETUP_URL };

@@ -1,9 +1,9 @@
 /**
- * Thin bridge to the setup shell: machine detection, release lookup,
- * install/uninstall commands, download progress events.
+ * Thin bridge to the setup shell: machine detection and the
+ * install/uninstall commands. The app payload is embedded in Setup, so
+ * nothing here touches the network.
  */
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 export function closeSetup() {
@@ -13,16 +13,9 @@ export function closeSetup() {
 export function detect() {
     return invoke('detect');
 }
-export function fetchLatest() {
-    return invoke('fetch_latest');
-}
-
-export function downloadPayload(url) {
-    return invoke('download_payload', { url });
-}
-
-export function installApp(installDir, version) {
-    return invoke('install', { installDir, version });
+/** Lay the embedded build down; `clean` wipes the old install first. */
+export function installApp(installDir, clean = false) {
+    return invoke('install', { installDir, clean });
 }
 
 export function launchApp(installDir) {
@@ -39,10 +32,6 @@ export function appRunning() {
 
 export function stopApp() {
     return invoke('stop_app');
-}
-
-export function onDownloadProgress(fn) {
-    return listen('setup:download', (e) => fn(e.payload));
 }
 
 export function openExternal(url) {

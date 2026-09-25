@@ -14,9 +14,11 @@ export default function UpdateNotice() {
     const available = useUpdates((s) => s.available);
     const current = useUpdates((s) => s.current);
     const dismissed = useUpdates((s) => s.dismissed);
+    const pct = useUpdates((s) => s.pct);
     const [notesOpen, setNotesOpen] = useState(false);
 
-    const showBanner = phase === 'available' && available && dismissed !== available.version;
+    const busy = phase === 'downloading' || phase === 'handing-off';
+    const showBanner = (phase === 'available' || busy) && available && dismissed !== available.version;
     if (!showBanner) return null;
 
     return (
@@ -49,8 +51,9 @@ export default function UpdateNotice() {
                                 Notes
                             </Button>
                         )}
-                        <Button type="button" size="sm" onClick={runSetup}>
-                            Update
+                        <Button type="button" size="sm" disabled={busy} onClick={runSetup}>
+                            {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+                            {phase === 'downloading' ? `Downloading… ${pct ?? 0}%` : phase === 'handing-off' ? 'Opening Setup…' : 'Update'}
                         </Button>
                     </div>
                 </div>

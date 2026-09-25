@@ -13,12 +13,16 @@ src-tauri/target/
 **/*.rs.bk
 **/*.pdb
 
-# Bundled engine + setup wizard binaries (built from the engine/ submodule
-# and setup/ by CI — see README "Production builds". Never committed.)
+# Bundled engine (+ its MSVC runtime DLLs on Windows), built from the
+# engine/ submodule by CI — see README "Production builds". Never committed.
 src-tauri/resources/digiclip
 src-tauri/resources/digiclip.exe
+src-tauri/resources/*.dll
 src-tauri/resources/DigiClip-Setup.exe
 src-tauri/binaries/
+
+# CI packaging scratch (app payload → embedded into DigiClip Setup)
+payload/
 
 # Engine submodule build output (lives in engine/, ignored there too)
 engine/target/
