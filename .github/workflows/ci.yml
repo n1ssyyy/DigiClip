@@ -117,36 +117,40 @@ jobs:
       - name: Build engine (release)
         run: cargo build --release --manifest-path engine/Cargo.toml
 
-      - name: Build setup wizard (Windows)
+      - name: Build setup wizard (all platforms)
         # The custom installer is bundled into the app's resources so the
-        # in-app "Update" handoff always has it locally.
-        if: runner.os == 'Windows'
+        # in-app "Update" handoff always has it locally. Windows/Linux
+        # ship the raw binary; macOS gets a real .app bundle.
         working-directory: setup
-        run: npm ci && npm run tauri build
+        run: |
+          npm ci
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            npm run tauri build -- --bundles app
+          else
+            npm run tauri build -- --no-bundle
+          fi
 
       - name: Stage engine + setup for bundling
-        # The shell looks for resources/digiclip(.exe) beside its exe
-        # (see src-tauri/src/main.rs `engine_binary`); tauri.conf bundles
+        # The shell looks for resources/digiclip(.exe) and
+        # resources/DigiClip-Setup beside its exe; tauri.conf bundles
         # the whole resources/ dir. Never committed (gitignored).
         shell: bash
         run: |
           cp "engine/target/release/${{ matrix.engine_exe }}" src-tauri/resources/
           if [ "${{ runner.os }}" = "Windows" ]; then
             cp setup/src-tauri/target/release/digiclip-setup.exe src-tauri/resources/DigiClip-Setup.exe
+          else
+            cp setup/src-tauri/target/release/digiclip-setup src-tauri/resources/DigiClip-Setup
+            chmod +x src-tauri/resources/DigiClip-Setup
           fi
           ls -la src-tauri/resources/
 
       - name: Build app
-        # TAURI_SIGNING_PRIVATE_KEY signs the updater bundles (.sig +
-        # latest.json). Absent on fork PRs — those builds just go unsigned.
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npm run tauri build
 
       - name: Build Windows app payload
-        # The custom DigiClip-Setup installer consumes a raw app payload
-        # (app exe + resources/) — the same files NSIS would copy into
-        # the install dir. Zipped here, consumed by the wizard.
+        # The custom Setup consumes a raw app payload (app exe + resources/)
+        # — zipped here, consumed by the wizard.
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -160,36 +164,56 @@ jobs:
           Compress-Archive -Path "payload/DigiClip" -DestinationPath $zip
           Get-ChildItem $zip | Select-Object Name, Length
 
-      - name: Stage setup exe for release
-        # The standalone download people click on the releases page.
-        if: runner.os == 'Windows'
-        shell: pwsh
+      - name: Build macOS app payload
+        # The .app bundle itself (the dmg stays as a convenience download).
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
-          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
-          Copy-Item setup/src-tauri/target/release/digiclip-setup.exe "DigiClip-Setup.exe"
-          Get-ChildItem DigiClip-Setup.exe | Select-Object Name, Length
+          version=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
+          mkdir -p payload
+          tar -czf "payload/DigiClip_${version}_mac-arm64-app.tar.gz" -C src-tauri/target/release/bundle/macos DigiClip.app
+          ls -la payload/
+
+      - name: Build Linux app payload
+        # The AppImage itself (the deb stays as a convenience download).
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          version=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
+          mkdir -p payload
+          appimage=$(ls src-tauri/target/release/bundle/appimage/*.AppImage)
+          tar -czf "payload/DigiClip_${version}_linux-x86_64-app.tar.gz" -C "$(dirname "$appimage")" "$(basename "$appimage")"
+          ls -la payload/
+
+      - name: Stage setup for release
+        # The standalone download people click on the releases page.
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp setup/src-tauri/target/release/digiclip-setup.exe dist/DigiClip-Setup.exe
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            (cd setup/src-tauri/target/release/bundle/macos && zip -qry "$GITHUB_WORKSPACE/dist/DigiClip-Setup-macOS.zip" DigiClip-Setup.app)
+          else
+            cp setup/src-tauri/target/release/digiclip-setup dist/DigiClip-Setup-linux-x86_64
+            chmod +x dist/DigiClip-Setup-linux-x86_64
+          fi
+          ls -la dist/
 
       - name: Upload installer artifact
-        # No `**/*.app`: uploading the raw .app dir makes the release
-        # step re-attach its loose contents (Info.plist, icon.icns, bare
-        # binaries — seen live in v2.0.0). The .dmg already carries the app.
-        # The .zip/.tar.gz/.sig set is the signed updater feed
-        # (`createUpdaterArtifacts: v1Compatible` — only present when the
-        # signing secret exists). latest.json is generated in release.
+        # The release surface is intentionally small: one custom Setup per
+        # platform, its app payload, plus the native packages people expect
+        # (AppImage/deb/dmg). No NSIS/MSI/RPM internals, no sig bundles.
         uses: actions/upload-artifact@v4
         with:
           name: digiclip-${{ matrix.os }}
           path: |
-            src-tauri/target/release/bundle/**/*.exe
-            src-tauri/target/release/bundle/**/*.msi
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.zip
-            src-tauri/target/release/bundle/**/*.tar.gz
-            src-tauri/target/release/bundle/**/*.sig
-            payload/DigiClip_*_win-x64-app.zip
-            DigiClip-Setup.exe
+            payload/DigiClip_*_app.zip
+            payload/DigiClip_*_app.tar.gz
+            dist/DigiClip-Setup*
           if-no-files-found: error
           retention-days: 14
 
@@ -219,61 +243,22 @@ jobs:
           name: digiclip-macos-latest
           path: artifacts/macos
 
-      - name: Generate updater latest.json
-        # Nothing in the toolchain writes latest.json — the v2 updater just
-        # reads `{version, notes, pub_date, platforms: {target: {url,
-        # signature}}}`. Each entry points at the signed v1Compatible
-        # bundle for that target (zips/tarballs the updater knows how to
-        # install), signature = the bundler's .sig contents. The updater
-        # tries `{os}-{arch}-{installer}` then `{os}-{arch}`, so MSI users
-        # match their key first and everyone else falls to the default.
-        # NOTE: no apostrophes inside the jq program (it is single-quoted).
-        # Downloaded artifacts keep their bundle/ paths — locate via find.
+      - name: Generate latest.json
+        # The app's update check reads {version, notes, pub_date} and
+        # hands the actual install to DigiClip Setup, so the feed is just
+        # the version pointer — no platform map, no signatures.
         shell: bash
         run: |
           mkdir -p dist
           TAG="${GITHUB_REF_NAME}"
           VER="${TAG#v}"
-          BASE="https://github.com/n1ssyyy/DigiClip/releases/download/${TAG}"
-          pick() { find artifacts -name "$1" | sort | head -1; }
-          sig() { tr -d '\n\r ' < "$1"; }
-          NSIS_ZIP_PATH=$(pick '*.nsis.zip')
-          MSI_ZIP_PATH=$(pick '*.msi.zip')
-          APPIMAGE_TZ_PATH=$(pick '*.AppImage.tar.gz')
-          APP_TZ_PATH=$(pick '*.app.tar.gz')
-          test -n "$NSIS_ZIP_PATH" || { echo "missing nsis.zip"; exit 1; }
-          test -n "$MSI_ZIP_PATH" || { echo "missing msi.zip"; exit 1; }
-          test -n "$APPIMAGE_TZ_PATH" || { echo "missing AppImage.tar.gz"; exit 1; }
-          test -n "$APP_TZ_PATH" || { echo "missing app.tar.gz"; exit 1; }
-          test -f "$NSIS_ZIP_PATH.sig" || { echo "missing nsis.zip.sig"; exit 1; }
-          test -f "$MSI_ZIP_PATH.sig" || { echo "missing msi.zip.sig"; exit 1; }
-          test -f "$APPIMAGE_TZ_PATH.sig" || { echo "missing AppImage.tar.gz.sig"; exit 1; }
-          test -f "$APP_TZ_PATH.sig" || { echo "missing app.tar.gz.sig"; exit 1; }
-          NSIS_ZIP=$(basename "$NSIS_ZIP_PATH")
-          MSI_ZIP=$(basename "$MSI_ZIP_PATH")
-          APPIMAGE_TZ=$(basename "$APPIMAGE_TZ_PATH")
-          APP_TZ=$(basename "$APP_TZ_PATH")
-          echo "nsis: $NSIS_ZIP | msi: $MSI_ZIP | appimage: $APPIMAGE_TZ | app: $APP_TZ"
           jq -n \
             --arg ver "$VER" \
             --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --arg base "$BASE" \
-            --arg nsis "$NSIS_ZIP" --arg nsis_sig "$(sig "$NSIS_ZIP_PATH.sig")" \
-            --arg msi "$MSI_ZIP" --arg msi_sig "$(sig "$MSI_ZIP_PATH.sig")" \
-            --arg appimage "$APPIMAGE_TZ" --arg appimage_sig "$(sig "$APPIMAGE_TZ_PATH.sig")" \
-            --arg app "$APP_TZ" --arg app_sig "$(sig "$APP_TZ_PATH.sig")" \
             '{
               version: $ver,
               notes: ("Release notes: https://github.com/n1ssyyy/DigiClip/releases/tag/v\($ver)"),
-              pub_date: $date,
-              platforms: {
-                "windows-x86_64-nsis": { url: "\($base)/\($nsis)", signature: $nsis_sig },
-                "windows-x86_64-msi": { url: "\($base)/\($msi)", signature: $msi_sig },
-                "windows-x86_64": { url: "\($base)/\($nsis)", signature: $nsis_sig },
-                "linux-x86_64-appimage": { url: "\($base)/\($appimage)", signature: $appimage_sig },
-                "linux-x86_64": { url: "\($base)/\($appimage)", signature: $appimage_sig },
-                "darwin-aarch64": { url: "\($base)/\($app)", signature: $app_sig }
-              }
+              pub_date: $date
             }' > dist/latest.json
           cat dist/latest.json
 

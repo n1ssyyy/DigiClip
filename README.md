@@ -210,29 +210,25 @@ git tag v2.2.0 && git push origin main v2.2.0
   exits; the wizard closes the app, downloads the new build, and lays it
   in — same custom UI as a fresh install. No NSIS/MSI in the loop, no
   reinstall.
-- **Signed feed** — every `v*` tag publishes v1Compatible updater bundles
-  (`.nsis.zip` / `.msi.zip`, `.AppImage.tar.gz`, `.app.tar.gz`, each with a
-  minisign `.sig`) plus a generated `latest.json` mapping each
-  `{os}-{arch}[-{installer}]` target to its bundle + signature; the app
-  verifies the download against the `pubkey` in `tauri.conf.json` before
-  touching anything. The private key lives in the
-  `TAURI_SIGNING_PRIVATE_KEY` repo secret (keypair at `~/.tauri/digiclip.key`
-  — back it up; rotating keys strands installs that only know the old one).
-  Unsigned local builds simply report "couldn't check".
-- **First install / repair / remove** — DigiClip Setup owns it on Windows
-  (see below). Linux (AppImage / deb) and macOS (dmg) use their native
-  packages; the in-app updater for those platforms uses the signed
-  v1Compatible tarballs + `latest.json`.
+- **Signed feed** — retired. Updates now flow through DigiClip Setup
+  (below), so the release publishes no updater bundles: just the
+  installers, the Windows app payload, and a `latest.json` version
+  pointer. Trust model is the GitHub release page over HTTPS.
+- **First install / repair / remove** — DigiClip Setup owns it on
+  every platform (see below). The release carries one Setup per OS, the
+  payloads the Setups consume, and the conventional packages (AppImage,
+  deb, dmg). Nothing else: no NSIS, no MSI, no RPM internals, no
+  signature bundles.
 - **One reinstall to join the channel** — builds before v2.2.0 have no
   updater, so they can't self-update into it. Install v2.2.0+ once from
   the releases page; every release after that arrives in-app.
 
-## 🧙 DigiClip Setup (Windows, from scratch)
+## 🧙 DigiClip Setup (all platforms, from scratch)
 
-`DigiClip-Setup.exe` (every release, next to the full installers) is the
-**only** Windows install path: a Tauri wizard in the app's own design
-language that does the install itself. No NSIS, no MSI, no silent-switch
-hacks — the wizard detects the machine and offers exactly what fits:
+DigiClip Setup is the installer on every OS: a Tauri wizard in the app's
+own design language that does the install itself. No NSIS, no MSI, no
+silent-switch hacks. It detects the machine and offers exactly what
+fits:
 
 | Machine state | What Setup shows |
 |---|---|
@@ -242,17 +238,24 @@ hacks — the wizard detects the machine and offers exactly what fits:
 | App running | close-and-continue guard (locked files are the #1 install failure) |
 | Offline | retry + uninstall fallback |
 
-The file work lives in `setup/src-tauri/src/main.rs`: registry detection
-(HKCU uninstall entry), GitHub release lookup, streaming payload
-download, zip extraction with retry-while-locks-release, per-user
-uninstall registration, Start Menu + desktop shortcuts, self-delete
-uninstall, and app launch on finish. The app payload is the plain
-`DigiClip_2.3.0_win-x64-app.zip` that CI zips from the release build
-(`digiclip-app.exe` + `resources/`, engine and this wizard included).
+Per platform, Setup lands the app like this:
 
-Uninstall also works the Windows way: "Apps & features → DigiClip →
-Uninstall" runs `DigiClip-Setup.exe --uninstall` (a temp copy, so the
-tree can be deleted while it runs).
+| OS | Downloads | Installs to | Registration |
+|---|---|---|---|
+| Windows | `DigiClip_<v>_win-x64-app.zip` | `%LOCALAPPDATA%\DigiClip` | Add/Remove Programs entry + Start Menu & desktop shortcuts |
+| macOS | `DigiClip_<v>_mac-arm64-app.tar.gz` (the `.app`) | `/Applications/DigiClip.app` via `ditto` (standard admin prompt when needed) | LaunchServices notice |
+| Linux | `DigiClip_<v>_linux-x86_64-app.tar.gz` (the AppImage) | `~/.local/opt/digiclip` (no sudo) | `~/.local/share/applications/digiclip.desktop`, icon, `~/.local/bin/digiclip` symlink |
+
+The release ships one Setup per platform — `DigiClip-Setup.exe`,
+`DigiClip-Setup-macOS.zip`, `DigiClip-Setup-linux-x86_64` — plus the
+payloads they consume, and the conventional packages people expect
+(AppImage, deb, dmg). That's the whole list: no NSIS, no MSI, no RPM
+internals, no signature bundles.
+
+On Windows, uninstall also works the OS way: "Apps & features →
+DigiClip → Uninstall" runs `DigiClip-Setup.exe --uninstall` (a temp
+copy, so the tree can be deleted while it runs). The payload archives
+are what CI feeds the wizard; they're not meant to be opened by hand.
 
 ```bash
 cd setup
@@ -260,8 +263,8 @@ npm install
 npm run tauri dev    # wizard dev loop (port 1430, no engine needed)
 ```
 
-The in-app "Update" button uses the same wizard: the shell bundles
-`DigiClip-Setup.exe` into `resources/`, launches it, and exits.
+The in-app "Update" button uses the same wizard on all platforms: the
+shell bundles it into `resources/` and launches it, then exits.
 
 ## 🗺 Project map
 

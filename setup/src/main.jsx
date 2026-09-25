@@ -21,6 +21,7 @@ import {
     closeSetup,
     cmpVersions,
     detect,
+    dragWindow,
     fetchLatest,
     installApp,
     launchApp,
@@ -41,7 +42,22 @@ const RELEASES_URL = 'https://github.com/n1ssyyy/DigiClip/releases';
 
 function Titlebar() {
     return (
-        <header className="flex h-11 shrink-0 items-center gap-2 pr-2 pl-4 select-none" data-tauri-drag-region>
+        <header
+            className="flex h-11 shrink-0 items-center gap-2 pr-2 pl-4 select-none"
+            data-tauri-drag-region
+            onMouseDown={(e) => {
+                // Declarative drag region + native fallback: on some
+                // webview builds the attribute alone doesn't grab, and the
+                // wizard would be stuck in one spot.
+                if (e.button !== 0) return;
+                if (e.target.closest('button, a, [data-no-drag]')) return;
+                dragWindow();
+            }}
+            onDoubleClick={(e) => {
+                if (e.target.closest('button, a, [data-no-drag]')) return;
+                closeSetup();
+            }}
+        >
             <Clapperboard className="size-4" aria-hidden />
             <p className="text-[13px] font-semibold tracking-tight">DigiClip Setup</p>
             <div className="flex-1" aria-hidden />
@@ -76,11 +92,11 @@ function Glyph({ children, tone = 'default' }) {
     );
 }
 
-function InstallLocation({ dir, onChange }) {
+function InstallLocation({ dir, label, onChange }) {
     return (
         <div className="rise flex w-full max-w-sm items-center gap-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-3 py-2">
             <p className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-muted-foreground" title={dir}>
-                {dir}
+                {label ?? dir}
             </p>
             <button
                 type="button"
@@ -262,7 +278,7 @@ function Boot() {
                         <h1 className="text-[17px] font-semibold tracking-tight">Install DigiClip</h1>
                         <p className="font-mono text-[11px] text-muted-foreground">v{latest?.version} · drop a video, get TikTok-ready clips</p>
                     </div>
-                    <InstallLocation dir={dir} onChange={(v) => patch({ dir: v })} />
+                    <InstallLocation dir={dir} label={d?.locationLabel} onChange={(v) => patch({ dir: v })} />
                     <Button onClick={startInstall}>
                         <ArrowDownToLine className="size-4" aria-hidden />
                         Install now

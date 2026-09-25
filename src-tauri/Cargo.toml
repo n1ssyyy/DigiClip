@@ -1,6 +1,6 @@
 [package]
 name = "digiclip-app"
-version = "2.3.0"
+version = "2.3.1"
 description = "DigiClip desktop shell (Tauri): spawns the digiclip serve sidecar and hosts the React UI."
 authors = ["n1ssyyy"]
 edition = "2021"
@@ -16,8 +16,6 @@ tokio = { version = "1", features = ["full"] }
 anyhow = "1.0.104"
 tauri-plugin-dialog = "2.7.3"
 tauri-plugin-fs = "2.5.2"
-tauri-plugin-process = "2"
-tauri-plugin-updater = "2"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 futures-util = "0.3"
 
