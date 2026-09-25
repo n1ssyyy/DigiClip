@@ -541,6 +541,13 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .manage(ShellState::default())
         .setup(|app| {
+            // Created hidden (tauri.conf `visible: false`) and shown once it
+            // is fully undecorated: mapped straight away, GNOME briefly
+            // framed it with a title bar, and window-effect extensions
+            // (e.g. Blur my Shell) kept that frame's offset.
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+            }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let booted = boot_sidecar(&handle).await;
