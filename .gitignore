@@ -13,10 +13,11 @@ src-tauri/target/
 **/*.rs.bk
 **/*.pdb
 
-# Bundled engine binary (built from the engine/ submodule by CI —
-# see README "Production builds". Never committed.)
+# Bundled engine + setup wizard binaries (built from the engine/ submodule
+# and setup/ by CI — see README "Production builds". Never committed.)
 src-tauri/resources/digiclip
 src-tauri/resources/digiclip.exe
+src-tauri/resources/DigiClip-Setup.exe
 src-tauri/binaries/
 
 # Engine submodule build output (lives in engine/, ignored there too)

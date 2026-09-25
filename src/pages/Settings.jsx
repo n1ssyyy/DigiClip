@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, KeyRound, RefreshCw, RotateCcw } from 'lucide-react';
+import { Download, KeyRound, RefreshCw } from 'lucide-react';
 import shkollaIcon from '../assets/shkolla-icon.png';
 import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
@@ -11,8 +11,7 @@ import { GpuToggle } from '../components/digiclip/controls';
 import Tip from '../components/digiclip/Tooltip';
 import { cn } from '../lib/utils';
 import { deleteModel, downloadModel, saveSettings, useStore } from '../lib/socket';
-import { checkForUpdates, downloadAndInstall, ensureAppVersion, restartToUpdate, setAutoUpdate, updateProgress, useUpdates } from '../lib/updates';
-import ProgressRing from '../components/digiclip/ProgressRing';
+import { checkForUpdates, ensureAppVersion, runSetup, setAutoUpdate, useUpdates } from '../lib/updates';
 
 function Field({ label, aside, hint, children }) {
     return (
@@ -64,7 +63,7 @@ function GpuRow({ gpu, checked, onChange }) {
 }
 
 /** App updates row: auto-check switch + status line + the action for
- *  whatever phase the updater is in (check / download / restart). */
+ *  whatever phase the updater is in (check / hand off to Setup). */
 function UpdatesRow() {
     const phase = useUpdates((s) => s.phase);
     const current = useUpdates((s) => s.current);
@@ -72,7 +71,6 @@ function UpdatesRow() {
     const auto = useUpdates((s) => s.auto);
     const error = useUpdates((s) => s.error);
     const [working, setWorking] = useState(false);
-    const pct = updateProgress();
 
     async function run(fn) {
         if (working) return;
@@ -93,12 +91,8 @@ function UpdatesRow() {
                 return current ? `You're on the latest — v${current}.` : 'You’re on the latest.';
             case 'available':
                 return available ? `v${available.version} is out${current ? ` — you're on v${current}` : ''}.` : 'A newer build is out.';
-            case 'downloading':
-                return `Downloading v${available?.version ?? ''}… ${pct !== null ? `${pct}%` : ''}`;
-            case 'installing':
-                return 'Installing… hang tight.';
-            case 'ready':
-                return `v${available?.version ?? ''} installed — restart to finish.`;
+            case 'handing-off':
+                return 'Opening DigiClip Setup…';
             case 'error':
                 return error ? `Couldn't check: ${error}` : 'Update check failed.';
             case 'unsupported':
@@ -123,9 +117,6 @@ function UpdatesRow() {
                 )}
             </div>
             <div className="flex items-center gap-2">
-                {(phase === 'downloading' || phase === 'installing') && pct !== null && phase === 'downloading' ? (
-                    <ProgressRing value={pct} size={16} label="Update download" />
-                ) : null}
                 <p className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground" title={status}>{status}</p>
                 {(phase === 'idle' || phase === 'uptodate' || phase === 'error') && (
                     <Button type="button" variant="secondary" size="sm" disabled={working} onClick={() => run(() => checkForUpdates())}>
@@ -134,15 +125,9 @@ function UpdatesRow() {
                     </Button>
                 )}
                 {phase === 'available' && (
-                    <Button type="button" size="sm" disabled={working} onClick={() => run(downloadAndInstall)}>
+                    <Button type="button" size="sm" disabled={working} onClick={() => run(runSetup)}>
                         <Download className="size-3.5" aria-hidden />
                         {working ? 'Starting…' : `Update to v${available?.version ?? ''}`}
-                    </Button>
-                )}
-                {phase === 'ready' && (
-                    <Button type="button" size="sm" onClick={() => restartToUpdate().catch(() => {})}>
-                        <RotateCcw className="size-3.5" aria-hidden />
-                        Restart now
                     </Button>
                 )}
             </div>

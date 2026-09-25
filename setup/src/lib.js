@@ -1,6 +1,6 @@
 /**
- * Thin bridge to the setup shell: install detection, release lookup,
- * download/install/uninstall commands, download progress events.
+ * Thin bridge to the setup shell: machine detection, release lookup,
+ * install/uninstall commands, download progress events.
  */
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -10,36 +10,36 @@ export function closeSetup() {
     return getCurrentWindow().close().catch(() => {});
 }
 
-export function detectInstall() {
-    return invoke('detect_install');
+export function detect() {
+    return invoke('detect');
 }
 
 export function fetchLatest() {
     return invoke('fetch_latest');
 }
 
-export function downloadSetup(url) {
-    return invoke('download_setup', { url });
+export function downloadPayload(url) {
+    return invoke('download_payload', { url });
 }
 
-export function installSilent(path) {
-    return invoke('install_silent', { path });
+export function installApp(installDir, version) {
+    return invoke('install', { installDir, version });
 }
 
-export function uninstallSilent() {
-    return invoke('uninstall_silent');
+export function launchApp(installDir) {
+    return invoke('launch_app', { installDir }).catch(() => null);
 }
 
-export function launchApp() {
-    return invoke('launch_app').catch(() => null);
+export function uninstallApp() {
+    return invoke('uninstall');
 }
 
-export function isAppRunning() {
-    return invoke('is_app_running');
+export function appRunning() {
+    return invoke('app_running');
 }
 
-export function closeApp() {
-    return invoke('close_app');
+export function stopApp() {
+    return invoke('stop_app');
 }
 
 export function onDownloadProgress(fn) {

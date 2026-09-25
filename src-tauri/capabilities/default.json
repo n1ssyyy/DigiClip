@@ -3,5 +3,5 @@
     "identifier": "default",
     "description": "Main window: core IPC (events, window APIs) plus the file dialog used by Browse.",
     "windows": ["main"],
-    "permissions": ["core:default", "core:app:allow-version", "dialog:allow-open", "dialog:allow-save", "fs:allow-write-file", "process:allow-restart", "updater:default"]
+    "permissions": ["core:default", "core:app:allow-version", "dialog:allow-open", "dialog:allow-save", "fs:allow-write-file", "process:allow-restart", "updater:default", "core:event:allow-listen"]
 }
