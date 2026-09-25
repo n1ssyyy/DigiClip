@@ -107,7 +107,9 @@ jobs:
             build-essential curl wget file \
             libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
             libayatana-appindicator3-dev librsvg2-dev \
-            cmake clang libclang-dev libfuse2t64 xvfb xauth
+            cmake clang libclang-dev libfuse2t64 xvfb xauth \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav \
+            gstreamer1.0-gl gstreamer1.0-pulseaudio gstreamer1.0-alsa patchelf
 
       - name: Install macOS deps
         if: runner.os == 'macOS'

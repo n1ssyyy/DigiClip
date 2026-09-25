@@ -148,7 +148,7 @@ export default function Health() {
     // points at the content so the two read as a pair without touching.
     // h-10 keeps all headers the same thickness.
     return (
-        <div className="flex h-[calc(100dvh_-_var(--chrome)_-_5px)] min-h-[480px] flex-col gap-[5px]">
+        <div className="flex h-full min-h-[480px] flex-col gap-[5px]">
             <Card
                 className={cn('relative shrink-0 transition-colors', hot && 'border-t-white/25 border-x-white/[0.13]')}
                 onMouseEnter={() => setHot(true)}

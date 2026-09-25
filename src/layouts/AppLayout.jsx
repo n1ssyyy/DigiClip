@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Clapperboard, HelpCircle } from 'lucide-react';
+import { Clapperboard, HelpCircle, X } from 'lucide-react';
+import { Card } from '../components/ui/card';
 import Sidebar from '../components/digiclip/Sidebar';
 import PageLine from '../components/digiclip/PageLine';
 import Toasts from '../components/digiclip/Toasts';
 import UpdateNotice from '../components/digiclip/UpdateNotice';
 import Onboarding, { shouldShowOnboarding } from '../components/digiclip/Onboarding';
 import WindowControls from '../components/digiclip/Titlebar';
-import { dismissToast, navigate, useStore } from '../lib/socket';
+import { dismissFlash, dismissToast, navigate, useStore } from '../lib/socket';
+import { cn } from '../lib/utils';
 import { dragWindow, isTauri, onMaximized, openExternal, queryMaximized, sendWindowAction } from '../lib/native';
 
 const noDrag = { WebkitAppRegion: 'no-drag' };
@@ -17,6 +19,48 @@ const noDrag = { WebkitAppRegion: 'no-drag' };
 const PAGE_ORDER = { home: 0, health: 1, settings: 2 };
 function orderOf(page) {
     return PAGE_ORDER[page] ?? 99;
+}
+
+/** Status banner under the header, in the panel language: a Card row the
+ *  height of the panel headers, dismissable like the other panel controls.
+ *  Its slot opens and closes by animating grid rows 0fr <-> 1fr, and the
+ *  5px panel gap lives inside the slot, so the page below (which fills the
+ *  remaining height) glides down to make room and back up after — no
+ *  jump. The last text stays rendered while the slot closes. */
+function FlashBar({ text }) {
+    const [shown, setShown] = useState(text);
+    useEffect(() => {
+        if (text) setShown(text);
+    }, [text]);
+    const open = !!text;
+    return (
+        <div
+            className={cn(
+                'grid shrink-0 transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+            )}
+            aria-hidden={!open}
+        >
+            <div className="min-h-0 overflow-hidden">
+                <div className="pr-[5px] pb-[5px]">
+                    <Card role="status" aria-live="polite" className="flex h-10 items-center gap-2 pr-1.5 pl-4">
+                        <p key={shown} className="fade min-w-0 flex-1 truncate text-[13px]" title={shown ?? ''}>
+                            {shown}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={dismissFlash}
+                            tabIndex={open ? 0 : -1}
+                            aria-label="Dismiss"
+                            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        >
+                            <X className="size-3.5" aria-hidden />
+                        </button>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default function AppLayout({ children }) {
@@ -164,14 +208,13 @@ export default function AppLayout({ children }) {
             </header>
             <div className="flex flex-1 items-start">
                 <Sidebar />
-                <div className="min-w-0 flex-1">
-                    {flash && (
-                        <div className="pr-[5px]">
-                            <p role="status" className="rise rounded-md border bg-card px-4 py-2 text-[13px]">{flash}</p>
-                        </div>
-                    )}
-                    <main className="pt-0 pr-[5px] pb-[5px] pl-0">
-                        <div key={stage.page} className={motionCls}>
+                {/* Fixed-height column: the banner slot takes what it needs and
+                    the page fills the rest, so pages shrink instead of
+                    spilling past the window. */}
+                <div className="flex h-[calc(100dvh_-_var(--chrome))] min-w-0 flex-1 flex-col">
+                    <FlashBar text={flash} />
+                    <main className="min-h-0 flex-1 pt-0 pr-[5px] pb-[5px] pl-0">
+                        <div key={stage.page} className={cn('h-full', motionCls)}>
                             {kids}
                         </div>
                     </main>

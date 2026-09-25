@@ -356,6 +356,14 @@ export function flashMessage(text) {
     flash(text);
 }
 
+/** Close the banner early (its own dismiss button). */
+export function dismissFlash() {
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = null;
+    S.flash = null;
+    emit();
+}
+
 export function navigate(page) {
     if (S.page !== page) {
         S.page = page;

@@ -535,6 +535,31 @@ fn open_url(url: String) -> Result<(), String> {
     }
 }
 
+/// WebKitGTK renders pages in a separate process; if that process dies
+/// (e.g. a media pipeline crash) the window just goes white. Reload
+/// instead — the engine holds all state, so the UI reconnects to exactly
+/// where it was. Capped at 3 reloads a minute so a crash loop can't spin.
+#[cfg(target_os = "linux")]
+fn reload_on_web_process_crash(win: &tauri::WebviewWindow) {
+    let _ = win.with_webview(|wv| {
+        use webkit2gtk::WebViewExt;
+        let recent = std::cell::RefCell::new(Vec::<std::time::Instant>::new());
+        wv.inner()
+            .connect_web_process_terminated(move |view, reason| {
+                let now = std::time::Instant::now();
+                let mut recent = recent.borrow_mut();
+                recent.retain(|t| now.duration_since(*t).as_secs() < 60);
+                if recent.len() >= 3 {
+                    eprintln!("[shell] web process terminated ({reason:?}) again — not reloading");
+                    return;
+                }
+                recent.push(now);
+                eprintln!("[shell] web process terminated ({reason:?}) — reloading");
+                view.reload();
+            });
+    });
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -547,6 +572,8 @@ fn main() {
             // (e.g. Blur my Shell) kept that frame's offset.
             if let Some(win) = app.get_webview_window("main") {
                 let _ = win.show();
+                #[cfg(target_os = "linux")]
+                reload_on_web_process_crash(&win);
             }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
