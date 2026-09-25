@@ -1,6 +1,6 @@
 [package]
 name = "digiclip-setup"
-version = "1.1.0"
+version = "1.1.1"
 description = "DigiClip Setup: custom offline installer wizard (detect, install, update, repair, uninstall)."
 authors = ["n1ssyyy"]
 edition = "2021"

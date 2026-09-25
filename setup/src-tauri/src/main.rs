@@ -314,6 +314,16 @@ fn main() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // The window is created hidden (tauri.conf `visible: false`) and shown
+        // here, once it is fully undecorated: mapped straight away, GNOME
+        // briefly framed it with a title bar, and window-effect extensions
+        // (e.g. Blur my Shell) kept that frame's offset.
+        .setup(|app| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             detect,
             install,
