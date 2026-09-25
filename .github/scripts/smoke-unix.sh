@@ -43,8 +43,14 @@ Linux)
     dir="$HOME/.local/opt/digiclip"
     [ -x "$dir/app/AppRun" ] || fail "missing $dir/app/AppRun"
     engine=$(find "$dir/app" -path '*/resources/digiclip' -type f | head -n1)
-    desktop="${XDG_DATA_HOME:-$HOME/.local/share}/applications/digiclip.desktop"
+    data="${XDG_DATA_HOME:-$HOME/.local/share}"
+    # Named after the window class so GNOME picks it over any other entry
+    # claiming `digiclip-app`; the icon name is unique to this install.
+    desktop="$data/applications/digiclip-app.desktop"
     grep -q "Exec=\"$dir/app/AppRun\"" "$desktop" || fail "desktop entry: $(cat "$desktop")"
+    grep -qx "Icon=com.digiclip.app" "$desktop" || fail "desktop icon: $(cat "$desktop")"
+    icon="$data/icons/hicolor/128x128/apps/com.digiclip.app.png"
+    [ -f "$icon" ] || fail "icon missing: $(find "$data/icons" -type f)"
     launch=(xvfb-run -a "$dir/app/AppRun")
     ;;
 *) fail "unsupported OS" ;;
@@ -69,6 +75,7 @@ Darwin) [ ! -e /Applications/DigiClip.app ] || fail "DigiClip.app left behind" ;
 Linux)
     [ ! -e "$HOME/.local/opt/digiclip" ] || fail "install dir left behind: $(ls -la "$HOME/.local/opt/digiclip")"
     [ ! -e "$desktop" ] || fail "desktop entry left behind"
+    [ ! -e "$icon" ] || fail "icon left behind"
     ;;
 esac
 echo "smoke OK"
