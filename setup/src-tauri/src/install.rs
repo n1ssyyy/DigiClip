@@ -177,26 +177,41 @@ pub fn register(_version: &str, install_dir: &Path, _payload: &Payload) -> Resul
     Ok(())
 }
 
+/// Desktop id = the window's WM_CLASS / Wayland app_id (`digiclip-app`).
+/// GNOME links a window to its launcher through StartupWMClass, and when
+/// two entries claim the same class it prefers the one whose file name
+/// matches it exactly — so an old system-wide DigiClip package (whose
+/// /usr/share/applications/DigiClip.desktop claims `digiclip-app` too)
+/// can't hand our window its icon.
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-fn applications_dir() -> PathBuf {
+const DESKTOP_ID: &str = "digiclip-app.desktop";
+
+/// An icon name no other package ships: old DigiClip packages installed
+/// `digiclip`/`digiclip-app` icons system-wide, in sizes this one lacked,
+/// and the theme lookup picked theirs.
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+const ICON_NAME: &str = "com.digiclip.app";
+
+/// What Setup ≤ 1.1.2 wrote (entry + a single 256px icon).
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+const LEGACY_DESKTOP: &str = "digiclip.desktop";
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn data_home() -> PathBuf {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .filter(|p| p.is_absolute())
         .unwrap_or_else(|| sys::home_dir().join(".local").join("share"))
-        .join("applications")
 }
 
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-fn icon_path() -> PathBuf {
-    std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .unwrap_or_else(|| sys::home_dir().join(".local").join("share"))
-        .join("icons")
-        .join("hicolor")
-        .join("256x256")
-        .join("apps")
-        .join("digiclip.png")
+fn applications_dir() -> PathBuf {
+    data_home().join("applications")
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn hicolor_dir() -> PathBuf {
+    data_home().join("icons").join("hicolor")
 }
 
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
@@ -219,52 +234,109 @@ pub fn register(version: &str, install_dir: &Path, _payload: &Payload) -> Result
          Name=DigiClip\n\
          Comment=Drop a video, get TikTok-ready clips\n\
          Exec=\"{exec}\" %U\n\
-         Icon=digiclip\n\
+         Icon={ICON_NAME}\n\
          Terminal=false\n\
          Categories=AudioVideo;Video;AudioVideoEditing;\n\
          StartupWMClass=digiclip-app\n"
     );
-    std::fs::write(apps.join("digiclip.desktop"), entry).map_err(|e| e.to_string())?;
-    let _ = std::process::Command::new("update-desktop-database")
-        .arg(&apps)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
-    // Icon: straight out of the unpacked AppImage.
-    if let Some(icon) = find_png(
+    remove_legacy_entry();
+    install_icons(
         &install_dir
             .join("app")
             .join("usr")
             .join("share")
             .join("icons"),
-    ) {
-        let dest = icon_path();
-        if let Some(parent) = dest.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let _ = std::fs::copy(icon, dest);
-    }
+    );
+    std::fs::write(apps.join(DESKTOP_ID), entry).map_err(|e| e.to_string())?;
+    let _ = std::process::Command::new("update-desktop-database")
+        .arg(&apps)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
     Ok(())
 }
 
+/// Every PNG the AppImage ships, filed under its real pixel size (Tauri's
+/// `256x256@2` dir holds a 256px image) with the unique icon name.
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
-fn find_png(dir: &Path) -> Option<PathBuf> {
-    let entries = std::fs::read_dir(dir).ok()?;
-    let mut best: Option<PathBuf> = None;
+fn install_icons(src: &Path) {
+    let root = hicolor_dir();
+    let mut pngs = Vec::new();
+    collect_pngs(src, &mut pngs);
+    for png in pngs {
+        let Some((w, h)) = png_size(&png) else {
+            continue;
+        };
+        if w != h || w == 0 {
+            continue;
+        }
+        let dir = root.join(format!("{w}x{w}")).join("apps");
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::copy(&png, dir.join(format!("{ICON_NAME}.png")));
+    }
+    touch_dir(&root);
+}
+
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn collect_pngs(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for e in entries.flatten() {
         let p = e.path();
         if p.is_dir() {
-            if let Some(found) = find_png(&p) {
-                if found.to_string_lossy().contains("256x256") {
-                    return Some(found);
-                }
-                best = best.or(Some(found));
-            }
-        } else if p.extension().and_then(|s| s.to_str()) == Some("png") && best.is_none() {
-            best = Some(p);
+            collect_pngs(&p, out);
+        } else if p.extension().and_then(|s| s.to_str()) == Some("png") {
+            out.push(p);
         }
     }
-    best
+}
+
+/// Width and height from a PNG's IHDR chunk.
+#[cfg(any(test, all(not(target_os = "windows"), not(target_os = "macos"))))]
+fn png_size(p: &Path) -> Option<(u32, u32)> {
+    use std::io::Read;
+    let mut b = [0u8; 24];
+    std::fs::File::open(p).ok()?.read_exact(&mut b).ok()?;
+    if &b[..8] != b"\x89PNG\r\n\x1a\n" || &b[12..16] != b"IHDR" {
+        return None;
+    }
+    let w = u32::from_be_bytes(b[16..20].try_into().ok()?);
+    let h = u32::from_be_bytes(b[20..24].try_into().ok()?);
+    Some((w, h))
+}
+
+/// GTK re-reads an icon theme when the theme dir's mtime changes.
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn touch_dir(dir: &Path) {
+    let f = dir.join(".digiclip-touch");
+    if std::fs::write(&f, b"").is_ok() {
+        let _ = std::fs::remove_file(&f);
+    }
+}
+
+/// Drop the entry + icon an older Setup wrote — only if the entry is ours
+/// (it launches an unpacked AppImage), never someone else's digiclip.desktop.
+#[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+fn remove_legacy_entry() {
+    let entry = applications_dir().join(LEGACY_DESKTOP);
+    let ours = std::fs::read_to_string(&entry)
+        .map(|t| is_legacy_setup_entry(&t))
+        .unwrap_or(false);
+    if ours {
+        let _ = std::fs::remove_file(&entry);
+        let _ = std::fs::remove_file(
+            hicolor_dir()
+                .join("256x256")
+                .join("apps")
+                .join("digiclip.png"),
+        );
+    }
+}
+
+#[cfg(any(test, all(not(target_os = "windows"), not(target_os = "macos"))))]
+fn is_legacy_setup_entry(text: &str) -> bool {
+    text.contains("StartupWMClass=digiclip-app") && text.contains("/app/AppRun\"")
 }
 
 // ---------------------------------------------------------------------------
@@ -290,8 +362,14 @@ pub fn unregister() {}
 
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 pub fn unregister() {
-    let _ = std::fs::remove_file(applications_dir().join("digiclip.desktop"));
-    let _ = std::fs::remove_file(icon_path());
+    let _ = std::fs::remove_file(applications_dir().join(DESKTOP_ID));
+    remove_legacy_entry();
+    if let Ok(sizes) = std::fs::read_dir(hicolor_dir()) {
+        for size in sizes.flatten() {
+            let _ = std::fs::remove_file(size.path().join("apps").join(format!("{ICON_NAME}.png")));
+        }
+    }
+    touch_dir(&hicolor_dir());
     // Setup ≤2.3.1 symlinked the AppImage as ~/.local/bin/digiclip. Remove
     // it only if it is that symlink — never a real `digiclip` CLI.
     let link = sys::home_dir().join(".local").join("bin").join("digiclip");
@@ -609,5 +687,27 @@ pub fn remove_tree(install_dir: &Path) {
         let _ = std::fs::remove_file(install_dir.join(".digiclip-version"));
         // Only drops the dir when nothing else lives there.
         let _ = std::fs::remove_dir(install_dir);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn png_size_reads_ihdr() {
+        let icon = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/icons/32x32.png");
+        assert_eq!(png_size(&icon), Some((32, 32)));
+        let not_png = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        assert_eq!(png_size(&not_png), None);
+    }
+
+    #[test]
+    fn legacy_entry_only_when_ours() {
+        let ours = "[Desktop Entry]\nExec=\"/home/u/.local/opt/digiclip/app/AppRun\" %U\nIcon=digiclip\nStartupWMClass=digiclip-app\n";
+        assert!(is_legacy_setup_entry(ours));
+        // The old 1.x package's entry (same file name, different app).
+        let other = "[Desktop Entry]\nExec=/opt/DigiClip/digiclip %U\nIcon=digiclip\nStartupWMClass=digiclip\n";
+        assert!(!is_legacy_setup_entry(other));
     }
 }
