@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 //! DigiClip desktop shell: owns the `digiclip serve` sidecar and exposes
 //! a handful of window/OS commands to the React UI. All pipeline state
 //! flows over the sidecar's WebSocket — this process never polls anything.
@@ -200,7 +201,7 @@ fn get_serve(state: State<ShellState>) -> Result<ServeInfo, String> {
 }
 
 /// Locate the DigiClip Setup wizard (the custom installer).
-/// 1. `resources/DigiClip-Setup.exe` — bundled next to the app,
+/// 1. `resources/DigiClip-Setup[.exe]` — bundled next to the app,
 /// 2. `%LOCALAPPDATA%\DigiClip\bin\DigiClip-Setup.exe` — a copy downloaded
 ///    by the updater flow (see `download_setup`).
 fn setup_binary() -> Option<PathBuf> {
@@ -208,6 +209,7 @@ fn setup_binary() -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             candidates.push(dir.join("resources").join("DigiClip-Setup.exe"));
+            candidates.push(dir.join("resources").join("DigiClip-Setup"));
         }
     }
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
@@ -393,8 +395,6 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ShellState::default())
         .setup(|app| {
             let handle = app.handle().clone();

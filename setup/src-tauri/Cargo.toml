@@ -16,9 +16,14 @@ serde_json = "1"
 anyhow = "1.0.104"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 futures-util = "0.3"
-winreg = "0.55"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
 tokio = { version = "1", features = ["rt", "fs", "io-util"] }
+
+# Registry reads/writes are Windows-only (Add/Remove Programs entry).
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
 
 [features]
 default = ["custom-protocol"]

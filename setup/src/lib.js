@@ -13,7 +13,6 @@ export function closeSetup() {
 export function detect() {
     return invoke('detect');
 }
-
 export function fetchLatest() {
     return invoke('fetch_latest');
 }
@@ -48,6 +47,11 @@ export function onDownloadProgress(fn) {
 
 export function openExternal(url) {
     return invoke('open_url', { url }).catch(() => {});
+}
+
+/** Frameless window: native drag for the header. */
+export function dragWindow() {
+    return invoke('drag_window').catch(() => {});
 }
 
 /** Compare dotted versions ("2.2.1" vs "2.10.0"): -1 | 0 | 1. */
