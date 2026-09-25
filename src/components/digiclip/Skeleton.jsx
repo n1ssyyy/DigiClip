@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 
 /**
@@ -27,16 +27,26 @@ export function FadeImg({ src, alt = '', eager = false, className, imgClassName 
     const [skelGone, setSkelGone] = useState(false);
     const [gone, setGone] = useState(false);
     const [attempt, setAttempt] = useState(0);
+    const [prevSrc, setPrevSrc] = useState(src);
     const retryTimer = useRef(null);
 
-    // A new src starts over (fresh retries, skeleton back).
-    useEffect(() => {
+    // A new src starts over (fresh retries, skeleton back). Reset during
+    // render, not in an effect: an effect also runs on mount, and WebKit
+    // fires `load` for a cached image before passive effects flush — the
+    // reset would then hide an image that already arrived.
+    if (src !== prevSrc) {
+        setPrevSrc(src);
         setLoaded(false);
         setSkelGone(false);
         setGone(false);
         setAttempt(0);
-        return () => clearTimeout(retryTimer.current);
-    }, [src]);
+    }
+    useEffect(() => () => clearTimeout(retryTimer.current), [src]);
+
+    // Backstop for a load that completed before React was listening.
+    const imgRef = useCallback((el) => {
+        if (el?.complete && el.naturalWidth > 0) setLoaded(true);
+    }, []);
 
     useEffect(() => {
         if (!loaded) return;
@@ -61,6 +71,7 @@ export function FadeImg({ src, alt = '', eager = false, className, imgClassName 
                 />
             )}
             <img
+                ref={imgRef}
                 src={url}
                 alt={alt}
                 loading={eager ? 'eager' : 'lazy'}
