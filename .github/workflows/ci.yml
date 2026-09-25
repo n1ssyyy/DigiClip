@@ -15,7 +15,7 @@ concurrency:
 jobs:
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -24,16 +24,24 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            setup/package-lock.json
 
-      - name: Install JS dependencies
-        run: npm ci
+      - name: Build app frontend
+        run: |
+          npm ci
+          npm run build
 
-      - name: Build frontend
-        run: npm run build
+      - name: Build Setup frontend
+        working-directory: setup
+        run: |
+          npm ci
+          npm run build
 
   engine:
     name: Engine tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -61,39 +69,47 @@ jobs:
         run: cargo test --all-targets
 
   build:
-    name: Build (${{ matrix.os }})
+    # One job per platform: engine → app → app payload → DigiClip Setup with
+    # the payload embedded → a real install/launch/uninstall on the runner.
+    # The only thing that leaves this job is the packed Setup.
+    name: Build (${{ matrix.name }})
     needs: [frontend, engine]
     if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            engine_exe: digiclip.exe
-          - os: ubuntu-latest
-            engine_exe: digiclip
-          - os: macos-latest
-            engine_exe: digiclip
+          - name: Windows
+            os: windows-latest
+            asset: DigiClip-Setup-Windows-x64.exe
+          - name: Linux
+            # Pinned: the glibc floor of every Linux binary follows the
+            # runner (ONNX Runtime already needs >= 2.38, so 24.04 it is).
+            os: ubuntu-24.04
+            asset: DigiClip-Setup-Linux-x86_64.AppImage
+          - name: macOS
+            os: macos-latest
+            asset: DigiClip-Setup-macOS-arm64.zip
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Linux Tauri deps
+      - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
             build-essential curl wget file \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            cmake clang libclang-dev
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            cmake clang libclang-dev libfuse2t64 xvfb xauth
 
-      - name: Install macOS engine deps
+      - name: Install macOS deps
         if: runner.os == 'macOS'
         run: brew install cmake llvm
 
@@ -102,6 +118,9 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            setup/package-lock.json
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -109,166 +128,204 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: engine -> target
+          workspaces: |
+            engine -> target
+            src-tauri -> target
+            setup/src-tauri -> target
+
+      - name: Resolve version
+        id: v
+        run: |
+          app=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* && "${GITHUB_REF_NAME#v}" != "$app" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match app version $app (src-tauri/tauri.conf.json)"
+            exit 1
+          fi
 
       - name: Install JS dependencies
-        run: npm ci
-
-      - name: Build engine (release)
-        run: cargo build --release --manifest-path engine/Cargo.toml
-
-      - name: Build setup wizard (all platforms)
-        # The custom installer is bundled into the app's resources so the
-        # in-app "Update" handoff always has it locally. Windows/Linux
-        # ship the raw binary; macOS gets a real .app bundle.
-        working-directory: setup
         run: |
           npm ci
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            npm run tauri build -- --bundles app
-          else
-            npm run tauri build -- --no-bundle
-          fi
+          (cd setup && npm ci)
 
-      - name: Stage engine + setup for bundling
-        # The shell looks for resources/digiclip(.exe) and
-        # resources/DigiClip-Setup beside its exe; tauri.conf bundles
-        # the whole resources/ dir. Never committed (gitignored).
-        shell: bash
+      - name: Build engine
+        # Run from engine/ so the engine's own .cargo config (if any) applies.
+        working-directory: engine
+        run: cargo build --release
+
+      - name: Engine watchdog (unix)
+        if: runner.os != 'Windows'
+        run: engine/.github/scripts/watchdog-test.sh engine/target/release/digiclip
+
+      - name: Engine watchdog (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: engine/.github/scripts/watchdog-test.ps1 -Engine engine/target/release/digiclip.exe
+
+      - name: Stage engine into app resources
+        # The shell finds resources/digiclip(.exe) under its resource dir;
+        # tauri.conf bundles the whole resources/ dir. Never committed.
         run: |
-          cp "engine/target/release/${{ matrix.engine_exe }}" src-tauri/resources/
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cp setup/src-tauri/target/release/digiclip-setup.exe src-tauri/resources/DigiClip-Setup.exe
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp engine/target/release/digiclip.exe src-tauri/resources/
           else
-            cp setup/src-tauri/target/release/digiclip-setup src-tauri/resources/DigiClip-Setup
-            chmod +x src-tauri/resources/DigiClip-Setup
+            cp engine/target/release/digiclip src-tauri/resources/
+            chmod +x src-tauri/resources/digiclip
           fi
-          ls -la src-tauri/resources/
 
-      - name: Build app
-        run: npm run tauri build
-
-      - name: Build Windows app payload
-        # The custom Setup consumes a raw app payload (app exe + resources/)
-        # — zipped here, consumed by the wizard.
+      - name: Stage MSVC runtime beside the engine (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
-          $stage = "payload/DigiClip"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          . .github/scripts/vc-runtime.ps1
+          Copy-CrtFor src-tauri/resources/digiclip.exe src-tauri/resources
+
+      - name: Build app
+        run: |
+          case "$RUNNER_OS" in
+            Windows) npm run tauri build -- --no-bundle ;;
+            macOS)   npm run tauri build -- --bundles app ;;
+            Linux)   npm run tauri build -- --bundles appimage ;;
+          esac
+
+      - name: Build app payload (Windows)
+        # The app folder's *contents* (exe + resources\) at the zip root.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $stage = 'payload/stage'
+          New-Item -ItemType Directory -Force -Path "$stage/resources", payload | Out-Null
           Copy-Item src-tauri/target/release/digiclip-app.exe "$stage/"
-          Copy-Item -Recurse src-tauri/resources "$stage/resources"
-          $zip = "payload/DigiClip_${version}_win-x64-app.zip"
-          if (Test-Path $zip) { Remove-Item $zip -Force }
-          Compress-Archive -Path "payload/DigiClip" -DestinationPath $zip
-          Get-ChildItem $zip | Select-Object Name, Length
+          Copy-Item src-tauri/resources/* "$stage/resources/" -Exclude .gitkeep
+          Compress-Archive -Path "$stage/*" -DestinationPath payload/app.zip -Force
+          Get-ChildItem -Recurse $stage | Select-Object FullName, Length
 
-      - name: Build macOS app payload
-        # The .app bundle itself (the dmg stays as a convenience download).
+      - name: Build app payload (macOS)
         if: runner.os == 'macOS'
-        shell: bash
         run: |
-          version=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
+          app=src-tauri/target/release/bundle/macos/DigiClip.app
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
           mkdir -p payload
-          tar -czf "payload/DigiClip_${version}_mac-arm64-app.tar.gz" -C src-tauri/target/release/bundle/macos DigiClip.app
+          tar -czf payload/app.tar.gz -C "$(dirname "$app")" DigiClip.app
           ls -la payload/
 
-      - name: Build Linux app payload
-        # The AppImage itself (the deb stays as a convenience download).
+      - name: Build app payload (Linux)
         if: runner.os == 'Linux'
-        shell: bash
         run: |
-          version=$(node -e "console.log(require('./src-tauri/tauri.conf.json').version)")
-          mkdir -p payload
           appimage=$(ls src-tauri/target/release/bundle/appimage/*.AppImage)
-          tar -czf "payload/DigiClip_${version}_linux-x86_64-app.tar.gz" -C "$(dirname "$appimage")" "$(basename "$appimage")"
+          mkdir -p payload
+          tar -czf payload/app.tar.gz -C "$(dirname "$appimage")" "$(basename "$appimage")"
           ls -la payload/
 
-      - name: Stage setup for release
-        # The standalone download people click on the releases page.
-        shell: bash
+      - name: Build Setup
+        working-directory: setup
+        run: |
+          case "$RUNNER_OS" in
+            Windows) npm run tauri build -- --no-bundle ;;
+            macOS)   npm run tauri build -- --bundles app ;;
+            Linux)   npm run tauri build -- --bundles appimage ;;
+          esac
+
+      - name: Setup unit tests
+        run: cargo test --release --manifest-path setup/src-tauri/Cargo.toml
+
+      - name: Pack Setup (embed the app payload)
+        env:
+          V: ${{ steps.v.outputs.app }}
+          ASSET: ${{ matrix.asset }}
         run: |
           mkdir -p dist
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cp setup/src-tauri/target/release/digiclip-setup.exe dist/DigiClip-Setup.exe
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            (cd setup/src-tauri/target/release/bundle/macos && zip -qry "$GITHUB_WORKSPACE/dist/DigiClip-Setup-macOS.zip" DigiClip-Setup.app)
-          else
-            cp setup/src-tauri/target/release/digiclip-setup dist/DigiClip-Setup-linux-x86_64
-            chmod +x dist/DigiClip-Setup-linux-x86_64
-          fi
+          case "$RUNNER_OS" in
+            Windows)
+              node setup/scripts/pack.mjs setup/src-tauri/target/release/digiclip-setup.exe payload/app.zip "$V" "dist/$ASSET"
+              ;;
+            Linux)
+              node setup/scripts/pack.mjs "$(ls setup/src-tauri/target/release/bundle/appimage/*.AppImage)" payload/app.tar.gz "$V" "dist/$ASSET"
+              chmod +x "dist/$ASSET"
+              ;;
+            macOS)
+              # The payload sits in the bundle's Resources (appending to the
+              # Mach-O would break its signature); then ad-hoc sign the
+              # whole bundle so the seal covers payload.bin.
+              app="setup/src-tauri/target/release/bundle/macos/DigiClip Setup.app"
+              node setup/scripts/pack.mjs - payload/app.tar.gz "$V" "$app/Contents/Resources/payload.bin"
+              codesign --force --deep --sign - "$app"
+              codesign --verify --deep --strict "$app"
+              ditto -c -k --keepParent "$app" "dist/$ASSET"
+              ;;
+          esac
           ls -la dist/
 
-      - name: Upload installer artifact
-        # The release surface is intentionally small: one custom Setup per
-        # platform, its app payload, plus the native packages people expect
-        # (AppImage/deb/dmg). No NSIS/MSI/RPM internals, no sig bundles.
+      - name: Install smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .github/scripts/smoke-windows.ps1 -Setup "dist/${{ matrix.asset }}" -Version "${{ steps.v.outputs.app }}"
+
+      - name: Install smoke test (Linux)
+        if: runner.os == 'Linux'
+        # Extract-and-run: the path users without FUSE take.
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: .github/scripts/smoke-unix.sh "dist/${{ matrix.asset }}" "${{ steps.v.outputs.app }}"
+
+      - name: Install smoke test (macOS)
+        # Test the shipped zip, not the build tree.
+        if: runner.os == 'macOS'
+        run: |
+          t=$(mktemp -d)
+          ditto -x -k "dist/${{ matrix.asset }}" "$t"
+          .github/scripts/smoke-unix.sh "$t/DigiClip Setup.app/Contents/MacOS/digiclip-setup" "${{ steps.v.outputs.app }}"
+
+      - name: Upload Setup
         uses: actions/upload-artifact@v4
         with:
-          name: digiclip-${{ matrix.os }}
-          path: |
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.dmg
-            payload/DigiClip_*_app.zip
-            payload/DigiClip_*_app.tar.gz
-            dist/DigiClip-Setup*
+          name: digiclip-setup-${{ matrix.name }}
+          path: dist/${{ matrix.asset }}
           if-no-files-found: error
           retention-days: 14
 
   release:
+    # The release carries exactly the three DigiClip Setup installers —
+    # nothing else. The app's update check reads the release via the GitHub
+    # API and downloads the Setup for its platform.
     name: Release
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - name: Download Windows artifact
+      - name: Download installers
         uses: actions/download-artifact@v4
         with:
-          name: digiclip-windows-latest
-          path: artifacts/win
+          pattern: digiclip-setup-*
+          merge-multiple: true
+          path: dist
 
-      - name: Download Linux artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: digiclip-ubuntu-latest
-          path: artifacts/linux
-
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: digiclip-macos-latest
-          path: artifacts/macos
-
-      - name: Generate latest.json
-        # The app's update check reads {version, notes, pub_date} and
-        # hands the actual install to DigiClip Setup, so the feed is just
-        # the version pointer — no platform map, no signatures.
-        shell: bash
+      - name: Check release surface
         run: |
-          mkdir -p dist
-          TAG="${GITHUB_REF_NAME}"
-          VER="${TAG#v}"
-          jq -n \
-            --arg ver "$VER" \
-            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{
-              version: $ver,
-              notes: ("Release notes: https://github.com/n1ssyyy/DigiClip/releases/tag/v\($ver)"),
-              pub_date: $date
-            }' > dist/latest.json
-          cat dist/latest.json
+          ls -la dist/
+          expected="DigiClip-Setup-Linux-x86_64.AppImage DigiClip-Setup-Windows-x64.exe DigiClip-Setup-macOS-arm64.zip"
+          actual=$(ls dist | LC_ALL=C sort | xargs)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::release must contain exactly the three Setup installers, got: $actual"
+            exit 1
+          fi
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/win/**/*
-            artifacts/linux/**/*
-            artifacts/macos/**/*
-            dist/latest.json
+          files: dist/*
+          fail_on_unmatched_files: true
           generate_release_notes: true
-          fail_on_unmatched_files: false
+          body: |
+            ## Install
+
+            Download the DigiClip Setup for your system and run it. The app is inside the installer, so no internet connection is needed while installing. Run the same Setup again later to update, repair or uninstall.
+
+            | System | Download | Notes |
+            |---|---|---|
+            | Windows 10/11 (x64) | `DigiClip-Setup-Windows-x64.exe` | Not code-signed yet: on the SmartScreen prompt choose **More info → Run anyway**. |
+            | macOS (Apple Silicon) | `DigiClip-Setup-macOS-arm64.zip` | Unzip, then open **DigiClip Setup**. It isn't notarized yet: if macOS blocks it, go to **System Settings → Privacy & Security → Open Anyway**. |
+            | Linux (x86_64, glibc 2.39+: Ubuntu 24.04+, Fedora 40+, Debian 13+) | `DigiClip-Setup-Linux-x86_64.AppImage` | `chmod +x DigiClip-Setup-Linux-x86_64.AppImage && ./DigiClip-Setup-Linux-x86_64.AppImage`. If it won't start (no FUSE), add `--appimage-extract-and-run`. |

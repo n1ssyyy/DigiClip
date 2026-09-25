@@ -70,6 +70,7 @@ function UpdatesRow() {
     const available = useUpdates((s) => s.available);
     const auto = useUpdates((s) => s.auto);
     const error = useUpdates((s) => s.error);
+    const pct = useUpdates((s) => s.pct);
     const [working, setWorking] = useState(false);
 
     async function run(fn) {
@@ -91,6 +92,8 @@ function UpdatesRow() {
                 return current ? `You're on the latest — v${current}.` : 'You’re on the latest.';
             case 'available':
                 return available ? `v${available.version} is out${current ? ` — you're on v${current}` : ''}.` : 'A newer build is out.';
+            case 'downloading':
+                return `Downloading DigiClip Setup… ${pct ?? 0}%`;
             case 'handing-off':
                 return 'Opening DigiClip Setup…';
             case 'error':

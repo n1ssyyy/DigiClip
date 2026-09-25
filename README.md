@@ -88,7 +88,23 @@ flowchart LR
 
 ## 🚀 Getting started
 
-### Prerequisites
+### Install (users)
+
+Grab the **DigiClip Setup** for your system from the
+[latest release](https://github.com/n1ssyyy/DigiClip/releases/latest) — it's
+the only thing the release ships, one per platform, with the app inside:
+
+| System | Download |
+|---|---|
+| Windows 10/11 (x64) | `DigiClip-Setup-Windows-x64.exe` |
+| macOS (Apple Silicon) | `DigiClip-Setup-macOS-arm64.zip` → unzip → open **DigiClip Setup** |
+| Linux x86_64 (glibc 2.39+: Ubuntu 24.04+, Fedora 40+, Debian 13+) | `DigiClip-Setup-Linux-x86_64.AppImage` → `chmod +x` → run (no FUSE? add `--appimage-extract-and-run`) |
+
+Neither installer is code-signed yet: Windows SmartScreen needs **More
+info → Run anyway**, macOS needs **System Settings → Privacy & Security →
+Open Anyway** on first launch.
+
+### Prerequisites (development)
 
 - Node **22** + npm
 - Rust **stable** (+ C++ build tools for the engine's whisper-rs — see the [engine README](https://github.com/n1ssyyy/DigiClip-CLI#getting-started))
@@ -135,17 +151,18 @@ engine binary: `DIGICLIP_BIN=/path/to/digiclip npm run tauri dev`.
 
 ```bash
 # engine release binary first, then staged for bundling:
-cargo build --release --manifest-path engine/Cargo.toml
+(cd engine && cargo build --release)
 cp engine/target/release/digiclip src-tauri/resources/         # linux/macos
-cp engine/target/release/digiclip.exe src-tauri/resources/     # windows
+cp engine/target/release/digiclip.exe src-tauri/resources/     # windows (+ the MSVC runtime DLLs it imports — CI does this)
 
-npm run tauri build
+npm run tauri build -- --no-bundle           # windows: raw app (exe + resources\)
+npm run tauri build -- --bundles app         # macos:   DigiClip.app
+npm run tauri build -- --bundles appimage    # linux:   DigiClip_<v>_amd64.AppImage
 ```
 
-Installers land in `src-tauri/target/release/bundle/` (`nsis` on Windows,
-`appimage`/`deb` on Linux, `dmg`/`app` on macOS). CI does the engine-build +
-stage + `tauri build` per OS automatically. `src-tauri/resources/` is
-gitignored — never commit the staged binary.
+The shipped artifact is **DigiClip Setup with that build embedded** — see
+[DigiClip Setup](#-digiclip-setup-all-platforms-offline) for how CI packs
+it. `src-tauri/resources/` is gitignored — never commit the staged binary.
 
 ## ⚙️ Configuration
 
@@ -185,100 +202,105 @@ cargo check --manifest-path src-tauri/Cargo.toml  # shell
 
 | Job | Runner | Does |
 |-----|--------|------|
-| `frontend` | `ubuntu-latest` | `npm ci`, `npm run build` |
-| `engine` | `ubuntu-latest` | engine `cargo test` from the submodule |
-| `build` | `windows-latest`, `ubuntu-latest`, `macos-latest` | engine (release) → stage into `src-tauri/resources/` (+ Setup on Windows) → `tauri build` → installers, app payload zip, `DigiClip-Setup.exe` |
-| `release` | `ubuntu-latest` | on `v*` tags only: attaches all artifacts + generated `latest.json` to the GitHub Release |
+| `frontend` | `ubuntu-24.04` | app + Setup `npm ci`, `npm run build` |
+| `engine` | `ubuntu-24.04` | engine fmt check + `cargo test` from the submodule |
+| `build` | `windows-latest`, `ubuntu-24.04`, `macos-latest` | engine (release) + [watchdog test](https://github.com/n1ssyyy/DigiClip-CLI/tree/main/.github/scripts) → stage into `src-tauri/resources/` (+ MSVC runtime on Windows) → app build → app payload → DigiClip Setup build + unit tests → **pack** (embed payload) → **install smoke test** (headless install, files/registry/desktop entry, launch the installed app and confirm it boots its engine, uninstall) → upload the Setup |
+| `release` | `ubuntu-24.04` | on `v*` tags only: publishes exactly the three Setups — the job fails if anything else shows up |
 
-Cut a release (engine first, then app so the submodule pin is exact):
+Linux is pinned to `ubuntu-24.04` rather than `ubuntu-latest`: the glibc
+floor of every Linux binary follows the runner, and ONNX Runtime's prebuilt
+libraries already require glibc 2.38.
+
+Cut a release (engine first, then app so the submodule pin is exact; the
+tag must equal `version` in `src-tauri/tauri.conf.json` or CI refuses):
 
 ```bash
-# in DigiClip-CLI: git tag v2.2.0 && git push origin v2.2.0
+# in DigiClip-CLI: git tag v2.1.1 && git push origin v2.1.1
 # in DigiClip:
 git submodule update --remote engine   # pull the released engine commit
-git add engine && git commit -m "chore: bump engine to v2.2.0"
-git tag v2.2.0 && git push origin main v2.2.0
+git add engine && git commit -m "chore: bump engine to v2.1.1"
+git tag v2.3.2 && git push origin main v2.3.2
 ```
 
-## 🔄 Updates & setup
+## 🔄 Updates
 
-- **In-app updates** — the shell checks `latest.json` on the releases page
-  on launch (silent when up to date or offline; toggle in Settings →
+- **In-app updates** — on launch the shell asks the GitHub API for the
+  latest release (silent when up to date or offline; toggle in Settings →
   Updates). A newer build raises a banner (bottom-left, release notes one
-  click away). The action hands off to **DigiClip Setup** (below): the
-  app fetches the wizard once if it doesn't have it, launches it, and
-  exits; the wizard closes the app, downloads the new build, and lays it
-  in — same custom UI as a fresh install. No NSIS/MSI in the loop, no
-  reinstall.
-- **Signed feed** — retired. Updates now flow through DigiClip Setup
-  (below), so the release publishes no updater bundles: just the
-  installers, the Windows app payload, and a `latest.json` version
-  pointer. Trust model is the GitHub release page over HTTPS.
-- **First install / repair / remove** — DigiClip Setup owns it on
-  every platform (see below). The release carries one Setup per OS, the
-  payloads the Setups consume, and the conventional packages (AppImage,
-  deb, dmg). Nothing else: no NSIS, no MSI, no RPM internals, no
-  signature bundles.
-- **One reinstall to join the channel** — builds before v2.2.0 have no
-  updater, so they can't self-update into it. Install v2.2.0+ once from
-  the releases page; every release after that arrives in-app.
+  click away). **Update** downloads the DigiClip Setup for this platform
+  (with progress), launches it and exits; Setup closes anything still
+  running and lays the new build in — same custom UI as a fresh install.
+- **Trust model** — the GitHub release over HTTPS; the shell only
+  downloads Setup assets from `github.com/n1ssyyy/DigiClip/releases`.
+- **Joining from ≤ 2.3.0** — those builds' update check can't see this
+  release format (and was blocked by the app's own CSP), so install 2.3.2+
+  once from the releases page; every release after that arrives in-app.
 
-## 🧙 DigiClip Setup (all platforms, from scratch)
+## 🧙 DigiClip Setup (all platforms, offline)
 
 DigiClip Setup is the installer on every OS: a Tauri wizard in the app's
 own design language that does the install itself. No NSIS, no MSI, no
-silent-switch hacks. It detects the machine and offers exactly what
-fits:
+silent-switch hacks. **The app build is embedded in the Setup**, so a
+release is just three files and installing needs no network. It detects
+the machine and offers exactly what fits:
 
 | Machine state | What Setup shows |
 |---|---|
-| Not installed | **Install now** (+ target folder picker) |
+| Not installed | **Install now** (+ folder picker on Windows) |
 | Installed, older build | **Update to vX** + Reinstall / Repair / Uninstall |
-| Installed, latest | **You are up to date** + Reinstall / Repair / Uninstall |
+| Installed, same build | **You are up to date** + Reinstall / Repair / Uninstall |
+| Installed, newer build | keep it, or **Install vX instead** (downgrade) / Uninstall |
 | App running | close-and-continue guard (locked files are the #1 install failure) |
-| Offline | retry + uninstall fallback |
+| Setup without a payload | uninstall + link to the full installer (the Windows uninstaller copy) |
 
-Per platform, Setup lands the app like this:
+Reinstall wipes the app folder first; Repair overwrites in place. User
+data (clips, models, settings) lives in the OS user-data dir and is never
+touched.
 
-| OS | Downloads | Installs to | Registration |
-|---|---|---|---|
-| Windows | `DigiClip_<v>_win-x64-app.zip` | `%LOCALAPPDATA%\DigiClip` | Add/Remove Programs entry + Start Menu & desktop shortcuts |
-| macOS | `DigiClip_<v>_mac-arm64-app.tar.gz` (the `.app`) | `/Applications/DigiClip.app` via `ditto` (standard admin prompt when needed) | LaunchServices notice |
-| Linux | `DigiClip_<v>_linux-x86_64-app.tar.gz` (the AppImage) | `~/.local/opt/digiclip` (no sudo) | `~/.local/share/applications/digiclip.desktop`, icon, `~/.local/bin/digiclip` symlink |
+| OS | Installs to | Registration |
+|---|---|---|
+| Windows | `%LOCALAPPDATA%\DigiClip` (or `<picked folder>\DigiClip`) | Apps & features entry (uninstaller: a payload-free copy of Setup in the install dir) + Start Menu & desktop shortcuts |
+| macOS | `/Applications/DigiClip.app` via `ditto` (standard admin prompt when needed) | — (the bundle is self-describing) |
+| Linux | `~/.local/opt/digiclip/app` — the AppImage **unpacked**, so the app starts fast and never needs FUSE (no sudo) | `~/.local/share/applications/digiclip.desktop` + icon |
 
-The release ships one Setup per platform — `DigiClip-Setup.exe`,
-`DigiClip-Setup-macOS.zip`, `DigiClip-Setup-linux-x86_64` — plus the
-payloads they consume, and the conventional packages people expect
-(AppImage, deb, dmg). That's the whole list: no NSIS, no MSI, no RPM
-internals, no signature bundles.
+How the payload is embedded (`setup/scripts/pack.mjs` writes it,
+`setup/src-tauri/src/payload.rs` reads it): `[payload][version][u32 len][u64 len]["DGCSETUP"]`
+appended to
 
-On Windows, uninstall also works the OS way: "Apps & features →
-DigiClip → Uninstall" runs `DigiClip-Setup.exe --uninstall` (a temp
-copy, so the tree can be deleted while it runs). The payload archives
-are what CI feeds the wizard; they're not meant to be opened by hand.
+- Windows: the Setup exe itself (PE overlay),
+- Linux: the Setup AppImage (squashfs ignores trailing bytes),
+- macOS: `DigiClip Setup.app/Contents/Resources/payload.bin` (appending to
+  the Mach-O would break its signature; the bundle is ad-hoc re-signed).
+
+Headless flags (CI uses them; handy for scripted installs):
+
+```text
+--payload-info                     version this Setup installs (exit 2: none)
+--detect                           what's installed on this machine
+--install [--dir D] [--reinstall]  install without the wizard
+--uninstall [--quiet]              remove DigiClip (Windows registers this)
+```
 
 ```bash
 cd setup
 npm install
-npm run tauri dev    # wizard dev loop (port 1430, no engine needed)
+npm run tauri dev    # wizard dev loop (port 1430) — no payload in dev, so it opens in maintenance mode
 ```
-
-The in-app "Update" button uses the same wizard on all platforms: the
-shell bundles it into `resources/` and launches it, then exits.
 
 ## 🗺 Project map
 
 ```
-src-tauri/src/main.rs     shell: engine boot, get_serve, window/drag/reveal/open-url
+src-tauri/src/main.rs     shell: engine boot, get_serve, update check/download/handoff, window/drag/reveal/open-url
 src-tauri/tauri.conf.json product meta, window, CSP, bundled resources/
 src-tauri/capabilities/   IPC permissions (core, dialog, fs)
 src-tauri/resources/      staged engine binary at build time (gitignored)
 src/main.jsx              boot gate (serve-ready -> sync -> UI)
 src/lib/socket.js         whole backend over one WebSocket (no polling)
 src/lib/native.js         Tauri bridge (window, dialogs, drag-drop, save flow)
-src/lib/updates.js        updater store (check → handoff to DigiClip Setup)
+src/lib/updates.js        updater store (check → download Setup → handoff)
 src/components/digiclip/UpdateNotice.jsx  update banner + release-notes dialog
-setup/                   DigiClip Setup — the from-scratch Windows installer
+setup/                    DigiClip Setup — the offline installer (all platforms)
+.github/scripts/          CI install smoke tests + MSVC runtime staging
 src/pages/                Home (dropzone + pipeline + clips) · Health · Settings
 src/components/digiclip/  Titlebar, dropzone, job cards, clip tiles, settings forms
 engine/                   submodule -> DigiClip-CLI (the clipping pipeline)
