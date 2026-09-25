@@ -12,12 +12,15 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'vc-runtime.ps1')
 function Fail($msg) { Write-Host "::error::$msg"; exit 1 }
 
-# Setup is a GUI-subsystem exe: Start-Process -Wait is the reliable way to
-# get its exit code and redirected stdout.
+# Setup is a GUI-subsystem exe: Start-Process is the reliable way to get its
+# exit code and redirected stdout. WaitForExit, not -Wait: -Wait also waits
+# for every descendant (e.g. the detached uninstall worker, a launched app).
 function Invoke-Setup([string[]] $SetupArgs, [int] $Expect = 0) {
     $out = New-TemporaryFile; $err = New-TemporaryFile
-    $p = Start-Process -FilePath $Setup -ArgumentList $SetupArgs -Wait -PassThru -NoNewWindow `
+    $p = Start-Process -FilePath $Setup -ArgumentList $SetupArgs -PassThru -NoNewWindow `
         -RedirectStandardOutput $out -RedirectStandardError $err
+    $null = $p.Handle # cache the handle so ExitCode survives the exit
+    if (-not $p.WaitForExit(300000)) { $p.Kill(); Fail "Setup $($SetupArgs -join ' ') hung" }
     $text = (Get-Content $out -Raw) + (Get-Content $err -Raw)
     Write-Host "> DigiClip-Setup $($SetupArgs -join ' ') [exit $($p.ExitCode)]`n$text"
     if ($p.ExitCode -ne $Expect) { Fail "Setup $($SetupArgs -join ' ') exited $($p.ExitCode)" }
@@ -78,7 +81,8 @@ if ($line -notmatch '^ok ') { Fail 'installed app could not boot its engine' }
 
 Write-Host '== uninstall (registered uninstaller)'
 $exe, $rest = ($reg.QuietUninstallString -split '"' | Where-Object { $_.Trim() })
-Start-Process -FilePath $exe -ArgumentList ($rest.Trim() -split ' ') -Wait
+$u = Start-Process -FilePath $exe -ArgumentList ($rest.Trim() -split ' ') -PassThru
+if (-not $u.WaitForExit(60000)) { Fail 'registered uninstaller hung' }
 for ($i = 0; $i -lt 60 -and (Test-Path $dir); $i++) { Start-Sleep -Milliseconds 500 }
 if (Test-Path $dir) { Fail "install dir left behind: $(Get-ChildItem -Recurse $dir | Out-String)" }
 if (Test-Path $key) { Fail 'uninstall registry key left behind' }
