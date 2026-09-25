@@ -187,9 +187,8 @@ cargo check --manifest-path src-tauri/Cargo.toml  # shell
 |-----|--------|------|
 | `frontend` | `ubuntu-latest` | `npm ci`, `npm run build` |
 | `engine` | `ubuntu-latest` | engine `cargo test` from the submodule |
-| `build` | `windows-latest`, `ubuntu-latest`, `macos-latest` | build engine (release) → stage into `src-tauri/resources/` → `tauri build` → installer artifacts |
-| `setup` | `windows-latest` | build the Setup stub wizard → `DigiClip-Setup.exe` artifact |
-| `release` | `ubuntu-latest` | on `v*` tags only: attaches installers + setup stub + generated `latest.json` to the GitHub Release |
+| `build` | `windows-latest`, `ubuntu-latest`, `macos-latest` | engine (release) → stage into `src-tauri/resources/` (+ Setup on Windows) → `tauri build` → installers, app payload zip, `DigiClip-Setup.exe` |
+| `release` | `ubuntu-latest` | on `v*` tags only: attaches all artifacts + generated `latest.json` to the GitHub Release |
 
 Cut a release (engine first, then app so the submodule pin is exact):
 
@@ -206,8 +205,11 @@ git tag v2.2.0 && git push origin main v2.2.0
 - **In-app updates** — the shell checks `latest.json` on the releases page
   on launch (silent when up to date or offline; toggle in Settings →
   Updates). A newer build raises a banner (bottom-left, release notes one
-  click away): Download → Install → Restart, with progress in the room's
-  own ring/dialog language. No polling, no browser window, no reinstall.
+  click away). The action hands off to **DigiClip Setup** (below): the
+  app fetches the wizard once if it doesn't have it, launches it, and
+  exits; the wizard closes the app, downloads the new build, and lays it
+  in — same custom UI as a fresh install. No NSIS/MSI in the loop, no
+  reinstall.
 - **Signed feed** — every `v*` tag publishes v1Compatible updater bundles
   (`.nsis.zip` / `.msi.zip`, `.AppImage.tar.gz`, `.app.tar.gz`, each with a
   minisign `.sig`) plus a generated `latest.json` mapping each
@@ -217,28 +219,40 @@ git tag v2.2.0 && git push origin main v2.2.0
   `TAURI_SIGNING_PRIVATE_KEY` repo secret (keypair at `~/.tauri/digiclip.key`
   — back it up; rotating keys strands installs that only know the old one).
   Unsigned local builds simply report "couldn't check".
-- **First install / repair / remove** — native installers own this:
-  - Windows NSIS (`*-setup.exe`): re-running the installer upgrades in
-    place; the uninstaller is in Add/Remove Programs.
-  - Windows MSI (`*.msi`): full maintenance mode — Modify / Repair /
-    Remove, plus major upgrades. The pinned `wix.upgradeCode` is what keeps
-    upgrades landing on the same product instead of side-by-side installs —
-    never change it.
-  - Linux (AppImage / deb) and macOS (dmg): replace-and-relaunch.
+- **First install / repair / remove** — DigiClip Setup owns it on Windows
+  (see below). Linux (AppImage / deb) and macOS (dmg) use their native
+  packages; the in-app updater for those platforms uses the signed
+  v1Compatible tarballs + `latest.json`.
 - **One reinstall to join the channel** — builds before v2.2.0 have no
   updater, so they can't self-update into it. Install v2.2.0+ once from
   the releases page; every release after that arrives in-app.
 
-## 🧙 Setup (Windows)
+## 🧙 DigiClip Setup (Windows, from scratch)
 
-`DigiClip-Setup.exe` (per release, next to the full installers) is the
-custom installer — a small Tauri wizard in the app's own design language,
-not a native NSIS page. It detects the machine and offers exactly what
-fits: **Install** (fresh), **Update** (older build found), **Reinstall** /
-**Repair** (same build), **Uninstall** — with download progress, a
-close-the-running-app guard (silent installers fail on locked files), and
-a launch-on-finish goodbye. The native NSIS installer does the file work
-silently underneath (`/S`); the wizard is the whole visible setup.
+`DigiClip-Setup.exe` (every release, next to the full installers) is the
+**only** Windows install path: a Tauri wizard in the app's own design
+language that does the install itself. No NSIS, no MSI, no silent-switch
+hacks — the wizard detects the machine and offers exactly what fits:
+
+| Machine state | What Setup shows |
+|---|---|
+| Not installed | **Install now** (+ target folder picker) |
+| Installed, older build | **Update to vX** + Reinstall / Repair / Uninstall |
+| Installed, latest | **You are up to date** + Reinstall / Repair / Uninstall |
+| App running | close-and-continue guard (locked files are the #1 install failure) |
+| Offline | retry + uninstall fallback |
+
+The file work lives in `setup/src-tauri/src/main.rs`: registry detection
+(HKCU uninstall entry), GitHub release lookup, streaming payload
+download, zip extraction with retry-while-locks-release, per-user
+uninstall registration, Start Menu + desktop shortcuts, self-delete
+uninstall, and app launch on finish. The app payload is the plain
+`DigiClip_2.3.0_win-x64-app.zip` that CI zips from the release build
+(`digiclip-app.exe` + `resources/`, engine and this wizard included).
+
+Uninstall also works the Windows way: "Apps & features → DigiClip →
+Uninstall" runs `DigiClip-Setup.exe --uninstall` (a temp copy, so the
+tree can be deleted while it runs).
 
 ```bash
 cd setup
@@ -246,10 +260,8 @@ npm install
 npm run tauri dev    # wizard dev loop (port 1430, no engine needed)
 ```
 
-Source: `setup/src/` (React state machine) + `setup/src-tauri/` (detect
-via the uninstall registry key, GitHub release lookup, streaming download,
-hidden silent install/uninstall). Windows-only by design — macOS/Linux
-keep their native packages.
+The in-app "Update" button uses the same wizard: the shell bundles
+`DigiClip-Setup.exe` into `resources/`, launches it, and exits.
 
 ## 🗺 Project map
 
@@ -261,9 +273,9 @@ src-tauri/resources/      staged engine binary at build time (gitignored)
 src/main.jsx              boot gate (serve-ready -> sync -> UI)
 src/lib/socket.js         whole backend over one WebSocket (no polling)
 src/lib/native.js         Tauri bridge (window, dialogs, drag-drop, save flow)
-src/lib/updates.js        updater store (check/download/install/restart state)
+src/lib/updates.js        updater store (check → handoff to DigiClip Setup)
 src/components/digiclip/UpdateNotice.jsx  update banner + release-notes dialog
-setup/                   custom installer wizard (own Tauri app, Windows-only)
+setup/                   DigiClip Setup — the from-scratch Windows installer
 src/pages/                Home (dropzone + pipeline + clips) · Health · Settings
 src/components/digiclip/  Titlebar, dropzone, job cards, clip tiles, settings forms
 engine/                   submodule -> DigiClip-CLI (the clipping pipeline)

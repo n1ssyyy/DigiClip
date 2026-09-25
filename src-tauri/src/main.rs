@@ -85,7 +85,10 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
     // its spawner, so the port is the only thing we can route around).
     let mut port: u16 = 4317;
     while port < 4331 {
-        if tokio::net::TcpListener::bind(("127.0.0.1", port)).await.is_ok() {
+        if tokio::net::TcpListener::bind(("127.0.0.1", port))
+            .await
+            .is_ok()
+        {
             break;
         }
         port += 1;
@@ -130,7 +133,10 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
     let mut stderr = child.stderr.take();
     let (info, stdout) = {
         use tokio::io::{AsyncBufReadExt, BufReader};
-        let stdout = child.stdout.take().ok_or_else(|| anyhow::anyhow!("no sidecar stdout"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("no sidecar stdout"))?;
         let mut lines = BufReader::new(stdout).lines();
         let deadline = tokio::time::sleep(std::time::Duration::from_secs(30));
         tokio::pin!(deadline);
@@ -185,7 +191,102 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
 
 #[tauri::command]
 fn get_serve(state: State<ShellState>) -> Result<ServeInfo, String> {
-    state.serve.lock().unwrap().clone().ok_or_else(|| "engine not booted".into())
+    state
+        .serve
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "engine not booted".into())
+}
+
+/// Locate the DigiClip Setup wizard (the custom installer).
+/// 1. `resources/DigiClip-Setup.exe` — bundled next to the app,
+/// 2. `%LOCALAPPDATA%\DigiClip\bin\DigiClip-Setup.exe` — a copy downloaded
+///    by the updater flow (see `download_setup`).
+fn setup_binary() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("resources").join("DigiClip-Setup.exe"));
+        }
+    }
+    if let Ok(local) = std::env::var("LOCALAPPDATA") {
+        candidates.push(
+            PathBuf::from(local)
+                .join("DigiClip")
+                .join("bin")
+                .join("DigiClip-Setup.exe"),
+        );
+    }
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// The updater path is the custom Setup wizard: find it, else tell the UI
+/// where to get it.
+#[tauri::command]
+fn get_setup() -> Result<String, String> {
+    setup_binary()
+        .map(|p| p.display().to_string())
+        .ok_or_else(|| "setup not found".into())
+}
+
+/// Fetch the wizard from the latest release (once) into the user data dir.
+#[tauri::command]
+async fn download_setup(app: AppHandle) -> Result<String, String> {
+    let target_dir = std::env::var("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::temp_dir())
+        .join("DigiClip")
+        .join("bin");
+    std::fs::create_dir_all(&target_dir).map_err(|e| e.to_string())?;
+    let dest = target_dir.join("DigiClip-Setup.exe");
+
+    let client = reqwest::Client::builder()
+        .user_agent("DigiClip")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+    // Latest release asset: https://github.com/…/releases/latest/download/…
+    let url = "https://github.com/n1ssyyy/DigiClip/releases/latest/download/DigiClip-Setup.exe";
+    let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("Setup download failed: HTTP {}.", resp.status()));
+    }
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let part = dest.with_extension("exe.part");
+    std::fs::write(&part, &bytes).map_err(|e| e.to_string())?;
+    std::fs::rename(&part, &dest).map_err(|e| e.to_string())?;
+
+    let _ = app.emit("digiclip:setup-ready", dest.display().to_string());
+    Ok(dest.display().to_string())
+}
+
+/// Launch the wizard, then exit the app so it can replace the install.
+/// The wizard re-detects whatever is running and asks/closes it — exiting
+/// here (with the engine killed by the exit path) keeps that clean.
+#[tauri::command]
+async fn run_setup(app: AppHandle, path: Option<String>) -> Result<(), String> {
+    let bin = match path {
+        Some(p) => PathBuf::from(p),
+        None => setup_binary().ok_or_else(|| "setup not found".to_string())?,
+    };
+    if !bin.is_file() {
+        return Err("setup not found".into());
+    }
+    let mut std_cmd = std::process::Command::new(&bin);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        std_cmd.creation_flags(0x08000000);
+    }
+    let mut child = std_cmd.spawn().map_err(|e| e.to_string())?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    // Give the wizard a moment to open, then drop the app + engine.
+    tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+    app.exit(0);
+    Ok(())
 }
 
 #[tauri::command]
@@ -202,14 +303,20 @@ async fn window_action(app: AppHandle, action: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn is_maximized(app: AppHandle) -> Result<bool, String> {
-    app.get_webview_window("main").ok_or("no main window")?.is_maximized().map_err(|e| e.to_string())
+    app.get_webview_window("main")
+        .ok_or("no main window")?
+        .is_maximized()
+        .map_err(|e| e.to_string())
 }
 
 /// Start a native window move (called from the header mousedown; the
 /// fallback when the declarative drag region doesn't grab).
 #[tauri::command]
 async fn drag_window(app: AppHandle) -> Result<(), String> {
-    app.get_webview_window("main").ok_or("no main window")?.start_dragging().map_err(|e| e.to_string())
+    app.get_webview_window("main")
+        .ok_or("no main window")?
+        .start_dragging()
+        .map_err(|e| e.to_string())
 }
 
 /// Reveal a file in the OS file manager (same contract as the old
@@ -218,16 +325,32 @@ async fn drag_window(app: AppHandle) -> Result<(), String> {
 fn reveal(path: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer").arg(format!("/select,{path}")).spawn().map(|_| ()).map_err(|e| e.to_string())
+        std::process::Command::new("explorer")
+            .arg(format!("/select,{path}"))
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open").arg("-R").arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        let parent = std::path::Path::new(&path).parent().map(|p| p.display().to_string()).unwrap_or(path);
-        std::process::Command::new("xdg-open").arg(&parent).spawn().map(|_| ()).map_err(|e| e.to_string())
+        let parent = std::path::Path::new(&path)
+            .parent()
+            .map(|p| p.display().to_string())
+            .unwrap_or(path);
+        std::process::Command::new("xdg-open")
+            .arg(&parent)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -250,11 +373,19 @@ fn open_url(url: String) -> Result<(), String> {
     }
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open").arg(&url).spawn().map(|_| ()).map_err(|e| e.to_string())
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
-        std::process::Command::new("xdg-open").arg(&url).spawn().map(|_| ()).map_err(|e| e.to_string())
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -283,13 +414,46 @@ fn main() {
         })
         .on_window_event(|win, ev| {
             // Keep the shell's rounded/fused look in sync with maximize.
-            if matches!(ev, tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }) {
+            if matches!(
+                ev,
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. }
+            ) {
                 if let Ok(maxed) = win.is_maximized() {
                     let _ = win.emit("digiclip:maximized", maxed);
                 }
             }
+            // CloseRequested (user X / "close" action) and Destroyed (alt-F4
+            // tearing the webview down) both end the process. `kill_on_drop`
+            // only fires if the whole runtime unwinds cleanly — a window
+            // close short-circuits that, which is how the engine used to
+            // survive as an orphan holding `resources\digiclip.exe` and
+            // breaking the next install ("Error opening file for writing").
+            if matches!(
+                ev,
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+            ) {
+                if let Some(state) = win.app_handle().try_state::<ShellState>() {
+                    if let Ok(mut slot) = state.child.lock() {
+                        if let Some(child) = slot.as_mut() {
+                            let _ = child.start_kill();
+                        }
+                        *slot = None;
+                    }
+                    let _ = state.serve.lock().map(|mut s| *s = None);
+                }
+            }
         })
-        .invoke_handler(tauri::generate_handler![get_serve, window_action, is_maximized, drag_window, reveal, open_url])
+        .invoke_handler(tauri::generate_handler![
+            get_serve,
+            get_setup,
+            download_setup,
+            run_setup,
+            window_action,
+            is_maximized,
+            drag_window,
+            reveal,
+            open_url
+        ])
         .run(tauri::generate_context!())
         .expect("tauri run");
 }

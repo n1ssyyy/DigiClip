@@ -117,13 +117,23 @@ jobs:
       - name: Build engine (release)
         run: cargo build --release --manifest-path engine/Cargo.toml
 
-      - name: Stage engine for bundling
+      - name: Build setup wizard (Windows)
+        # The custom installer is bundled into the app's resources so the
+        # in-app "Update" handoff always has it locally.
+        if: runner.os == 'Windows'
+        working-directory: setup
+        run: npm ci && npm run tauri build
+
+      - name: Stage engine + setup for bundling
         # The shell looks for resources/digiclip(.exe) beside its exe
         # (see src-tauri/src/main.rs `engine_binary`); tauri.conf bundles
         # the whole resources/ dir. Never committed (gitignored).
         shell: bash
         run: |
           cp "engine/target/release/${{ matrix.engine_exe }}" src-tauri/resources/
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp setup/src-tauri/target/release/digiclip-setup.exe src-tauri/resources/DigiClip-Setup.exe
+          fi
           ls -la src-tauri/resources/
 
       - name: Build app
@@ -132,6 +142,32 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: npm run tauri build
+
+      - name: Build Windows app payload
+        # The custom DigiClip-Setup installer consumes a raw app payload
+        # (app exe + resources/) — the same files NSIS would copy into
+        # the install dir. Zipped here, consumed by the wizard.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $stage = "payload/DigiClip"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item src-tauri/target/release/digiclip-app.exe "$stage/"
+          Copy-Item -Recurse src-tauri/resources "$stage/resources"
+          $zip = "payload/DigiClip_${version}_win-x64-app.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path "payload/DigiClip" -DestinationPath $zip
+          Get-ChildItem $zip | Select-Object Name, Length
+
+      - name: Stage setup exe for release
+        # The standalone download people click on the releases page.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          Copy-Item setup/src-tauri/target/release/digiclip-setup.exe "DigiClip-Setup.exe"
+          Get-ChildItem DigiClip-Setup.exe | Select-Object Name, Length
 
       - name: Upload installer artifact
         # No `**/*.app`: uploading the raw .app dir makes the release
@@ -152,58 +188,14 @@ jobs:
             src-tauri/target/release/bundle/**/*.zip
             src-tauri/target/release/bundle/**/*.tar.gz
             src-tauri/target/release/bundle/**/*.sig
-          if-no-files-found: error
-          retention-days: 14
-
-  setup:
-    name: Setup stub (Windows)
-    # DigiClip Setup: the custom installer wizard (own Tauri app, no
-    # engine). Windows-only — other platforms use their native packages.
-    if: github.event_name != 'pull_request'
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: setup/package-lock.json
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: setup/src-tauri -> target
-
-      - name: Install JS dependencies
-        working-directory: setup
-        run: npm ci
-
-      - name: Build setup stub
-        working-directory: setup
-        run: npm run tauri build
-
-      - name: Stage setup exe
-        shell: bash
-        run: |
-          cp setup/src-tauri/target/release/digiclip-setup.exe DigiClip-Setup.exe
-          ls -la DigiClip-Setup.exe
-
-      - name: Upload setup artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: digiclip-setup
-          path: DigiClip-Setup.exe
+            payload/DigiClip_*_win-x64-app.zip
+            DigiClip-Setup.exe
           if-no-files-found: error
           retention-days: 14
 
   release:
     name: Release
-    needs: [build, setup]
+    needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -226,12 +218,6 @@ jobs:
         with:
           name: digiclip-macos-latest
           path: artifacts/macos
-
-      - name: Download setup stub
-        uses: actions/download-artifact@v4
-        with:
-          name: digiclip-setup
-          path: artifacts/setup
 
       - name: Generate updater latest.json
         # Nothing in the toolchain writes latest.json — the v2 updater just
@@ -298,7 +284,6 @@ jobs:
             artifacts/win/**/*
             artifacts/linux/**/*
             artifacts/macos/**/*
-            artifacts/setup/**/*
             dist/latest.json
           generate_release_notes: true
           fail_on_unmatched_files: false

@@ -1,7 +1,7 @@
 {
     "$schema": "../gen/schemas/desktop-schema.json",
     "identifier": "default",
-    "description": "Setup wizard: window close, download progress events.",
+    "description": "Setup wizard: window close, folder picker, download progress events.",
     "windows": ["main"],
-    "permissions": ["core:default", "core:event:allow-emit", "core:event:allow-listen", "core:window:allow-close"]
+    "permissions": ["core:default", "core:event:allow-emit", "core:event:allow-listen", "core:window:allow-close", "dialog:allow-open"]
 }

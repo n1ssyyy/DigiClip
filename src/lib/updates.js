@@ -1,28 +1,29 @@
 /**
- * In-app updates, over the Tauri updater plugin (signed `latest.json` on
- * the GitHub releases page — see src-tauri/tauri.conf.json).
+ * App updates, routed through the custom DigiClip Setup wizard.
  *
- * One boot check (silent: no toast when up to date or unreachable) plus
- * manual checks from Settings. State lives here in a tiny external store
- * (same shape as lib/socket.js) so the banner, dialog and Settings row
- * all read one source of truth.
+ * The app itself never replaces its files: it checks the published
+ * `latest.json` (one tiny GET, no plugin), and when a newer version
+ * exists the "Update" action fetches the Setup wizard (once, into the
+ * user-data dir), launches it, and exits. The wizard detects the
+ * running app, closes it, downloads the signed payload, and lays the
+ * new build in — same custom UI as a fresh install.
  *
- * Phases: idle → checking → uptodate | available → downloading → ready
- * (restart applies it) — error anywhere lands on `error` with copy.
+ * Phases: idle → checking → uptodate | available → handing-off
+ * (setup running) — error anywhere lands on `error` with copy.
  */
 
 import { useSyncExternalStore } from 'react';
 import { isTauri } from './native.js';
 
 const AUTO_KEY = 'digiclip.updates.auto';
+const MANIFEST = 'https://github.com/n1ssyyy/DigiClip/releases/latest/download/latest.json';
+const SETUP_URL = 'https://github.com/n1ssyyy/DigiClip/releases/latest/download/DigiClip-Setup.exe';
 
 const U = {
-    phase: 'idle', // idle | checking | uptodate | available | downloading | ready | installing | error | unsupported
-    current: null, // installed app version (confirmed by an update check)
-    appVersion: null, // installed app version (lazy, no check needed) string
+    phase: 'idle', // idle | checking | uptodate | available | handing-off | error | unsupported
+    current: null, // installed app version
+    appVersion: null, // installed app version (lazy, no network)
     available: null, // { version, notes, date }
-    total: 0, // expected download bytes (0 = unknown)
-    done: 0, // downloaded bytes so far
     error: null,
     lastCheck: 0,
     dismissed: null, // version the user waved away this session (banner only)
@@ -38,7 +39,6 @@ function readAuto() {
     }
 }
 
-let pending = null; // inflight Update object from check()
 const listeners = new Set();
 
 function emit() {
@@ -69,8 +69,21 @@ export function updateAutoEnabled() {
     return U.auto;
 }
 
-/**
- * App (shell) version for display — the Settings header badge, anywhere the
+export function setAutoUpdate(on) {
+    U.auto = !!on;
+    try {
+        localStorage.setItem(AUTO_KEY, U.auto ? '1' : '0');
+    } catch {
+    }
+    emit();
+}
+
+function set(patch) {
+    Object.assign(U, patch);
+    emit();
+}
+
+/** App (shell) version for display — the Settings header badge, anywhere the
  * engine version would be the wrong number. Cached after first read.
  * Null outside the Tauri shell (browser dev).
  */
@@ -87,100 +100,74 @@ export async function ensureAppVersion() {
     }
 }
 
-export function setAutoUpdate(on) {
-    U.auto = !!on;
-    try {
-        localStorage.setItem(AUTO_KEY, U.auto ? '1' : '0');
-    } catch {
+/** Compare dotted versions ("2.2.1" vs "2.10.0"): -1 | 0 | 1. */
+function cmpVersions(a, b) {
+    const pa = String(a ?? '').replace(/^[vV]/, '').split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = String(b ?? '').replace(/^[vV]/, '').split('.').map((n) => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+        if (d !== 0) return d < 0 ? -1 : 1;
     }
-    emit();
-}
-
-function set(patch) {
-    Object.assign(U, patch);
-    emit();
-}
-
-/** Silent boot check: resolves when settled, never throws. */
-export async function checkForUpdates({ silent = false } = {}) {
-    if (!isTauri()) {
-        set({ phase: 'unsupported' });
-        return null;
-    }
-    if (U.phase === 'checking' || U.phase === 'downloading' || U.phase === 'installing') return null;
-    set({ phase: 'checking', error: null });
-    try {
-        const { getVersion } = await import('@tauri-apps/api/app');
-        const { check } = await import('@tauri-apps/plugin-updater');
-        const current = await getVersion().catch(() => null);
-        const update = await check();
-        set({ lastCheck: Date.now() });
-        if (!update) {
-            pending = null;
-            set({ phase: 'uptodate', current: current ?? U.current, available: null });
-            return null;
-        }
-        pending = update;
-        const available = {
-            version: update.version,
-            notes: update.body ?? '',
-            date: update.date ?? '',
-        };
-        set({ phase: 'available', current: current ?? U.current, available });
-        return available;
-    } catch (e) {
-        // Unreachable server (offline, or no published latest.json yet) is
-        // routine — only loud on a manual check, never on boot.
-        pending = null;
-        const raw = e?.message ?? String(e);
-        // No signed build published for this OS/arch (e.g. Intel Macs while
-        // only arm64 ships) — plain words, not the updater's target key.
-        const msg = /Target(?:s)?NotFound/i.test(raw)
-            ? 'No update published for this machine yet.'
-            : raw;
-        set({ phase: 'error', error: msg });
-        if (!silent) throw e;
-        return null;
-    }
+    return 0;
 }
 
 export function dismissUpdate() {
     set({ dismissed: U.available?.version ?? null });
 }
 
-/** Download + install the pending update, then sit on `ready`. */
-export async function downloadAndInstall() {
-    if (!pending || U.phase === 'downloading' || U.phase === 'installing') return;
-    set({ phase: 'downloading', done: 0, total: 0, error: null });
+/** Silent boot check: one GET of latest.json, no plugin, no prompt. */
+export async function checkForUpdates({ silent = false } = {}) {
+    if (!isTauri()) {
+        set({ phase: 'unsupported' });
+        return null;
+    }
+    if (U.phase === 'checking') return null;
+    set({ phase: 'checking', error: null });
     try {
-        let downloaded = 0;
-        let total = 0;
-        await pending.downloadAndInstall((ev) => {
-            if (ev.event === 'Started') {
-                total = ev.data.contentLength ?? 0;
-                set({ total });
-            } else if (ev.event === 'Progress') {
-                downloaded += ev.data.chunkLength ?? 0;
-                set({ done: downloaded, total });
-            } else if (ev.event === 'Finished') {
-                set({ done: total || downloaded, phase: 'installing' });
-            }
-        });
-        // Installed — the new version starts on relaunch.
-        set({ phase: 'ready' });
+        const current = (await ensureAppVersion()) ?? U.current;
+        const res = await fetch(MANIFEST, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const version = String(data.version ?? '').replace(/^[vV]/, '');
+        if (!version) throw new Error('Manifest has no version.');
+        set({ lastCheck: Date.now(), current });
+        if (cmpVersions(version, current) > 0) {
+            const available = { version, notes: data.notes ?? '', date: data.pub_date ?? '' };
+            set({ phase: 'available', available });
+            return available;
+        }
+        set({ phase: 'uptodate', available: null });
+        return null;
     } catch (e) {
+        // Unreachable feed (offline, or no published latest.json yet) is
+        // routine — only loud on a manual check, never on boot.
         set({ phase: 'error', error: e?.message ?? String(e) });
-        throw e;
+        if (!silent) throw e;
+        return null;
     }
 }
 
-/** Relaunch into the installed update. */
-export async function restartToUpdate() {
-    const { relaunch } = await import('@tauri-apps/plugin-process');
-    await relaunch();
+/**
+ * Hand off to the custom Setup wizard: reuse the bundled/downloaded copy
+ * when present, otherwise fetch it once. The shell launches it and exits
+ * this app so files are free to replace.
+ */
+export async function runSetup() {
+    if (U.phase === 'handing-off') return;
+    set({ phase: 'handing-off', error: null });
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        let path = await invoke('get_setup').catch(() => null);
+        if (!path) {
+            path = await invoke('download_setup');
+        }
+        await invoke('run_setup', { path });
+        // The shell exits right after launching; this is only reached if
+        // the launch failed.
+        set({ phase: 'error', error: 'Setup could not be started.' });
+    } catch (e) {
+        set({ phase: 'error', error: e?.message ?? String(e) });
+    }
 }
 
-export function updateProgress() {
-    if (!U.total) return null;
-    return Math.min(99, Math.round((U.done / U.total) * 100));
-}
+export { SETUP_URL };
