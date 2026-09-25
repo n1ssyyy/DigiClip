@@ -629,7 +629,7 @@ dependencies = [
 
 [[package]]
 name = "digiclip-app"
-version = "2.3.3"
+version = "2.3.4"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -641,6 +641,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-fs",
  "tokio",
+ "webkit2gtk",
 ]
 
 [[package]]

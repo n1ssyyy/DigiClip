@@ -12,13 +12,31 @@ export function Skeleton({ className }) {
 /**
  * Image over its own skeleton: the shimmer shows underneath while the
  * file loads, then fades out as the image fades in. Independent per
- * instance via local state. On error the whole thing unmounts so
- * whatever fallback sits behind shows through.
+ * instance via local state.
+ *
+ * A failed load retries with backoff before giving up: posters are
+ * written by the engine a moment *after* their tile appears (a fresh
+ * job's source poster lands ~2s in), so the first request can 404 while
+ * the file is still on its way. Only after the retries run out does the
+ * whole thing unmount so the fallback behind shows through.
  */
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000, 8000];
+
 export function FadeImg({ src, alt = '', eager = false, className, imgClassName }) {
     const [loaded, setLoaded] = useState(false);
     const [skelGone, setSkelGone] = useState(false);
     const [gone, setGone] = useState(false);
+    const [attempt, setAttempt] = useState(0);
+    const retryTimer = useRef(null);
+
+    // A new src starts over (fresh retries, skeleton back).
+    useEffect(() => {
+        setLoaded(false);
+        setSkelGone(false);
+        setGone(false);
+        setAttempt(0);
+        return () => clearTimeout(retryTimer.current);
+    }, [src]);
 
     useEffect(() => {
         if (!loaded) return;
@@ -27,6 +45,9 @@ export function FadeImg({ src, alt = '', eager = false, className, imgClassName 
     }, [loaded]);
 
     if (!src || gone) return null;
+
+    // Retries bust the cache so a remembered 404 isn't reused.
+    const url = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}retry=${attempt}`;
 
     return (
         <span className={cn('absolute inset-0 block overflow-hidden', className)} aria-hidden={alt === ''}>
@@ -40,12 +61,19 @@ export function FadeImg({ src, alt = '', eager = false, className, imgClassName 
                 />
             )}
             <img
-                src={src}
+                src={url}
                 alt={alt}
                 loading={eager ? 'eager' : 'lazy'}
                 draggable={false}
                 onLoad={() => setLoaded(true)}
-                onError={() => setGone(true)}
+                onError={() => {
+                    if (attempt >= RETRY_DELAYS.length) {
+                        setGone(true);
+                        return;
+                    }
+                    clearTimeout(retryTimer.current);
+                    retryTimer.current = setTimeout(() => setAttempt((a) => a + 1), RETRY_DELAYS[attempt]);
+                }}
                 className={cn(
                     imgClassName ?? 'h-full w-full object-cover',
                     'motion-safe:transition-opacity motion-safe:duration-300',

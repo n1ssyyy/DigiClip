@@ -1186,7 +1186,7 @@ export default function Home() {
     }, [activeId, shownId, dir]);
 
     return (
-        <div className="grid h-[calc(100dvh_-_var(--chrome)_-_5px)] min-h-[480px] grid-cols-2 gap-[5px]">
+        <div className="grid h-full min-h-[480px] grid-cols-2 gap-[5px]">
             {/* LEFT HALF: upload (30%) over queue */}
             <div className="flex min-h-0 min-w-0 flex-col gap-[5px]">
                 <Card className="stagger-1 flex h-[30%] min-h-[148px] shrink-0 flex-col overflow-hidden">
