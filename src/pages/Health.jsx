@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, MinusCircle } from 'lucide-react';
+import { CheckCircle2, FileDown, Loader2, XCircle, MinusCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { cn } from '../lib/utils';
 import Tip from '../components/digiclip/Tooltip';
 import { Skeleton, Swap } from '../components/digiclip/Skeleton';
-import { refreshHealth, useStore } from '../lib/socket';
+import { exportDiagnostics, flashMessage, refreshHealth, useStore } from '../lib/socket';
+import { isTauri, reveal } from '../lib/native';
 
 function StatusIcon({ ok }) {
     if (ok === true) return <CheckCircle2 className="size-4 text-[var(--viral)]" aria-label="ok" />;
@@ -78,6 +79,38 @@ const FALLBACK = {
     whisper_cli: null, whisper_vulkan: false, yunet_ok: null,
     gpu_available: null, gpu_reason: 'Probing…', jobs_dir: '…',
 };
+
+/** One report to attach to a bug: versions, health, settings without
+ *  keys, recent jobs and logs. Written by the engine, then shown in the
+ *  file manager. */
+function DiagnosticsButton() {
+    const [busy, setBusy] = useState(false);
+    function run() {
+        if (busy) return;
+        setBusy(true);
+        exportDiagnostics()
+            .then((d) => {
+                if (!d?.path) return;
+                if (isTauri()) reveal(d.path);
+                flashMessage(`Diagnostics saved to ${d.path}`);
+            })
+            .catch((e) => flashMessage(`Couldn't export diagnostics: ${e?.message ?? e}`))
+            .finally(() => setBusy(false));
+    }
+    return (
+        <Tip label="Save a report (no keys) to attach to a bug" side="top">
+            <button
+                type="button"
+                onClick={run}
+                disabled={busy}
+                className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-60"
+            >
+                {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <FileDown className="size-3" aria-hidden />}
+                Export diagnostics
+            </button>
+        </Tip>
+    );
+}
 
 export default function Health() {
     const health = useStore((s) => s.health);
@@ -201,13 +234,16 @@ export default function Health() {
                         </div>
                     </Swap>
                     <div className="flex-1" aria-hidden />
-                    <button
-                        type="button"
-                        onClick={() => window.dispatchEvent(new CustomEvent('digiclip:tour'))}
-                        className="shrink-0 font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                    >
-                        Take the tour again
-                    </button>
+                    <div className="flex shrink-0 items-center justify-center gap-4">
+                        <button
+                            type="button"
+                            onClick={() => window.dispatchEvent(new CustomEvent('digiclip:tour'))}
+                            className="font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                            Take the tour again
+                        </button>
+                        <DiagnosticsButton />
+                    </div>
                     <ul className="flex shrink-0 flex-col divide-y divide-border">
                         {checks.map((c) => <Row key={c.label} {...c} />)}
                     </ul>
