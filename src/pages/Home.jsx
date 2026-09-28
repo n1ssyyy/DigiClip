@@ -261,6 +261,15 @@ function ClearDialog({ count, onClose, onConfirm, leaving }) {
  *  (.queue-in); exits via `leaving` (slide toward the nearest edge when
  *  the row sits at the top/bottom of the list, plain fade for middle
  *  rows), held mounted by the parent's ExitBeat. */
+/** Short tags for a job's non-default look: its aspect when not the
+ *  default 9:16, and the focus topic it was ranked for. */
+function jobTags(options) {
+    const tags = [];
+    if (options?.aspect && options.aspect !== '9:16') tags.push(options.aspect);
+    if (options?.focus) tags.push(`focus: ${options.focus}`);
+    return tags;
+}
+
 function QueueRow({ project, onCancel, leaving, edge }) {
     const failed = project.status === 'failed';
     const cancelled = project.status === 'cancelled';
@@ -287,6 +296,9 @@ function QueueRow({ project, onCancel, leaving, edge }) {
                         <p className="min-w-0 shrink truncate text-[13px] font-medium">
                             {project.name}
                             {merged && <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">merged</span>}
+                            {jobTags(project.options).map((t) => (
+                                <span key={t} className="ml-1.5 font-mono text-[10px] text-muted-foreground">{t}</span>
+                            ))}
                         </p>
                     </Tip>
                     <span className="flex flex-1 items-center justify-center">
@@ -1355,6 +1367,11 @@ export default function Home() {
                                                 merged
                                             </Badge>
                                         )}
+                                        {jobTags(shown.options).map((t) => (
+                                            <Badge key={t} variant="secondary" className="max-w-32 shrink-0 truncate font-mono text-[10px] text-muted-foreground">
+                                                {t}
+                                            </Badge>
+                                        ))}
                                         <span className="truncate font-medium">
                                             {shown.name}
                                         </span>
