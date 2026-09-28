@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Download, KeyRound, RefreshCw } from 'lucide-react';
+import { ChevronDown, Download, KeyRound, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import shkollaIcon from '../assets/shkolla-icon.png';
 import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
@@ -13,13 +13,15 @@ import { cn } from '../lib/utils';
 import { deleteModel, downloadModel, saveSettings, useStore } from '../lib/socket';
 import { checkForUpdates, ensureAppVersion, runSetup, setAutoUpdate, useUpdates } from '../lib/updates';
 
-function Field({ label, aside, hint, children }) {
+/** `as="div"` for groups of buttons: a label would forward clicks on its
+ *  caption to the first button. */
+function Field({ label, aside, hint, children, as: Tag = 'label' }) {
     return (
-        <label className="block space-y-1.5">
+        <Tag className="block space-y-1.5">
             <span className="flex items-center gap-2 text-[13px] font-medium">{label}{aside}</span>
             {children}
             {hint && <span className="block text-[11px] text-muted-foreground">{hint}</span>}
-        </label>
+        </Tag>
     );
 }
 
@@ -88,6 +90,76 @@ function GpuRow({ gpu, checked, onChange }) {
                 <p className="text-[13px] font-medium">GPU transcription</p>
                 <p className="text-[11px] text-muted-foreground">{hint}</p>
             </div>
+        </div>
+    );
+}
+
+const DECIDERS = [
+    { id: 'auto', label: 'Auto', hint: 'Jev when a key is set, else Laya when downloaded and the talk is English, else off.' },
+    { id: 'jev', label: 'Jev', hint: 'TypeSafe\u2019s hosted Jev re-judges every pick. Needs a Jev key.' },
+    { id: 'laya', label: 'Laya', hint: 'Local Laya on the CPU, English talks only. Downloads ~1.6 GB on first use.' },
+    { id: 'off', label: 'Off', hint: 'Keep the clip model\u2019s picks as they are.' },
+];
+
+/** Clip judge picker: the same segmented look as the job options. */
+function DeciderSeg({ value, onChange }) {
+    return (
+        <div className="flex h-9 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label="Clip judge">
+            {DECIDERS.map((o) => (
+                <button
+                    key={o.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={value === o.id}
+                    onClick={() => onChange(o.id)}
+                    className={cn(
+                        'flex min-w-0 flex-1 items-center justify-center text-[12px] transition-colors hover:bg-accent hover:text-foreground',
+                        value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
+                    )}
+                >
+                    {o.label}
+                </button>
+            ))}
+        </div>
+    );
+}
+
+/** Laya's local bundle: size, live download progress, fetch or remove. */
+function LayaRow({ model }) {
+    const size = model?.size_mb ? `${(model.size_mb / 1024).toFixed(1)} GB` : '~1.6 GB';
+    const state = !model ? 'missing'
+        : model.downloaded ? 'ready'
+            : model.downloading ? 'downloading'
+                : model.error ? 'failed' : 'missing';
+    const text = state === 'ready'
+        ? `On disk (${size}), ready to judge.`
+        : state === 'downloading'
+            ? `Downloading\u2026 ${model.progress ?? 0}% \u2014 keeps going in the background.`
+            : state === 'failed'
+                ? `Download failed: ${model.error}`
+                : `Not on disk. ${size}, downloaded once.`;
+    return (
+        <div className="flex items-center gap-3 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-muted/40 px-3 py-2">
+            <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium">Laya model</p>
+                <p className="truncate text-[11px] text-muted-foreground" title={text}>{text}</p>
+                {state === 'downloading' && (
+                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
+                        <div className="h-full bg-primary transition-[width]" style={{ width: `${model.progress ?? 0}%` }} />
+                    </div>
+                )}
+            </div>
+            {state === 'ready' ? (
+                <Button type="button" variant="secondary" size="sm" onClick={() => deleteModel('laya')}>
+                    <Trash2 className="size-3.5" aria-hidden />
+                    Remove
+                </Button>
+            ) : (
+                <Button type="button" variant="secondary" size="sm" disabled={state === 'downloading'} onClick={() => downloadModel('laya')}>
+                    {state === 'downloading' ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Download className="size-3.5" aria-hidden />}
+                    {state === 'failed' ? 'Retry' : 'Download'}
+                </Button>
+            )}
         </div>
     );
 }
@@ -198,6 +270,8 @@ export default function Settings() {
             caption_default: settings.caption_default,
             tighten: settings.tighten,
             punch: !!settings.punch,
+            jev_key: '',
+            decider: settings.decider ?? 'auto',
         });
     }, [settings]);
     if (!settings || !form) return null;
@@ -209,6 +283,7 @@ export default function Settings() {
     const modelOptions = {};
     const modelDownloaded = {};
     for (const [id, m] of Object.entries(liveModels ?? {})) {
+        if (m.kind && m.kind !== 'stt') continue;
         modelOptions[id] = { size_mb: m.size_mb };
         modelDownloaded[id] = !!m.downloaded;
         modelStatus[id] = {
@@ -251,9 +326,17 @@ export default function Settings() {
         caption_default: settings.caption_default,
         tighten: settings.tighten,
         punch: !!settings.punch,
+        jev_key: '',
+        decider: settings.decider ?? 'auto',
     };
     const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
     const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved';
+
+    function clearJevKey() {
+        saveSettings({ jev_key: null }).catch(() => {});
+    }
+    const deciderHint = DECIDERS.find((d) => d.id === form.decider)?.hint;
+    const jevMissing = form.decider === 'jev' && !settings.jev_key_set && !form.jev_key.trim();
 
     function save(e) {
         e.preventDefault();
@@ -262,7 +345,7 @@ export default function Settings() {
         saveSettings({ ...form }).then(() => {
             // Blank key keeps the saved one (server-side); reset the field
             // so the baseline comparison settles back to Saved.
-            setForm((prev) => (prev ? { ...prev, openrouter_key: '' } : prev));
+            setForm((prev) => (prev ? { ...prev, openrouter_key: '', jev_key: '' } : prev));
         }).catch(() => {}).finally(() => setSaving(false));
     }
 
@@ -344,6 +427,31 @@ export default function Settings() {
                                         checked={form.gpu}
                                         onChange={(v) => setForm({ ...form, gpu: v })}
                                     />
+                                </div>
+                            </div>
+                        </Section>
+                        <Section title="Clip judge (System One)" className="stagger-3">
+                            <Field as="div" label="Judge" hint={jevMissing ? 'Jev needs a key below; without one picks stay as they are.' : deciderHint}>
+                                <DeciderSeg value={form.decider} onChange={(v) => setForm({ ...form, decider: v })} />
+                            </Field>
+                            <div className="grid grid-cols-2 items-start gap-4">
+                                <Field
+                                    label="Jev API key"
+                                    aside={settings.jev_key_set
+                                        ? <Badge variant="success" className="text-[10px]">set</Badge>
+                                        : <Badge variant="secondary" className="text-[10px]">not set</Badge>}
+                                    hint={settings.jev_key_set
+                                        ? <>Saved. Blank keeps it. <button type="button" onClick={clearJevKey} className="underline underline-offset-2 hover:text-foreground">Remove key</button></>
+                                        : 'From TypeSafe. Only needed for Jev.'}
+                                >
+                                    <div className="relative">
+                                        <KeyRound className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                                        <input type="password" name="jev_key" autoComplete="off" placeholder={settings.jev_key_set ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (unchanged)' : 'jev-\u2026'}
+                                            value={form.jev_key} onChange={set('jev_key')} className={cn(inputCls, 'pl-9')} />
+                                    </div>
+                                </Field>
+                                <div className="pt-6">
+                                    <LayaRow model={liveModels?.laya} />
                                 </div>
                             </div>
                         </Section>

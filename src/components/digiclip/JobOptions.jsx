@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDownLeft, ArrowDownRight, ArrowUpLeft, ArrowUpRight, ImagePlus, Music, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowDownRight, ArrowUpLeft, ArrowUpRight, Bookmark, ChevronDown, ImagePlus, Music, Save, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Tip from './Tooltip';
 import CaptionPicker from './CaptionPicker';
@@ -8,6 +8,7 @@ import { GpuToggle, Stepper, TightenSeg } from './controls';
 import { usePanelBeat } from './usePanelBeat';
 import { useFloatingPanel } from './useFloatingPanel';
 import { pickAudio, pickImage } from '../../lib/native';
+import { flashMessage, saveSettings, useStore } from '../../lib/socket';
 
 const STORE_KEY = 'digiclip.jobOptions';
 
@@ -35,17 +36,44 @@ function defaults(settings) {
         music: '',
         music_db: -16,
         focus: '',
+        layout: 'single',
+        subs_lang: 'off',
     };
 }
 
 export const ASPECTS = ['9:16', '4:5', '1:1', '16:9'];
 export const CAPTION_ANIMS = ['pop', 'words', 'none'];
+export const LAYOUTS = ['single', 'split', 'auto'];
+
+/** Caption languages offered for translated subtitles (ISO codes). */
+export const SUBS_LANGS = [
+    ['off', 'Spoken language'], ['en', 'English'], ['sq', 'Albanian'], ['de', 'German'],
+    ['fr', 'French'], ['es', 'Spanish'], ['it', 'Italian'], ['tr', 'Turkish'],
+    ['pt', 'Portuguese'], ['nl', 'Dutch'], ['pl', 'Polish'], ['sr', 'Serbian'],
+    ['hr', 'Croatian'], ['mk', 'Macedonian'], ['el', 'Greek'], ['ru', 'Russian'],
+    ['uk', 'Ukrainian'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['ja', 'Japanese'],
+    ['ko', 'Korean'], ['zh', 'Chinese'],
+];
+
+/** The picked shapes, main first: `"9:16,1:1"` -> ['9:16', '1:1']. */
+export function aspectList(v) {
+    const out = [];
+    for (const a of String(v ?? '').split(',').map((x) => x.trim())) {
+        if (ASPECTS.includes(a) && !out.includes(a)) out.push(a);
+    }
+    return out.length ? out : ['9:16'];
+}
 
 /** The engine options for the Look knobs: only what's switched on is
  *  sent, so an untouched panel renders exactly as before. */
 export function lookOptions(o) {
     const out = {};
-    if (ASPECTS.includes(o.aspect) && o.aspect !== '9:16') out.aspect = o.aspect;
+    // First shape is the main render, the rest are extra variants.
+    const aspects = aspectList(o.aspect);
+    if (aspects.join(',') !== '9:16') out.aspect = aspects.join(',');
+    // Split needs smart framing, which every app job uses.
+    if (LAYOUTS.includes(o.layout) && o.layout !== 'single') out.layout = o.layout;
+    if (o.subs_lang && o.subs_lang !== 'off') out.subs_lang = o.subs_lang;
     // Pop is the engine default.
     if (CAPTION_ANIMS.includes(o.caption_anim) && o.caption_anim !== 'pop') out.caption_anim = o.caption_anim;
     // Empty headline = the clip's own title.
@@ -62,6 +90,62 @@ export function lookOptions(o) {
     const focus = (o.focus ?? '').trim();
     if (focus) out.focus = focus;
     return out;
+}
+
+function durRange(o) {
+    if (o.dur_mode === 'exact') {
+        const L = Math.min(300, Math.max(5, +o.dur_exact || 30));
+        return { min_len: L, max_len: L };
+    }
+    if (o.dur_mode === 'minmax') {
+        const lo = Math.min(300, Math.max(5, +o.dur_min || 15));
+        const hi = Math.max(lo, Math.min(600, +o.dur_max || 60));
+        return { min_len: lo, max_len: hi };
+    }
+    return {};
+}
+
+/** Panel state -> engine job options. Machine settings (model, GPU) are
+ *  left to the caller, so presets and the watch folder stay portable. */
+export function toEngine(o) {
+    return {
+        mode: 'clips',
+        kind: o.kind,
+        count: o.count,
+        ...durRange(o),
+        style: o.style,
+        tighten: o.tighten,
+        punch: o.punch,
+        merge_flash: o.merge_flash,
+        kit: true,
+        framing: 'smart',
+        ...lookOptions(o),
+    };
+}
+
+/** Engine job options (a preset) -> panel state. Unset fields fall back
+ *  to the panel defaults, so an old preset never keeps stale knobs. */
+export function fromEngine(e, settings) {
+    const v = (k) => (e?.[k] ?? null);
+    const p = defaults(settings);
+    for (const k of ['kind', 'count', 'style', 'tighten', 'punch', 'merge_flash', 'caption_anim', 'logo_pos', 'music_db', 'layout', 'subs_lang']) {
+        if (v(k) != null) p[k] = v(k);
+    }
+    const lo = v('min_len');
+    const hi = v('max_len');
+    if (lo != null && hi != null) {
+        if (lo === hi) Object.assign(p, { dur_mode: 'exact', dur_exact: lo });
+        else Object.assign(p, { dur_mode: 'minmax', dur_min: lo, dur_max: hi });
+    }
+    p.aspect = aspectList(v('aspect')).join(',');
+    p.headline = v('headline') != null;
+    p.headline_text = v('headline') ?? '';
+    p.progress_bar = v('progress_bar') != null;
+    if (v('progress_bar')) p.bar_color = v('progress_bar');
+    p.logo = v('logo') ?? '';
+    p.music = v('music') ?? '';
+    p.focus = v('focus') ?? '';
+    return p;
 }
 
 /** Per-job knobs for the next upload. Persisted locally; seeded from
@@ -252,6 +336,160 @@ function FileSlot({ icon: Icon, value, empty, pick, onChange }) {
     );
 }
 
+/** Shapes to render: toggle any; the first picked is the main clip and
+ *  the rest come out as extra files from the same run. */
+function AspectPicker({ value, onChange }) {
+    const list = aspectList(value);
+    function toggle(id) {
+        const next = list.includes(id) ? list.filter((a) => a !== id) : [...list, id];
+        if (next.length) onChange(next.join(','));
+    }
+    return (
+        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="group" aria-label="Aspect">
+            {ASPECT_OPTS.map((o) => {
+                const at = list.indexOf(o.id);
+                return (
+                    <Tip key={o.id} label={at === 0 ? `${o.tip} Main shape.` : at > 0 ? `${o.tip} Extra file.` : o.tip} side="top" className="min-w-0 flex-1">
+                        <button
+                            type="button"
+                            aria-pressed={at >= 0}
+                            onClick={() => toggle(o.id)}
+                            className={cn(
+                                'flex min-w-0 flex-1 items-center justify-center gap-1 truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
+                                at >= 0 ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
+                            )}
+                        >
+                            {o.label}
+                            {at === 0 && list.length > 1 && <span className="size-1 rounded-full bg-foreground" aria-hidden />}
+                        </button>
+                    </Tip>
+                );
+            })}
+        </div>
+    );
+}
+
+/** Native select in the panel's input look. */
+function Select({ label, value, options, onChange }) {
+    return (
+        <div className="relative">
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                aria-label={label}
+                className={cn(inputCls, 'appearance-none pr-8 [color-scheme:dark]')}
+            >
+                {options.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        </div>
+    );
+}
+
+/** Saved option sets: apply one, save the panel as one, delete one.
+ *  They live in the engine settings, so the watch folder can use them. */
+function PresetRow({ options, onApply }) {
+    const settings = useStore((s) => s.settings);
+    const presets = settings?.presets ?? [];
+    const [naming, setNaming] = useState(false);
+    const [name, setName] = useState('');
+    // The select shows the preset the panel matches right now, so any
+    // tweak drops back to "Apply a preset" and it can be re-applied.
+    const current = JSON.stringify(toEngine(options));
+    const picked = presets.find((p) => JSON.stringify(toEngine(fromEngine(p.options, settings))) === current)?.name ?? '';
+    const known = !!picked;
+
+    function persist(next) {
+        return saveSettings({ presets: next }).then(() => true).catch((e) => {
+            flashMessage(`Couldn't save presets: ${e?.message ?? e}`);
+            return false;
+        });
+    }
+    function save() {
+        const n = name.trim();
+        if (!n) return;
+        const rest = presets.filter((p) => p.name !== n);
+        persist([...rest, { name: n, options: toEngine(options) }]).then((ok) => {
+            if (!ok) return;
+            setNaming(false);
+            setName('');
+            flashMessage(`Saved preset “${n}”.`);
+        });
+    }
+    function apply(n) {
+        const p = presets.find((x) => x.name === n);
+        if (p) onApply(fromEngine(p.options, settings));
+    }
+    function remove() {
+        if (!known) return;
+        persist(presets.filter((p) => p.name !== picked));
+    }
+
+    if (naming) {
+        return (
+            <div className="flex h-8 items-stretch gap-1">
+                <input
+                    autoFocus
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') save();
+                        if (e.key === 'Escape') { e.stopPropagation(); setNaming(false); }
+                    }}
+                    placeholder="Preset name, e.g. Podcast"
+                    aria-label="Preset name"
+                    maxLength={40}
+                    className={inputCls}
+                />
+                <button type="button" onClick={save} disabled={!name.trim()} className="shrink-0 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    Save
+                </button>
+                <Tip label="Cancel" side="top">
+                    <button type="button" aria-label="Cancel" onClick={() => setNaming(false)} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+                        <X className="size-3.5" aria-hidden />
+                    </button>
+                </Tip>
+            </div>
+        );
+    }
+    return (
+        <div className="flex h-8 items-stretch gap-1">
+            <div className="relative min-w-0 flex-1">
+                <Bookmark className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <select
+                    value={picked}
+                    onChange={(e) => apply(e.target.value)}
+                    aria-label="Apply a preset"
+                    disabled={!presets.length}
+                    className={cn(inputCls, 'appearance-none pr-8 pl-7 [color-scheme:dark] disabled:opacity-60')}
+                >
+                    <option value="" disabled>{presets.length ? 'Apply a preset…' : 'No presets yet'}</option>
+                    {presets.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            </div>
+            <Tip label="Save these options as a preset" side="top">
+                <button type="button" aria-label="Save as preset" onClick={() => { setName(known ? picked : ''); setNaming(true); }} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+                    <Save className="size-3.5" aria-hidden />
+                </button>
+            </Tip>
+            {known && (
+                <Tip label={`Delete “${picked}”`} side="top">
+                    <button type="button" aria-label={`Delete preset ${picked}`} onClick={remove} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-red-400">
+                        <Trash2 className="size-3.5" aria-hidden />
+                    </button>
+                </Tip>
+            )}
+        </div>
+    );
+}
+
+const LAYOUT_OPTS = [
+    { id: 'single', label: 'Single', tip: 'Follow one speaker.' },
+    { id: 'split', label: 'Split', tip: 'Two people stacked, captions on the seam.' },
+    { id: 'auto', label: 'Auto', tip: 'Split when two people share the frame.' },
+];
+
 /** Options popover for the upload card: same trigger/popover language
  *  as the pickers (digi-menu, pop/menu-out, floating panel). */
 export default function OptionsButton({ options, onChange }) {
@@ -284,6 +522,10 @@ export default function OptionsButton({ options, onChange }) {
                 // a strip. Same digi-menu/pop language as the pickers.
                 <div ref={panelRef} style={{ ...panelPos, width: 320 }} className={cn('digi-menu fixed z-[100] rounded-md border bg-popover p-2 text-popover-foreground shadow-md', panelLeaving ? 'menu-out' : 'pop')}>
                     <div className="digi-scroll max-h-[70dvh] space-y-2 overflow-y-auto pr-0.5">
+                        <div className="space-y-1 border-b border-white/10 pb-2">
+                            <Kicker>Preset</Kicker>
+                            <PresetRow options={options} onApply={onChange} />
+                        </div>
                         <div className="space-y-1">
                             <Kicker>Picking</Kicker>
                             <KindSeg value={options.kind} onChange={set('kind')} />
@@ -354,7 +596,23 @@ export default function OptionsButton({ options, onChange }) {
                         </div>
                         <div className="space-y-1">
                             <Kicker>Aspect</Kicker>
-                            <Seg label="Aspect" value={options.aspect ?? '9:16'} options={ASPECT_OPTS} onChange={set('aspect')} />
+                            <AspectPicker value={options.aspect} onChange={set('aspect')} />
+                            <p className="text-[11px] text-muted-foreground">
+                                {aspectList(options.aspect).length > 1
+                                    ? `One run, ${aspectList(options.aspect).length} shapes. ${aspectList(options.aspect)[0]} is the main clip.`
+                                    : 'Pick more than one for extra shapes from the same run.'}
+                            </p>
+                        </div>
+                        <div className="space-y-1">
+                            <Kicker>Layout</Kicker>
+                            <Seg label="Layout" value={options.layout ?? 'single'} options={LAYOUT_OPTS} onChange={set('layout')} />
+                        </div>
+                        <div className="space-y-1">
+                            <Kicker>Caption language</Kicker>
+                            <Select label="Caption language" value={options.subs_lang ?? 'off'} options={SUBS_LANGS} onChange={set('subs_lang')} />
+                            {options.subs_lang && options.subs_lang !== 'off' && (
+                                <p className="text-[11px] text-muted-foreground">Translated through OpenRouter; without a key captions stay as spoken.</p>
+                            )}
                         </div>
                         <div className="space-y-1">
                             <Kicker>Caption motion</Kicker>
