@@ -93,9 +93,12 @@ function wsUrl() {
     return `ws://127.0.0.1:${port}/ws?token=${encodeURIComponent(token)}`;
 }
 
-export function artUrl(jobId, file) {
+/** `rev` busts the webview cache after a clip re-renders in place
+ *  (same file name, new bytes). */
+export function artUrl(jobId, file, rev) {
     const { port, token } = S.serve;
-    return `http://127.0.0.1:${port}/art/${encodeURIComponent(jobId)}/${encodeURIComponent(file)}?token=${encodeURIComponent(token)}`;
+    const v = rev ? `&v=${rev}` : '';
+    return `http://127.0.0.1:${port}/art/${encodeURIComponent(jobId)}/${encodeURIComponent(file)}?token=${encodeURIComponent(token)}${v}`;
 }
 
 export function srcUrl(jobId) {
@@ -216,7 +219,8 @@ export function cmd(name, params = {}, { busy = false, timeoutMs = 60000 } = {})
         p.resolve = (v) => { done(); origResolve(v); };
         p.reject = (e) => { done(); origReject(e); };
         try {
-            ws.send(JSON.stringify({ id, cmd: name, ...params }));
+            // Frame id and cmd go last so a param can never overwrite them.
+            ws.send(JSON.stringify({ ...params, id, cmd: name }));
         } catch (e) {
             pending.delete(id);
             clearTimeout(timer);
@@ -272,6 +276,7 @@ function apply(frame) {
             break;
         case 'job_removed':
             S.jobs = S.jobs.filter((j) => j.id !== ev.id);
+            transcripts.delete(ev.id);
             break;
         case 'stage': {
             const ji = S.jobs.findIndex((x) => x.id === ev.job);
@@ -398,11 +403,11 @@ export function saveSettings(patch) {
 }
 
 export function downloadModel(id) {
-    return cmd('models_download', { id }).catch(() => {});
+    return cmd('models_download', { model: id }).catch((e) => flash(`Couldn't download ${id}: ${e?.message ?? e}`));
 }
 
 export function deleteModel(id) {
-    return cmd('models_delete', { id }).catch(() => {});
+    return cmd('models_delete', { model: id }).catch((e) => flash(`Couldn't delete ${id}: ${e?.message ?? e}`));
 }
 
 export function refreshHealth() {
@@ -423,6 +428,30 @@ export function loadOrModels(refresh = false) {
         }
         return data;
     });
+}
+
+// Word-timed transcripts per job: they never change once a job has
+// clips, so one fetch serves every editor open.
+const transcripts = new Map();
+
+/** `{ words: [{w, s, e}], language }` for a finished job. */
+export function getTranscript(job) {
+    if (transcripts.has(job)) return transcripts.get(job);
+    const p = cmd('transcript_get', { job }, { busy: false, timeoutMs: 30000 });
+    transcripts.set(job, p);
+    p.catch(() => transcripts.delete(job));
+    return p;
+}
+
+/** Re-render one clip: new range, title, style or word fixes
+ *  (`[{s, w}]`: the word starting at `s` becomes `w`). */
+export function editClip(job, rank, patch) {
+    return cmd('clip_edit', { job, rank, ...patch }, { busy: true });
+}
+
+/** Render a new clip from a transcript range. Resolves `{ rank }`. */
+export function addClip(job, start_s, end_s, extra = {}) {
+    return cmd('clip_add', { job, start_s, end_s, ...extra }, { busy: true });
 }
 
 export function fetchKit(job, rank) {

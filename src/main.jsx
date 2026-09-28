@@ -16,6 +16,12 @@ import { getServe, isTauri, onServeFailed, onServeReady } from './lib/native';
  *  before this listener attaches would be missed — so a local `get_serve`
  *  poll backs it up (500ms; a shell invoke, not backend polling). */
 function waitServe() {
+    // Dev in a plain browser: `?port=…&token=…` points at a `--serve`
+    // started by hand. Compiled out of production builds.
+    if (import.meta.env.DEV && !isTauri()) {
+        const q = new URLSearchParams(window.location.search);
+        if (q.get('port') && q.get('token')) return Promise.resolve({ port: +q.get('port'), token: q.get('token') });
+    }
     return new Promise((resolve, reject) => {
         let done = false;
         let offR = null;
