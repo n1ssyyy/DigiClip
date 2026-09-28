@@ -11,7 +11,7 @@ import {
 import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../lib/native';
 import Tip from '../components/digiclip/Tooltip';
 import { FadeImg } from '../components/digiclip/Skeleton';
-import OptionsButton, { lookOptions, useJobOptions } from '../components/digiclip/JobOptions';
+import OptionsButton, { toEngine, useJobOptions } from '../components/digiclip/JobOptions';
 import ClipInsights, { overall, scoreTone } from '../components/digiclip/ClipInsights';
 import EditClipDialog from '../components/digiclip/EditClipDialog';
 import TranscriptDialog from '../components/digiclip/TranscriptDialog';
@@ -1158,33 +1158,11 @@ export default function Home() {
     /** Shared knobs for a fresh job off this screen. Durations are
      *  sanitized here so stale/corrupt local storage can never send
      *  the engine an inverted window; auto sends nothing (15–90s). */
-    function durRange() {
-        if (jobOptions.dur_mode === 'exact') {
-            const L = Math.min(300, Math.max(5, +jobOptions.dur_exact || 30));
-            return { min_len: L, max_len: L };
-        }
-        if (jobOptions.dur_mode === 'minmax') {
-            const lo = Math.min(300, Math.max(5, +jobOptions.dur_min || 15));
-            const hi = Math.max(lo, Math.min(600, +jobOptions.dur_max || 60));
-            return { min_len: lo, max_len: hi };
-        }
-        return {};
-    }
     function baseOptions() {
         return {
-            mode: 'clips',
-            kind: jobOptions.kind,
-            count: jobOptions.count,
-            ...durRange(),
-            style: jobOptions.style,
-            tighten: jobOptions.tighten,
-            punch: jobOptions.punch,
-            merge_flash: jobOptions.merge_flash,
-            kit: true,
-            framing: 'smart',
+            ...toEngine(jobOptions),
             model: settings?.stt_model,
             gpu: settings?.gpu,
-            ...lookOptions(jobOptions),
         };
     }
 
