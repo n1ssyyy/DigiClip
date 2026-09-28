@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, KeyRound, RefreshCw } from 'lucide-react';
+import { ChevronDown, Download, KeyRound, RefreshCw } from 'lucide-react';
 import shkollaIcon from '../assets/shkolla-icon.png';
 import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
@@ -33,6 +33,36 @@ function Section({ title, children, className }) {
 }
 
 const inputCls = 'flex h-9 w-full rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-3 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+
+/** Spoken languages offered for transcription (whisper codes). Auto
+ *  detects per video; the rest pin it, which is faster and never guesses
+ *  wrong on a short intro. Albanian/Serbian first after English: that's
+ *  who uses this most. */
+const LANGS = [
+    ['auto', 'Auto-detect'], ['en', 'English'], ['sq', 'Albanian'], ['sr', 'Serbian'],
+    ['hr', 'Croatian'], ['bs', 'Bosnian'], ['mk', 'Macedonian'], ['tr', 'Turkish'],
+    ['de', 'German'], ['fr', 'French'], ['it', 'Italian'], ['es', 'Spanish'],
+    ['pt', 'Portuguese'], ['nl', 'Dutch'], ['pl', 'Polish'], ['el', 'Greek'],
+    ['ru', 'Russian'], ['uk', 'Ukrainian'], ['ar', 'Arabic'], ['hi', 'Hindi'],
+    ['ja', 'Japanese'], ['ko', 'Korean'], ['zh', 'Chinese'],
+];
+
+/** Transcription language: native select in the input look (keyboard and
+ *  screen readers for free; the list is too long for a segmented row). */
+function LangSelect({ value, onChange }) {
+    return (
+        <div className="relative">
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={cn(inputCls, 'appearance-none pr-9 [color-scheme:dark]')}
+            >
+                {LANGS.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        </div>
+    );
+}
 
 /** GPU transcription row: switch + plain-language state. The device list
  *  comes from the backend detector (best first); with several GPUs the
@@ -162,6 +192,7 @@ export default function Settings() {
             openrouter_key: '',
             openrouter_model: settings.openrouter_model ?? '',
             stt_model: settings.stt_model,
+            stt_lang: settings.stt_lang ?? 'en',
             gpu: !!settings.gpu,
             clips_count: settings.clips_count,
             caption_default: settings.caption_default,
@@ -201,12 +232,20 @@ export default function Settings() {
                 ? 'Download failed — pick the model again to retry.'
                 : 'Not on disk yet — pick it to download in the background.';
 
+    const langName = LANGS.find(([id]) => id === form.stt_lang)?.[1] ?? form.stt_lang;
+    const langHint = form.stt_model?.endsWith('.en') && form.stt_lang !== 'en'
+        ? `${form.stt_model} is English-only — pick a large-v3 model to transcribe ${form.stt_lang === 'auto' ? 'other languages' : langName}.`
+        : form.stt_lang === 'auto'
+            ? 'Detected per video. Pin it when you know it: faster, never guesses wrong.'
+            : `Videos are transcribed as ${langName}.`;
+
     // One word, only alive when something actually changed. Baseline
     // re-derives from saved settings, so a saved form settles itself.
     const baseline = {
         openrouter_key: '',
         openrouter_model: settings.openrouter_model ?? '',
         stt_model: settings.stt_model,
+        stt_lang: settings.stt_lang ?? 'en',
         gpu: !!settings.gpu,
         clips_count: settings.clips_count,
         caption_default: settings.caption_default,
@@ -295,11 +334,18 @@ export default function Settings() {
                                     />
                                 </Field>
                             </div>
-                            <GpuRow
-                                gpu={health ? { available: health.gpu_available, reason: health.gpu_reason } : null}
-                                checked={form.gpu}
-                                onChange={(v) => setForm({ ...form, gpu: v })}
-                            />
+                            <div className="grid grid-cols-2 items-start gap-4">
+                                <Field label="Spoken language" hint={langHint}>
+                                    <LangSelect value={form.stt_lang} onChange={(v) => setForm({ ...form, stt_lang: v })} />
+                                </Field>
+                                <div className="pt-6">
+                                    <GpuRow
+                                        gpu={health ? { available: health.gpu_available, reason: health.gpu_reason } : null}
+                                        checked={form.gpu}
+                                        onChange={(v) => setForm({ ...form, gpu: v })}
+                                    />
+                                </div>
+                            </div>
                         </Section>
                     </form>
                     <Section title="Updates" className="stagger-4">
