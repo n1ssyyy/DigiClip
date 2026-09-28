@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ImagePlus, Music, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowDownRight, ArrowUpLeft, ArrowUpRight, ImagePlus, Music, SlidersHorizontal, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Tip from './Tooltip';
 import CaptionPicker from './CaptionPicker';
@@ -107,7 +107,7 @@ function KindSeg({ value, onChange }) {
                         aria-checked={value === o.id}
                         onClick={() => onChange(o.id)}
                         className={cn(
-                            'flex-1 text-[11px] transition-colors hover:bg-accent hover:text-foreground',
+                            'flex min-w-0 flex-1 items-center justify-center truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
                             value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                         )}
                     >
@@ -137,7 +137,7 @@ function DurSeg({ value, onChange }) {
                         aria-checked={value === o.id}
                         onClick={() => onChange(o.id)}
                         className={cn(
-                            'flex-1 text-[11px] transition-colors hover:bg-accent hover:text-foreground',
+                            'flex min-w-0 flex-1 items-center justify-center truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
                             value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                         )}
                     >
@@ -158,9 +158,10 @@ function Seg({ label, value, options, onChange }) {
                         type="button"
                         role="radio"
                         aria-checked={value === o.id}
+                        aria-label={typeof o.label === 'string' ? undefined : o.tip}
                         onClick={() => onChange(o.id)}
                         className={cn(
-                            'flex-1 text-[11px] transition-colors hover:bg-accent hover:text-foreground',
+                            'flex min-w-0 flex-1 items-center justify-center truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
                             value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                         )}
                     >
@@ -180,10 +181,10 @@ const ASPECT_OPTS = [
 ];
 
 const CORNER_OPTS = [
-    { id: 'tl', label: 'Top L', tip: 'Top-left corner.' },
-    { id: 'tr', label: 'Top R', tip: 'Top-right corner.' },
-    { id: 'bl', label: 'Bottom L', tip: 'Bottom-left corner.' },
-    { id: 'br', label: 'Bottom R', tip: 'Bottom-right corner.' },
+    { id: 'tl', label: <ArrowUpLeft className="size-3.5" />, tip: 'Top-left corner.' },
+    { id: 'tr', label: <ArrowUpRight className="size-3.5" />, tip: 'Top-right corner.' },
+    { id: 'bl', label: <ArrowDownLeft className="size-3.5" />, tip: 'Bottom-left corner.' },
+    { id: 'br', label: <ArrowDownRight className="size-3.5" />, tip: 'Bottom-right corner.' },
 ];
 
 const LEVEL_OPTS = [

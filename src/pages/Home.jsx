@@ -494,7 +494,7 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, onClose, 
                 // clip gets the same 340px portrait box as always, 1:1 and
                 // 4:5 grow wider) so the video lands without bars. Source
                 // playback stays a wide landscape box.
-                style={{ width: shape ? `min(${Math.min(760, Math.round(316 * shape.w / shape.h) + 24)}px, 100%)` : 'min(760px, 100%)' }}
+                style={{ width: shape ? `min(${Math.min(760, Math.round(562 * shape.w / shape.h) + 24)}px, 100%)` : 'min(760px, 100%)' }}
             >
                 <div className="flex items-center gap-2 pb-2">
                     <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">{title}</p>

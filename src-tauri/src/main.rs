@@ -115,8 +115,13 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
     // plain spawn opens a visible terminal next to the app. Build a std
     // command with CREATE_NO_WINDOW first, then hand it to tokio.
     let mut std_cmd = std::process::Command::new(&bin);
+    std_cmd.args(["--serve", "--port", &port.to_string(), "--token", &token]);
+    // Dev override: a throwaway settings/data dir (test runs without
+    // touching the user's saved settings).
+    if let Some(dir) = std::env::var_os("DIGICLIP_DATA_DIR").filter(|d| !d.is_empty()) {
+        std_cmd.arg("--data-dir").arg(dir);
+    }
     std_cmd
-        .args(["--serve", "--port", &port.to_string(), "--token", &token])
         .stdout(Stdio::piped())
         // Piped (not null): on a pre-banner exit the tail below becomes
         // the boot error instead of silence.
