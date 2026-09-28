@@ -25,6 +25,7 @@ function defaults(settings) {
         merge_flash: false,
         // Look: output shape and brand overlays.
         aspect: '9:16',
+        caption_anim: 'pop',
         headline: false,
         headline_text: '',
         progress_bar: false,
@@ -38,12 +39,15 @@ function defaults(settings) {
 }
 
 export const ASPECTS = ['9:16', '4:5', '1:1', '16:9'];
+export const CAPTION_ANIMS = ['pop', 'words', 'none'];
 
 /** The engine options for the Look knobs: only what's switched on is
  *  sent, so an untouched panel renders exactly as before. */
 export function lookOptions(o) {
     const out = {};
     if (ASPECTS.includes(o.aspect) && o.aspect !== '9:16') out.aspect = o.aspect;
+    // Pop is the engine default.
+    if (CAPTION_ANIMS.includes(o.caption_anim) && o.caption_anim !== 'pop') out.caption_anim = o.caption_anim;
     // Empty headline = the clip's own title.
     if (o.headline) out.headline = (o.headline_text ?? '').trim();
     if (o.progress_bar) out.progress_bar = /^#[0-9a-f]{6}$/i.test(o.bar_color ?? '') ? o.bar_color : '';
@@ -172,6 +176,12 @@ function Seg({ label, value, options, onChange }) {
         </div>
     );
 }
+
+const ANIM_OPTS = [
+    { id: 'pop', label: 'Pop', tip: 'Lines pop in, keywords bump as they are spoken.' },
+    { id: 'words', label: 'Word by word', tip: 'Pop, and each word appears as it is spoken.' },
+    { id: 'none', label: 'Static', tip: 'No motion: lines cut in and out.' },
+];
 
 const ASPECT_OPTS = [
     { id: '9:16', label: '9:16', tip: 'Vertical: TikTok, Reels, Shorts.' },
@@ -345,6 +355,10 @@ export default function OptionsButton({ options, onChange }) {
                         <div className="space-y-1">
                             <Kicker>Aspect</Kicker>
                             <Seg label="Aspect" value={options.aspect ?? '9:16'} options={ASPECT_OPTS} onChange={set('aspect')} />
+                        </div>
+                        <div className="space-y-1">
+                            <Kicker>Caption motion</Kicker>
+                            <Seg label="Caption motion" value={options.caption_anim ?? 'pop'} options={ANIM_OPTS} onChange={set('caption_anim')} />
                         </div>
                         <div className="space-y-1.5">
                             <SwitchRow checked={options.headline} onChange={set('headline')} title="Headline" hint="Title card pinned at the top." />
