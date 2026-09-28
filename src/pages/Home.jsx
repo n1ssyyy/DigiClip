@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../components/ui/button';
-import { UploadCloud, FileVideo, X, RotateCcw, Film, Download, Loader2, Merge, FileText, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { UploadCloud, FileVideo, X, RotateCcw, Film, Download, Loader2, Merge, FileText, Trash2, ChevronLeft, ChevronRight, Pencil, ScrollText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { cn } from '../lib/utils';
@@ -12,6 +12,9 @@ import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../
 import Tip from '../components/digiclip/Tooltip';
 import { FadeImg } from '../components/digiclip/Skeleton';
 import OptionsButton, { lookOptions, useJobOptions } from '../components/digiclip/JobOptions';
+import ClipInsights, { overall, scoreTone } from '../components/digiclip/ClipInsights';
+import EditClipDialog from '../components/digiclip/EditClipDialog';
+import TranscriptDialog from '../components/digiclip/TranscriptDialog';
 
 const VIDEO_RE = new RegExp(`\\.(${VIDEO_EXT.join('|')})$`, 'i');
 
@@ -445,7 +448,7 @@ function clipShape(mp4) {
     return { w, h, tag: `${w}x${h}` };
 }
 
-function PlayerDialog({ title, sub, src, poster, shape, download, kit, onClose, leaving }) {
+function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, jobId, onEdit, onClose, leaving }) {
     const videoRef = useRef(null);
     const [waiting, setWaiting] = useState(true);
     const [ready, setReady] = useState(false);
@@ -506,11 +509,23 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, onClose, 
                 // clip gets the same 340px portrait box as always, 1:1 and
                 // 4:5 grow wider) so the video lands without bars. Source
                 // playback stays a wide landscape box.
-                style={{ width: shape ? `min(${Math.min(760, Math.round(562 * shape.w / shape.h) + 24)}px, 100%)` : 'min(760px, 100%)' }}
+                // Clips carry a 272px insights column beside the video.
+                style={{ width: shape ? `min(${Math.min(760, Math.round(562 * shape.w / shape.h) + 24) + (clip ? 272 : 0)}px, 100%)` : 'min(760px, 100%)' }}
             >
                 <div className="flex items-center gap-2 pb-2">
                     <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">{title}</p>
                     {sub && <p className="shrink-0 font-mono text-[10px] text-muted-foreground">{sub}</p>}
+                    {clip && onEdit && (
+                        <Tip label="Edit and re-render" side="top">
+                            <button
+                                type="button" aria-label="Edit clip"
+                                onClick={onEdit}
+                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            >
+                                <Pencil className="size-4" aria-hidden />
+                            </button>
+                        </Tip>
+                    )}
                     {kitText && kit && (
                         <Tip label="Upload kit (title + hashtags)" side="top">
                             <button
@@ -541,7 +556,8 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, onClose, 
                         <X className="size-4" aria-hidden />
                     </button>
                 </div>
-                <div className="relative">
+                <div className={cn(clip && 'flex items-start gap-3')}>
+                <div className={cn('relative', clip && 'min-w-0 flex-1')}>
                     {!ready && <span aria-hidden className="skel absolute inset-0 rounded-md" />}
                     {waiting && !failed && (
                         <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" aria-hidden>
@@ -588,6 +604,30 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, onClose, 
                     />
                     </div>
                 </div>
+                {clip && (
+                    <div className="digi-scroll max-h-[72dvh] w-[260px] shrink-0 space-y-3 overflow-y-auto">
+                        <ClipInsights clip={clip} />
+                        {clip.variants?.length > 0 && (
+                            <div className="space-y-1">
+                                <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">Other shapes</p>
+                                <div className="flex flex-wrap gap-1">
+                                    {clip.variants.map((v) => (
+                                        <button
+                                            key={v.aspect}
+                                            type="button"
+                                            onClick={() => downloadArt(artUrl(jobId, v.mp4, clip.rev), `digiclip-clip${clip.rank}-${v.aspect}.mp4`).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`))}
+                                            className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 font-mono text-[11px] hover:bg-accent"
+                                        >
+                                            <Download className="size-3" aria-hidden />
+                                            {v.aspect.replace('x', ':')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                </div>
             </div>
         </div>
     );
@@ -623,13 +663,15 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
     const rendering = clip.render_status === 'rendering' && progress > 0;
     const shape = clipShape(clip.mp4);
     const fileName = `digiclip-clip${clip.rank}-${shape.tag}.mp4`;
+    const score = overall(clip);
     const play = () => onPlay({
         title: clip.title || `Clip #${clip.rank}`,
         sub: projectName,
-        src: artUrl(job.id, clip.mp4),
+        src: artUrl(job.id, clip.mp4, clip.rev),
         shape,
-        download: { url: artUrl(job.id, clip.mp4), filename: fileName },
+        download: { url: artUrl(job.id, clip.mp4, clip.rev), filename: fileName },
         kit: clip.kit ? { job: job.id, rank: clip.rank, filename: clip.kit } : null,
+        clipRef: { job: job.id, rank: clip.rank },
     });
     return (
         <div
@@ -661,7 +703,15 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
             </span>
             <span className="relative my-1 min-h-0 flex-1 overflow-hidden rounded bg-muted/50">
                 <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
-                {playable && clip.poster && <FadeImg src={artUrl(job.id, clip.poster)} />}
+                {playable && clip.poster && <FadeImg key={clip.rev ?? 0} src={artUrl(job.id, clip.poster, clip.rev)} />}
+                {score != null && (
+                    <Tip label="Virality score (open the clip for why)" side="top" className="absolute top-1 left-1">
+                        <span className="flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white tabular-nums">
+                            <span className={cn('size-1.5 rounded-full', scoreTone(score))} aria-hidden />
+                            {score}
+                        </span>
+                    </Tip>
+                )}
                 {rendering && (
                     <span
                         aria-hidden
@@ -683,7 +733,7 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
                             aria-label={`Download clip #${clip.rank}`}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                downloadArt(artUrl(job.id, clip.mp4), fileName).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`));
+                                downloadArt(artUrl(job.id, clip.mp4, clip.rev), fileName).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`));
                             }}
                             className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
                         >
@@ -921,6 +971,15 @@ export default function Home() {
         setConfirmClear(false);
     }
     const [player, setPlayer] = useState(null);
+    const [editTarget, setEditTarget] = useState(null); // { job, rank }
+    const [transcriptJob, setTranscriptJob] = useState(null);
+    // Player and editor follow the live clip, so a re-render lands in
+    // an open dialog (new rev, new scores) without reopening it.
+    const liveClip = (ref) => (ref ? projects.find((j) => j.id === ref.job)?.clips?.find((c) => c.rank === ref.rank) ?? null : null);
+    const playerClip = liveClip(player?.clipRef);
+    const editJob = editTarget ? projects.find((j) => j.id === editTarget.job) ?? null : null;
+    const editClipLive = liveClip(editTarget);
+    const transcriptTarget = transcriptJob ? projects.find((j) => j.id === transcriptJob) ?? null : null;
     const [uploading, setUploading] = useState(null);
     const [activeId, setActiveId] = useState(null);
     const [dir, setDir] = useState(null);
@@ -1375,6 +1434,16 @@ export default function Home() {
                                         <span className="truncate font-medium">
                                             {shown.name}
                                         </span>
+                                        <Tip label="Transcript: make a clip from any stretch" side="top">
+                                            <button
+                                                type="button" aria-label={`Open the transcript of ${shown.name}`}
+                                                disabled={shown.status !== 'clips_ready' && shown.status !== 'done'}
+                                                onClick={() => setTranscriptJob(shown.id)}
+                                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                                            >
+                                                <ScrollText className="size-4" aria-hidden />
+                                            </button>
+                                        </Tip>
                                         <Tip label="Merge picks into one video" side="top">
                                             <button
                                                 type="button" aria-label={`Merge ${shown.name} into one video`}
@@ -1552,7 +1621,23 @@ export default function Home() {
             </ExitBeat>
             <ExitBeat open={player != null} ms={200}>
                 {player && (
-                    <PlayerDialog {...player} onClose={() => setPlayer(null)} />
+                    <PlayerDialog
+                        {...player}
+                        clip={playerClip}
+                        jobId={player.clipRef?.job}
+                        onEdit={playerClip ? () => { setEditTarget(player.clipRef); setPlayer(null); } : undefined}
+                        onClose={() => setPlayer(null)}
+                    />
+                )}
+            </ExitBeat>
+            <ExitBeat open={editJob != null && editClipLive != null} ms={200}>
+                {editJob && editClipLive && (
+                    <EditClipDialog job={editJob} clip={editClipLive} onClose={() => setEditTarget(null)} />
+                )}
+            </ExitBeat>
+            <ExitBeat open={transcriptTarget != null} ms={200}>
+                {transcriptTarget && (
+                    <TranscriptDialog job={transcriptTarget} onClose={() => setTranscriptJob(null)} />
                 )}
             </ExitBeat>
         </div>
