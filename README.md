@@ -5,7 +5,7 @@
 <p align="center">
   <strong>Drop a video, get TikTok-ready clips.</strong><br />
   Offline-first desktop app that transcribes long-form video, finds the moments worth posting,
-  and renders captioned 9:16 clips — no cloud render farm required.
+  and renders captioned clips in 9:16, 4:5, 1:1 or 16:9 — no cloud render farm required.
 </p>
 
 <p align="center">
@@ -70,11 +70,26 @@ Run the same Setup again any time to update, repair or uninstall — and once in
 
 > The installers aren't code-signed yet: on Windows hit **More info → Run anyway**, on macOS **System Settings → Privacy & Security → Open Anyway**.
 
+## 🎨 Make it yours
+
+Click the **sliders** icon on the upload card (Job options) before you drop a video. Everything is off until you switch it on, so an untouched panel gives you the same 9:16 clips as always.
+
+| Option | What you get |
+|---|---|
+| **Focus** | Type a topic (say *pricing*) and clips that talk about it rank first. |
+| **Aspect** | 9:16 for TikTok, Reels and Shorts · 4:5 for Instagram and LinkedIn feeds · 1:1 square · 16:9 for YouTube and X. |
+| **Headline** | A title card pinned at the top. Leave the text empty and each clip gets its own title. |
+| **Progress bar** | A thin bar filling along the bottom, in any colour you pick. |
+| **Logo** | Your PNG or JPG in the corner you choose. Captions and the headline move out of its way. |
+| **Music** | A background track, looped to length and ducked under speech. Soft, medium or loud. |
+
+Pick or drop **several videos at once** and each one queues as its own project; the engine works through them in turn.
+
 ## 🧬 Under the hood
 
 ```mermaid
 flowchart LR
-    V(["Your video"]) --> A["Extract audio"] --> T["Transcribe"] --> P["Pick the moments"] --> F["Track the speaker"] --> R["Render 9:16"] --> C(["Clips"])
+    V(["Your video"]) --> A["Extract audio"] --> T["Transcribe"] --> P["Pick the moments"] --> F["Track the speaker"] --> R["Render"] --> C(["Clips"])
 ```
 
 A Tauri shell boots the [DigiClip CLI](https://github.com/n1ssyyy/DigiClip-CLI) engine as a local daemon and streams every step to the UI live over a private localhost socket. Jobs survive restarts.
@@ -102,13 +117,14 @@ Everything lives in the app's **Settings**: OpenRouter key and model, transcript
 | `OPENROUTER_API_KEY` | Unlocks LLM clip picking (without it, the offline scorer runs). |
 | `OPENROUTER_MODEL` | Scoring model — default `nvidia/nemotron-3-ultra-550b-a55b:free`. |
 | `DIGICLIP_BIN` | Dev: use a specific engine binary. |
+| `DIGICLIP_DATA_DIR` | Dev: give the engine a separate settings and data folder. |
 
 ## 🚢 Ship it
 
 Every push is built, installed and launch-tested on Windows, macOS and Linux. Tag it and CI publishes exactly three files — one Setup per platform, app embedded.
 
 ```bash
-git tag v2.3.4 && git push origin v2.3.4   # must match src-tauri/tauri.conf.json
+git tag v2.4.0 && git push origin v2.4.0   # must match src-tauri/tauri.conf.json
 ```
 
 ## 🩺 Something off?

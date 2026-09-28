@@ -57,14 +57,34 @@ export function openExternal(url) {
     return invoke('open_url', { url }).catch(() => {});
 }
 
-/** Browse for a source video (dialog plugin, native picker). */
-export async function pickVideo() {
+/** Source files the engine takes (browse filter and drop filter). */
+export const VIDEO_EXT = ['mp4', 'mov', 'mkv', 'webm', 'm4v', 'm4a'];
+
+/** Browse for source videos (dialog plugin, native picker). Several
+ *  can be picked at once; each becomes its own queued job. */
+export async function pickVideos() {
     const sel = await open({
-        multiple: false,
+        multiple: true,
         directory: false,
-        filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'webm', 'm4a'] }],
+        filters: [{ name: 'Video', extensions: VIDEO_EXT }],
     });
+    if (typeof sel === 'string') return [sel];
+    return Array.isArray(sel) ? sel : [];
+}
+
+/** Browse for a single file of one kind (logo image, music bed). */
+async function pickOne(name, extensions) {
+    if (!isTauri()) return null;
+    const sel = await open({ multiple: false, directory: false, filters: [{ name, extensions }] });
     return typeof sel === 'string' ? sel : null;
+}
+
+export function pickImage() {
+    return pickOne('Image', ['png', 'jpg', 'jpeg']);
+}
+
+export function pickAudio() {
+    return pickOne('Audio', ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac']);
 }
 
 /** Native save flow: the user picks the destination, bytes go straight
