@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../components/ui/button';
-import { UploadCloud, FileVideo, X, RotateCcw, Film, Download, Loader2, Merge, FileText, Trash2, ChevronLeft, ChevronRight, Pencil, ScrollText } from 'lucide-react';
+import { UploadCloud, FileVideo, X, RotateCcw, Film, Download, Loader2, Merge, FileText, Trash2, ChevronLeft, ChevronRight, Pencil, ScrollText, Link2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { cn } from '../lib/utils';
 import {
-    artUrl, srcUrl, startJob, removeJob, retryJob,
+    artUrl, srcUrl, startJob, startJobUrl, removeJob, retryJob,
     fetchKit, downloadArt, downloadText, flashMessage, useStore,
 } from '../lib/socket';
 import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../lib/native';
@@ -43,13 +43,15 @@ function stepState(status) {
             return { done: 1, active: null, paused: true };
         case 'failed':
             return { done: 1, active: null, failed: true };
+        // Link jobs fetch the source first: the Upload step is live.
+        case 'downloading':
         default:
             return { done: 0, active: 0 };
     }
 }
 
 const LIVE_LABEL = {
-    queued: 'Queued', extracting: 'Extracting audio',
+    downloading: 'Downloading', queued: 'Queued', extracting: 'Extracting audio',
     transcribing: 'Transcribing', analyzing: 'Picking clips',
     clips_ready: 'Ready', done: 'Ready', cancelled: 'Cancelled', failed: 'Failed',
 };
@@ -126,7 +128,7 @@ const TONES = {
 function Stepper({ status }) {
     const st = stepState(status);
     const tone = TONES[st.failed ? 'red' : status === 'clips_ready' || status === 'done' ? 'green' : 'orange'];
-    const current = st.active != null ? STEPS[st.active]?.label : (LIVE_LABEL[status] ?? 'Done');
+    const current = status === 'downloading' ? 'Downloading' : st.active != null ? STEPS[st.active]?.label : (LIVE_LABEL[status] ?? 'Done');
     return (
         <div className="flex items-center" aria-label={`Pipeline: ${current}`}>
             {STEPS.map((s, i) => {
@@ -1175,6 +1177,20 @@ export default function Home() {
     /** Start a job from a local path (dialog pick or window drop). The
      *  file never uploads anywhere — the engine reads it off disk.
      *  Failures surface in the banner instead of dying silently. */
+    const [link, setLink] = useState('');
+    const linkOk = /^https?:\/\/\S+\.\S+/i.test(link.trim());
+    /** Start a job from a pasted link; the engine downloads it. */
+    function startFromLink() {
+        const url = link.trim();
+        if (!linkOk) {
+            flashMessage('Paste a full link, starting with https://');
+            return;
+        }
+        startJobUrl(url, baseOptions())
+            .then(() => setLink(''))
+            .catch((e) => flashMessage(`Couldn't start the link: ${e?.message ?? e}`));
+    }
+
     function startFromPath(path) {
         if (!path) return;
         const name = path.split(/[\\/]/).pop() ?? path;
@@ -1315,6 +1331,25 @@ export default function Home() {
                                 {limits.accept} · {limits.note}
                             </span>
                         </div>
+                        <form
+                            className="flex h-8 shrink-0 items-stretch gap-1 pt-1.5"
+                            onSubmit={(e) => { e.preventDefault(); startFromLink(); }}
+                        >
+                            <div className="relative min-w-0 flex-1">
+                                <Link2 className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                                <input
+                                    type="url"
+                                    value={link}
+                                    onChange={(e) => setLink(e.target.value)}
+                                    placeholder="…or paste a link (YouTube, Vimeo, X…)"
+                                    aria-label="Video link"
+                                    className="h-full w-full min-w-0 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-2 pl-8 text-[12px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                            </div>
+                            <Button type="submit" size="sm" variant="secondary" disabled={!linkOk} className="h-full">
+                                Fetch
+                            </Button>
+                        </form>
                         {uploading && (
                             <p className="pt-1 font-mono text-[11px] text-muted-foreground">
                                 {uploading.name} — starting…

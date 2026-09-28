@@ -269,7 +269,7 @@ function apply(frame) {
             break;
         case 'job_created':
             upsertJob(ev.job);
-            flash(`Stored ${ev.job.name}, transcription queued.`);
+            flash(ev.job.status === 'downloading' ? `Fetching ${ev.job.name}…` : `Stored ${ev.job.name}, transcription queued.`);
             break;
         case 'job_updated':
             upsertJob(ev.job);
@@ -283,7 +283,7 @@ function apply(frame) {
             if (ji >= 0) {
                 const cur = S.jobs[ji].status;
                 const map = {
-                    provision: 'queued', audio: 'extracting', transcribe: 'transcribing',
+                    download: 'downloading', provision: 'queued', audio: 'extracting', transcribe: 'transcribing',
                     pick: 'analyzing', track: 'analyzing', render: cur, merge: cur, kit: cur, done: cur,
                 };
                 const next = map[ev.stage] ?? cur;
@@ -378,6 +378,18 @@ export function navigate(page) {
 
 export function startJob(source, options) {
     return cmd('job_start', { source, options });
+}
+
+/** Start a job from a link (YouTube and anything yt-dlp reads): the
+ *  engine downloads it first, status `downloading`. */
+export function startJobUrl(url, options) {
+    return cmd('job_start_url', { url, options });
+}
+
+/** Write a diagnostics report (versions, health, recent logs, no keys)
+ *  and resolve its path. */
+export function exportDiagnostics() {
+    return cmd('diagnostics', {}, { busy: true });
 }
 
 export function cancelJob(id) {

@@ -79,6 +79,13 @@ async function pickOne(name, extensions) {
     return typeof sel === 'string' ? sel : null;
 }
 
+/** Browse for a folder (the watch folder). */
+export async function pickFolder() {
+    if (!isTauri()) return null;
+    const sel = await open({ multiple: false, directory: true });
+    return typeof sel === 'string' ? sel : null;
+}
+
 export function pickImage() {
     return pickOne('Image', ['png', 'jpg', 'jpeg']);
 }

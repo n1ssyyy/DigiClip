@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, Download, KeyRound, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { ChevronDown, Download, FolderOpen, KeyRound, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
 import shkollaIcon from '../assets/shkolla-icon.png';
 import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
@@ -10,6 +10,7 @@ import SttModelPicker from '../components/digiclip/SttModelPicker';
 import { GpuToggle } from '../components/digiclip/controls';
 import Tip from '../components/digiclip/Tooltip';
 import { cn } from '../lib/utils';
+import { isTauri, pickFolder } from '../lib/native';
 import { deleteModel, downloadModel, saveSettings, useStore } from '../lib/socket';
 import { checkForUpdates, ensureAppVersion, runSetup, setAutoUpdate, useUpdates } from '../lib/updates';
 
@@ -164,6 +165,15 @@ function LayaRow({ model }) {
     );
 }
 
+/** Which saved options the watch folder runs with: a preset, or the
+ *  engine defaults. Matched by value, so renaming a preset is harmless. */
+function watchPick(options, presets) {
+    const cur = JSON.stringify(options ?? {});
+    const hit = presets.find((p) => JSON.stringify(p.options) === cur);
+    if (hit) return hit.name;
+    return Object.values(options ?? {}).every((v) => v == null) ? '' : '__custom';
+}
+
 /** App updates row: auto-check switch + status line + the action for
  *  whatever phase the updater is in (check / hand off to Setup). */
 function UpdatesRow() {
@@ -272,6 +282,9 @@ export default function Settings() {
             punch: !!settings.punch,
             jev_key: '',
             decider: settings.decider ?? 'auto',
+            watch_on: !!settings.watch_on,
+            watch_dir: settings.watch_dir ?? '',
+            watch_options: settings.watch_options ?? {},
         });
     }, [settings]);
     if (!settings || !form) return null;
@@ -328,12 +341,20 @@ export default function Settings() {
         punch: !!settings.punch,
         jev_key: '',
         decider: settings.decider ?? 'auto',
+        watch_on: !!settings.watch_on,
+        watch_dir: settings.watch_dir ?? '',
+        watch_options: settings.watch_options ?? {},
     };
     const dirty = JSON.stringify(form) !== JSON.stringify(baseline);
     const saveLabel = saving ? 'Saving…' : dirty ? 'Save' : 'Saved';
 
     function clearJevKey() {
         saveSettings({ jev_key: null }).catch(() => {});
+    }
+    const presets = settings.presets ?? [];
+    const watchSel = watchPick(form.watch_options, presets);
+    function browseWatch() {
+        pickFolder().then((d) => { if (d) setForm((f) => ({ ...f, watch_dir: d })); }).catch(() => {});
     }
     const deciderHint = DECIDERS.find((d) => d.id === form.decider)?.hint;
     const jevMissing = form.decider === 'jev' && !settings.jev_key_set && !form.jev_key.trim();
@@ -342,7 +363,8 @@ export default function Settings() {
         e.preventDefault();
         if (saving || !dirty) return;
         setSaving(true);
-        saveSettings({ ...form }).then(() => {
+        // An empty folder clears it (a blank string is ignored).
+        saveSettings({ ...form, watch_dir: form.watch_dir.trim() || null }).then(() => {
             // Blank key keeps the saved one (server-side); reset the field
             // so the baseline comparison settles back to Saved.
             setForm((prev) => (prev ? { ...prev, openrouter_key: '', jev_key: '' } : prev));
@@ -453,6 +475,64 @@ export default function Settings() {
                                 <div className="pt-6">
                                     <LayaRow model={liveModels?.laya} />
                                 </div>
+                            </div>
+                        </Section>
+                        <Section title="Watch folder" className="stagger-3">
+                            <div className="flex items-center gap-3">
+                                <GpuToggle checked={form.watch_on} disabled={!form.watch_dir.trim()} onChange={(v) => setForm({ ...form, watch_on: v })} label="Watch a folder" />
+                                <div className="min-w-0">
+                                    <p className="text-[13px] font-medium">Clip new videos automatically</p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                        {!form.watch_dir.trim()
+                                            ? 'Pick a folder first.'
+                                            : form.watch_on
+                                                ? 'Videos that land in the folder start a job once they finish copying. Files already there stay put.'
+                                                : 'Off. Turn on to start a job for every new video in the folder.'}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 items-start gap-4">
+                                <Field as="div" label="Folder">
+                                    <div className="flex h-9 items-stretch gap-1">
+                                        <button
+                                            type="button"
+                                            onClick={browseWatch}
+                                            disabled={!isTauri()}
+                                            title={form.watch_dir || undefined}
+                                            className={cn(inputCls, 'items-center gap-2 text-left hover:bg-accent')}
+                                        >
+                                            <FolderOpen className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                                            <span className={cn('truncate', !form.watch_dir && 'text-muted-foreground')}>{form.watch_dir || 'Choose a folder\u2026'}</span>
+                                        </button>
+                                        {form.watch_dir && (
+                                            <Tip label="Stop watching this folder" side="top">
+                                                <button type="button" aria-label="Clear folder" onClick={() => setForm({ ...form, watch_dir: '', watch_on: false })} className="shrink-0 rounded-md px-2 text-muted-foreground hover:bg-accent hover:text-foreground">
+                                                    <X className="size-4" aria-hidden />
+                                                </button>
+                                            </Tip>
+                                        )}
+                                    </div>
+                                </Field>
+                                <Field label="Options" hint={presets.length ? 'Save presets from the job options panel on Home.' : 'No presets yet: save one from the job options panel on Home.'}>
+                                    <div className="relative">
+                                        <select
+                                            value={watchSel}
+                                            onChange={(e) => {
+                                                const p = presets.find((x) => x.name === e.target.value);
+                                                // Defaults = every field unset, shaped like the saved value so
+                                                // the form settles back to Saved.
+                                                const none = Object.fromEntries(Object.keys(settings.watch_options ?? {}).map((k) => [k, null]));
+                                                setForm({ ...form, watch_options: p ? p.options : none });
+                                            }}
+                                            className={cn(inputCls, 'appearance-none pr-9 [color-scheme:dark]')}
+                                        >
+                                            <option value="">Defaults (from these settings)</option>
+                                            {presets.map((p) => <option key={p.name} value={p.name}>Preset: {p.name}</option>)}
+                                            {watchSel === '__custom' && <option value="__custom" disabled>Custom (preset since changed)</option>}
+                                        </select>
+                                        <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                                    </div>
+                                </Field>
                             </div>
                         </Section>
                     </form>
