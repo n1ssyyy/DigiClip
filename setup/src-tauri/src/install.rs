@@ -38,6 +38,9 @@ fn write_uninstaller(install_dir: &Path, payload: &Payload) -> Result<PathBuf, S
     std::io::copy(&mut (&mut src).take(keep), &mut out).map_err(|e| e.to_string())?;
     out.flush().map_err(|e| e.to_string())?;
     drop(out);
+    // A signed Setup's header still points at the certificate table that
+    // was cut off with the payload.
+    crate::payload::clear_dangling_cert_dir(&part).map_err(|e| e.to_string())?;
     let _ = std::fs::remove_file(&dest);
     std::fs::rename(&part, &dest).map_err(|e| e.to_string())?;
     Ok(dest)

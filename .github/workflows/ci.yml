@@ -135,6 +135,36 @@ jobs:
             src-tauri -> target
             setup/src-tauri -> target
 
+      - name: Signing config
+        # Only whether the secrets exist leaves this step; the secrets
+        # themselves are handed to the signing steps alone (never to npm or
+        # cargo). No secrets (forks, PR-less runs) = unsigned, as before.
+        id: sign
+        env:
+          WIN_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          MAC_P12: ${{ secrets.APPLE_CERT_P12 }}
+        run: |
+          echo "win=$([ -n "$WIN_PFX" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "mac=$([ -n "$MAC_P12" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Import signing identity (macOS)
+        if: runner.os == 'macOS' && steps.sign.outputs.mac == 'true'
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          kc="$RUNNER_TEMP/sign.keychain-db"
+          pw=$(openssl rand -hex 16)
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/sign.p12"
+          security import "$RUNNER_TEMP/sign.p12" -k "$kc" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/sign.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc" > /dev/null
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$kc"
+
       - name: Resolve version
         id: v
         run: |
@@ -190,6 +220,14 @@ jobs:
             Linux)   npm run tauri build -- --bundles appimage ;;
           esac
 
+      - name: Sign app and engine (Windows)
+        if: runner.os == 'Windows' && steps.sign.outputs.win == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: .github/scripts/sign-windows.ps1 -Files src-tauri/target/release/digiclip-app.exe, src-tauri/resources/digiclip.exe
+
       - name: Build app payload (Windows)
         # The app folder's *contents* (exe + resources\) at the zip root.
         if: runner.os == 'Windows'
@@ -203,11 +241,19 @@ jobs:
           Get-ChildItem -Recurse $stage | Select-Object FullName, Length
 
       - name: Build app payload (macOS)
+        # Developer ID + hardened runtime + notarized when the secrets are
+        # set (the installed app then passes Gatekeeper on its own);
+        # ad-hoc otherwise.
         if: runner.os == 'macOS'
+        env:
+          APPLE_SIGN_ID: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_SIGN_ID || '' }}
+          APPLE_ID: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_TEAM_ID: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_APP_PASSWORD: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_APP_PASSWORD || '' }}
         run: |
           app=src-tauri/target/release/bundle/macos/DigiClip.app
-          codesign --force --deep --sign - "$app"
-          codesign --verify --deep --strict "$app"
+          .github/scripts/sign-macos.sh "$app"
+          .github/scripts/notarize-macos.sh "$app"
           mkdir -p payload
           tar -czf payload/app.tar.gz -C "$(dirname "$app")" DigiClip.app
           ls -la payload/
@@ -236,6 +282,10 @@ jobs:
         env:
           V: ${{ steps.v.outputs.app }}
           ASSET: ${{ matrix.asset }}
+          APPLE_SIGN_ID: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_SIGN_ID || '' }}
+          APPLE_ID: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_TEAM_ID: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_APP_PASSWORD: ${{ steps.sign.outputs.mac == 'true' && secrets.APPLE_APP_PASSWORD || '' }}
         run: |
           mkdir -p dist
           case "$RUNNER_OS" in
@@ -248,16 +298,45 @@ jobs:
               ;;
             macOS)
               # The payload sits in the bundle's Resources (appending to the
-              # Mach-O would break its signature); then ad-hoc sign the
-              # whole bundle so the seal covers payload.bin.
+              # Mach-O would break its signature); then sign the whole
+              # bundle so the seal covers payload.bin, and notarize it.
               app="setup/src-tauri/target/release/bundle/macos/DigiClip Setup.app"
               node setup/scripts/pack.mjs - payload/app.tar.gz "$V" "$app/Contents/Resources/payload.bin"
-              codesign --force --deep --sign - "$app"
-              codesign --verify --deep --strict "$app"
+              .github/scripts/sign-macos.sh "$app"
+              .github/scripts/notarize-macos.sh "$app"
               ditto -c -k --keepParent "$app" "dist/$ASSET"
               ;;
           esac
           ls -la dist/
+
+      - name: Sign Setup (Windows)
+        # After packing, so the signature covers the payload too; Setup
+        # finds its trailer in front of the certificate table.
+        if: runner.os == 'Windows' && steps.sign.outputs.win == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: .github/scripts/sign-windows.ps1 -Files "dist/${{ matrix.asset }}"
+
+      - name: Signed Setup self-test (Windows)
+        # Without the real certificate, sign a copy with a throwaway one so
+        # every run proves a signed Setup still finds its payload.
+        if: runner.os == 'Windows' && steps.sign.outputs.win != 'true'
+        shell: pwsh
+        run: |
+          $copy = Join-Path $env:RUNNER_TEMP 'signed-setup.exe'
+          Copy-Item "dist/${{ matrix.asset }}" $copy
+          .github/scripts/sign-windows.ps1 -Files $copy -Throwaway
+          $p = Start-Process -FilePath $copy -ArgumentList '--payload-info' -PassThru -NoNewWindow `
+            -RedirectStandardOutput "$env:RUNNER_TEMP/info.txt"
+          $null = $p.Handle
+          if (-not $p.WaitForExit(60000)) { $p.Kill(); Write-Host '::error::signed Setup hung'; exit 1 }
+          $info = (Get-Content "$env:RUNNER_TEMP/info.txt" -Raw).Trim()
+          Write-Host "signed copy: $info (exit $($p.ExitCode))"
+          if ($p.ExitCode -ne 0 -or $info.Split(' ')[0] -ne '${{ steps.v.outputs.app }}') {
+            Write-Host "::error::a signed Setup lost its payload ('$info')"; exit 1
+          }
 
       - name: Install smoke test (Windows)
         if: runner.os == 'Windows'
