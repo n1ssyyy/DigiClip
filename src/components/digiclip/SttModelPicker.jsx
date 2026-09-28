@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils';
 import ProgressRing from './ProgressRing';
 import { usePanelBeat } from './usePanelBeat';
 import { useFloatingPanel } from './useFloatingPanel';
+import { useT } from '../../lib/i18n';
 
 const inputCls = 'flex h-9 w-full rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-3 py-1 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -19,6 +20,7 @@ const inputCls = 'flex h-9 w-full rounded-md border border-x-white/10 border-b-b
  * status: { [id]: { downloaded, downloading, progress, failed, error } }
  */
 export default function SttModelPicker({ value, onChange, options, downloaded = {}, status = {}, onDownload, onDelete }) {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const { show: panelShow, leaving: panelLeaving } = usePanelBeat(open);
     const rootRef = useRef(null);
@@ -78,9 +80,9 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
     };
 
     const tag = (id) => {
-        if (id === 'base.en') return 'FAST';
-        if (id === 'large-v3-turbo-q5_0') return 'BEST';
-        if (id === 'tiny.en') return 'TINY';
+        if (id === 'base.en') return t('FAST');
+        if (id === 'large-v3-turbo-q5_0') return t('BEST');
+        if (id === 'tiny.en') return t('TINY');
         return null;
     };
 
@@ -94,7 +96,7 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                 className={cn(inputCls, 'cursor-pointer items-center justify-between text-left')}
             >
                 <span className="flex min-w-0 items-center gap-2 truncate font-mono text-xs">
-                    {isDownloading(value) && <ProgressRing value={progressOf(value)} label={`Downloading ${value}`} />}
+                    {isDownloading(value) && <ProgressRing value={progressOf(value)} label={t('Downloading {id}', { id: value })} />}
                     <span className="truncate">
                         {value}{current ? ` · ${current.size_mb}MB` : ''}{isDownloading(value) ? ` · ${progressOf(value)}%` : ''}
                     </span>
@@ -104,7 +106,7 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
 
             {panelShow && panelPos && createPortal(
                 <div ref={panelRef} style={panelPos} className={cn('digi-menu fixed z-[100] rounded-md border bg-popover text-popover-foreground shadow-md', panelLeaving ? 'menu-out' : 'pop')}>
-                    <ul role="listbox" aria-label="Transcription models" className="digi-scroll max-h-64 overflow-y-auto p-1">
+                    <ul role="listbox" aria-label={t('Transcription models')} className="digi-scroll max-h-64 overflow-y-auto p-1">
                         {entries.map(([id, m]) => (
                             <li key={id} role="option" aria-selected={id === value}>
                                 <div
@@ -116,11 +118,11 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                     <button
                                         type="button"
                                         onClick={() => pick(id)}
-                                        aria-label={`Select ${id}`}
+                                        aria-label={t('Select {id}', { id })}
                                         className="flex min-w-0 flex-1 items-center gap-3 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                     >
                                         {isDownloading(id) ? (
-                                            <ProgressRing value={progressOf(id)} label={`Downloading ${id}`} />
+                                            <ProgressRing value={progressOf(id)} label={t('Downloading {id}', { id })} />
                                         ) : (
                                             id === value && <Check className="size-4 shrink-0" aria-hidden />
                                         )}
@@ -129,7 +131,7 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                     <span className="flex shrink-0 items-center gap-1.5">
                                         {isDownloaded(id) && (
                                             <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                                                on disk
+                                                {t('on disk')}
                                             </span>
                                         )}
                                         {tag(id) && (
@@ -149,10 +151,10 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                         ) : isDownloaded(id) ? (
                                             confirmId === id ? (
                                                 <span className="flex shrink-0 items-center gap-1">
-                                                    <span className="text-[10px] font-medium text-destructive">Delete?</span>
+                                                    <span className="text-[10px] font-medium text-destructive">{t('Delete?')}</span>
                                                     <button
                                                         type="button"
-                                                        aria-label={`Confirm deleting ${id} weights`}
+                                                        aria-label={t('Confirm deleting {id} weights', { id })}
                                                         onClick={() => confirmDelete(id)}
                                                         className="flex size-6 items-center justify-center rounded-md bg-destructive font-mono text-[10px] font-bold text-destructive-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                     >
@@ -162,8 +164,8 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                             ) : (
                                                 <button
                                                     type="button"
-                                                    aria-label={`Delete ${id} weights (${m.size_mb}MB freed)`}
-                                                    title={`Delete weights, free ${m.size_mb}MB`}
+                                                    aria-label={t('Delete {id} weights ({size}MB freed)', { id, size: m.size_mb })}
+                                                    title={t('Delete weights, free {size}MB', { size: m.size_mb })}
                                                     onClick={() => askDelete(id)}
                                                     className="flex size-6 items-center justify-center rounded-md border border-transparent text-muted-foreground transition-colors hover:border-input hover:bg-background hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                                 >
@@ -173,8 +175,8 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                         ) : (
                                             <button
                                                 type="button"
-                                                aria-label={isFailed(id) ? `Retry downloading ${id}` : `Download ${id} (${m.size_mb}MB)`}
-                                                title={isFailed(id) ? (live(id).error ?? 'Download failed — retry') : `Download ${m.size_mb}MB in the background`}
+                                                aria-label={isFailed(id) ? t('Retry downloading {id}', { id }) : t('Download {id} ({size}MB)', { id, size: m.size_mb })}
+                                                title={isFailed(id) ? (live(id).error ?? t('Download failed — retry')) : t('Download {size}MB in the background', { size: m.size_mb })}
                                                 onClick={() => onDownload?.(id)}
                                                 className={cn(
                                                     'flex size-6 items-center justify-center rounded-md border border-transparent transition-colors',

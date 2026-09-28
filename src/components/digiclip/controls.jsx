@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
 /** GPU switch: track flips with primary, knob slides. Disabled state gets
  *  its explanation from the wrapping Tip, not the control itself. */
@@ -35,6 +36,7 @@ export function GpuToggle({ checked, disabled, onChange, label }) {
  *  hide cross-browser and can't be styled). `compact` drops to h-8 for
  *  dense popovers; default stays h-9 for forms. */
 export function Stepper({ label, value, min = 1, max = 10, onChange, compact = false }) {
+    const t = useT();
     const clamp = (v) => Math.min(max, Math.max(min, Number.isFinite(+v) ? +v : min));
     const stepCls = 'flex flex-1 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:bg-accent/60';
     return (
@@ -49,10 +51,10 @@ export function Stepper({ label, value, min = 1, max = 10, onChange, compact = f
                 className="no-spin min-w-0 flex-1 bg-transparent px-3 py-1 text-[13px] outline-none"
             />
             <div className="flex w-9 shrink-0 flex-col divide-y divide-input border-l border-input">
-                <button type="button" aria-label={`More ${label}`} onClick={() => onChange(clamp(value + 1))} className={stepCls}>
+                <button type="button" aria-label={t('More {label}', { label })} onClick={() => onChange(clamp(value + 1))} className={stepCls}>
                     <ChevronUp className="size-3.5" aria-hidden />
                 </button>
-                <button type="button" aria-label={`Fewer ${label}`} onClick={() => onChange(clamp(value - 1))} className={stepCls}>
+                <button type="button" aria-label={t('Fewer {label}', { label })} onClick={() => onChange(clamp(value - 1))} className={stepCls}>
                     <ChevronDown className="size-3.5" aria-hidden />
                 </button>
             </div>
@@ -63,13 +65,14 @@ export function Stepper({ label, value, min = 1, max = 10, onChange, compact = f
 /** Tighten picker: same segmented language as the filter chips —
  *  one choice, three verbs, no dropdown. `compact` for dense popovers. */
 export function TightenSeg({ value, onChange, compact = false }) {
+    const t = useT();
     const opts = [
         { id: 'off', label: 'Off' },
         { id: 'light', label: 'Light' },
         { id: 'punchy', label: 'Punchy' },
     ];
     return (
-        <div className={cn('flex w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]', compact ? 'h-8' : 'h-9')} role="radiogroup" aria-label="Tighten">
+        <div className={cn('flex w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]', compact ? 'h-8' : 'h-9')} role="radiogroup" aria-label={t('Tighten')}>
             {opts.map((o) => (
                 <button
                     key={o.id}
@@ -82,7 +85,7 @@ export function TightenSeg({ value, onChange, compact = false }) {
                         value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                     )}
                 >
-                    {o.label}
+                    {t(o.label)}
                 </button>
             ))}
         </div>

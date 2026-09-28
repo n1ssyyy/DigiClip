@@ -8,6 +8,7 @@ import Health from './pages/Health';
 import Settings from './pages/Settings';
 import { connect, useStore, whenSynced } from './lib/socket';
 import { getServe, isTauri, onServeFailed, onServeReady } from './lib/native';
+import { t, useT } from './lib/i18n';
 
 /** The shell boots the sidecar before first paint: either it is already
  *  up (`get_serve`) or the `serve-ready` event lands. No UI until then. */
@@ -39,21 +40,22 @@ function waitServe() {
             fn(v);
         };
         onServeReady((p) => finish(resolve, p)).then((f) => { offR = f; }).catch(() => {});
-        onServeFailed((e) => finish(reject, new Error(typeof e === 'string' ? e : 'engine failed to boot'))).then((f) => { offF = f; }).catch(() => {});
+        onServeFailed((e) => finish(reject, new Error(typeof e === 'string' ? e : t('engine failed to boot')))).then((f) => { offF = f; }).catch(() => {});
         const poll = () => {
             getServe().then((p) => finish(resolve, p)).catch(() => {});
         };
         poll();
         const timer = setInterval(poll, 500);
-        const cap = setTimeout(() => finish(reject, new Error('engine did not answer in 60s')), 60000);
+        const cap = setTimeout(() => finish(reject, new Error(t('engine did not answer in 60s'))), 60000);
     });
 }
 
 function BootFailed({ error }) {
+    const t = useT();
     return (
         <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 text-foreground">
             <div className="pop w-[min(440px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl">
-                <h1 className="text-[13px] font-semibold">Engine failed to start</h1>
+                <h1 className="text-[13px] font-semibold">{t('Engine failed to start')}</h1>
                 <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">{String(error?.message ?? error)}</p>
                 <div className="mt-4 flex justify-end gap-2">
                     <button
@@ -61,7 +63,7 @@ function BootFailed({ error }) {
                         onClick={() => window.location.reload()}
                         className="rounded-md bg-primary px-4 py-1.5 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                     >
-                        Retry
+                        {t('Retry')}
                     </button>
                 </div>
             </div>
@@ -80,6 +82,7 @@ function Shell() {
 
 function Boot() {
     const [phase, setPhase] = useState({ name: 'serve', error: null });
+    const t = useT();
 
     useEffect(() => {
         let dead = false;
@@ -116,7 +119,7 @@ function Boot() {
             <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-foreground">
                 <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden />
                 <p className="font-mono text-[11px] text-muted-foreground">
-                    {phase.name === 'sync' ? 'Syncing…' : 'Starting engine…'}
+                    {phase.name === 'sync' ? t('Syncing…') : t('Starting engine…')}
                 </p>
             </div>
         );

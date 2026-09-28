@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowDownToLine, Loader2, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { dismissUpdate, runSetup, useUpdates } from '../../lib/updates';
+import { useT } from '../../lib/i18n';
 
 /**
  * Update affordance, bottom-left (toasts own bottom-right). Same voice as
@@ -16,6 +17,7 @@ export default function UpdateNotice() {
     const dismissed = useUpdates((s) => s.dismissed);
     const pct = useUpdates((s) => s.pct);
     const [notesOpen, setNotesOpen] = useState(false);
+    const t = useT();
 
     const busy = phase === 'downloading' || phase === 'handing-off';
     const showBanner = (phase === 'available' || busy) && available && dismissed !== available.version;
@@ -31,15 +33,15 @@ export default function UpdateNotice() {
                     <div className="flex items-start gap-3">
                         <ArrowDownToLine className="mt-0.5 size-4 shrink-0 text-[var(--viral)]" aria-hidden />
                         <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-medium">Update available — v{available.version}</p>
+                            <p className="text-[13px] font-medium">{t('Update available — v{version}', { version: available.version })}</p>
                             <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                {current ? `You have v${current}. DigiClip Setup handles the rest.` : 'DigiClip Setup handles the rest.'}
+                                {current ? t('You have v{version}. DigiClip Setup handles the rest.', { version: current }) : t('DigiClip Setup handles the rest.')}
                             </p>
                         </div>
                         <button
                             type="button"
                             onClick={dismissUpdate}
-                            aria-label="Dismiss update"
+                            aria-label={t('Dismiss update')}
                             className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                         >
                             <X className="size-3.5" aria-hidden />
@@ -48,12 +50,12 @@ export default function UpdateNotice() {
                     <div className="mt-2.5 flex items-center justify-end gap-2">
                         {available.notes && (
                             <Button type="button" variant="ghost" size="sm" onClick={() => setNotesOpen(true)}>
-                                Notes
+                                {t('Notes')}
                             </Button>
                         )}
                         <Button type="button" size="sm" disabled={busy} onClick={runSetup}>
                             {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
-                            {phase === 'downloading' ? `Downloading… ${pct ?? 0}%` : phase === 'handing-off' ? 'Opening Setup…' : 'Update'}
+                            {phase === 'downloading' ? t('Downloading… {pct}%', { pct: pct ?? 0 }) : phase === 'handing-off' ? t('Opening Setup…') : t('Update')}
                         </Button>
                     </div>
                 </div>
@@ -66,20 +68,20 @@ export default function UpdateNotice() {
                     <div
                         role="dialog"
                         aria-modal="true"
-                        aria-label={`Release notes for v${available.version}`}
+                        aria-label={t('Release notes for v{version}', { version: available.version })}
                         className="pop w-[min(480px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h2 className="text-[13px] font-semibold">What&apos;s new in v{available.version}</h2>
+                        <h2 className="text-[13px] font-semibold">{t("What's new in v{version}", { version: available.version })}</h2>
                         {available.date && (
                             <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">{available.date.slice(0, 10)}</p>
                         )}
                         <pre className="digi-scroll mt-3 max-h-64 overflow-y-auto rounded-md border bg-muted/40 p-3 font-mono text-[11px] whitespace-pre-wrap text-muted-foreground">
-                            {available.notes || 'No notes published for this build.'}
+                            {available.notes || t('No notes published for this build.')}
                         </pre>
                         <div className="mt-4 flex justify-end gap-2">
                             <Button type="button" variant="ghost" size="sm" onClick={() => setNotesOpen(false)}>
-                                Close
+                                {t('Close')}
                             </Button>
                             <Button
                                 type="button"
@@ -89,7 +91,7 @@ export default function UpdateNotice() {
                                     runSetup();
                                 }}
                             >
-                                Update via Setup
+                                {t('Update via Setup')}
                             </Button>
                         </div>
                     </div>

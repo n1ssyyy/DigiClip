@@ -7,14 +7,17 @@ import Tip from '../components/digiclip/Tooltip';
 import { Skeleton, Swap } from '../components/digiclip/Skeleton';
 import { exportDiagnostics, flashMessage, refreshHealth, useStore } from '../lib/socket';
 import { isTauri, reveal } from '../lib/native';
+import { t as tr, useT } from '../lib/i18n';
 
 function StatusIcon({ ok }) {
-    if (ok === true) return <CheckCircle2 className="size-4 text-[var(--viral)]" aria-label="ok" />;
-    if (ok === false) return <XCircle className="size-4 text-destructive" aria-label="missing" />;
-    return <MinusCircle className="size-4 text-muted-foreground" aria-label="unknown" />;
+    const t = useT();
+    if (ok === true) return <CheckCircle2 className="size-4 text-[var(--viral)]" aria-label={t('ok')} />;
+    if (ok === false) return <XCircle className="size-4 text-destructive" aria-label={t('missing')} />;
+    return <MinusCircle className="size-4 text-muted-foreground" aria-label={t('unknown')} />;
 }
 
 function Row({ label, version, value, hint }) {
+    const t = useT();
     const sub = value?.path ?? hint ?? value?.hint;
     return (
         <li className="rise flex items-center gap-3 py-2.5">
@@ -30,16 +33,16 @@ function Row({ label, version, value, hint }) {
                     </Tip>
                 )}
             </div>
-            <Badge variant={value?.ok ? 'success' : 'secondary'}>{value?.ok ? 'ready' : 'pending'}</Badge>
+            <Badge variant={value?.ok ? 'success' : 'secondary'}>{value?.ok ? t('ready') : t('pending')}</Badge>
         </li>
     );
 }
 
 function ago(ms) {
     const s = Math.max(0, Math.round(ms / 1000));
-    if (s < 10) return 'just now';
-    if (s < 60) return `${s}s ago`;
-    return `${Math.floor(s / 60)}m ago`;
+    if (s < 10) return tr('just now');
+    if (s < 60) return tr('{s}s ago', { s });
+    return tr('{m}m ago', { m: Math.floor(s / 60) });
 }
 
 function Stat({ label, value, alert }) {
@@ -56,28 +59,28 @@ const ACTIVE = ['queued', 'extracting', 'transcribing', 'analyzing'];
 // Checklist rows over the serve health shape. Same 9-row board, same
 // density — only the probes changed (engine instead of PHP/Node).
 const CHECKS = (live, extra) => [
-    { label: 'Engine', version: live.version, value: { ok: true } },
+    { label: tr('Engine'), version: live.version, value: { ok: true } },
     { label: `ffmpeg${live.ffmpeg_libass ? ' + libass' : ''}`, value: { ok: live.ffmpeg_ok, hint: extra.jobsDir } },
-    { label: 'render encoder', version: live.encoder, value: { ok: true } },
+    { label: tr('render encoder'), version: live.encoder, value: { ok: true } },
     {
-        label: 'whisper sidecar',
+        label: tr('whisper sidecar'),
         version: live.whisper_vulkan ? 'vulkan' : live.whisper_cli ? 'cpu' : null,
         value: { ok: live.whisper_cli || live.whisper_vulkan },
     },
     { label: 'GPU', value: { ok: live.gpu_available, hint: extra.gpuReason } },
     {
-        label: `STT model (${extra.sttModel})`,
-        value: { ok: extra.sttReady, hint: extra.sttReady ? 'On disk, ready to transcribe.' : 'Pick it in Settings to download.' },
+        label: tr('STT model ({model})', { model: extra.sttModel }),
+        value: { ok: extra.sttReady, hint: extra.sttReady ? tr('On disk, ready to transcribe.') : tr('Pick it in Settings to download.') },
     },
-    { label: 'Storage', value: { ok: true, hint: extra.jobsDir } },
-    { label: 'Queue (gpu worker)', value: { ok: true, hint: extra.queueHint } },
-    { label: 'Connection', value: { ok: extra.connected, hint: extra.socketHint } },
+    { label: tr('Storage'), value: { ok: true, hint: extra.jobsDir } },
+    { label: tr('Queue (gpu worker)'), value: { ok: true, hint: extra.queueHint } },
+    { label: tr('Connection'), value: { ok: extra.connected, hint: extra.socketHint } },
 ];
 
 const FALLBACK = {
     version: '…', ffmpeg_ok: null, ffmpeg_libass: false, encoder: '…',
     whisper_cli: null, whisper_vulkan: false, yunet_ok: null,
-    gpu_available: null, gpu_reason: 'Probing…', jobs_dir: '…',
+    gpu_available: null, gpu_reason: null, jobs_dir: '…',
 };
 
 /** One report to attach to a bug: versions, health, settings without
@@ -85,6 +88,7 @@ const FALLBACK = {
  *  file manager. */
 function DiagnosticsButton() {
     const [busy, setBusy] = useState(false);
+    const t = useT();
     function run() {
         if (busy) return;
         setBusy(true);
@@ -92,13 +96,13 @@ function DiagnosticsButton() {
             .then((d) => {
                 if (!d?.path) return;
                 if (isTauri()) reveal(d.path);
-                flashMessage(`Diagnostics saved to ${d.path}`);
+                flashMessage(t('Diagnostics saved to {path}', { path: d.path }));
             })
-            .catch((e) => flashMessage(`Couldn't export diagnostics: ${e?.message ?? e}`))
+            .catch((e) => flashMessage(t("Couldn't export diagnostics: {error}", { error: e?.message ?? e })))
             .finally(() => setBusy(false));
     }
     return (
-        <Tip label="Save a report (no keys) to attach to a bug" side="top">
+        <Tip label={t('Save a report (no keys) to attach to a bug')} side="top">
             <button
                 type="button"
                 onClick={run}
@@ -106,7 +110,7 @@ function DiagnosticsButton() {
                 className="inline-flex items-center gap-1 font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-60"
             >
                 {busy ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <FileDown className="size-3" aria-hidden />}
-                Export diagnostics
+                {t('Export diagnostics')}
             </button>
         </Tip>
     );
@@ -123,6 +127,7 @@ export default function Health() {
     // the pair reads as one unit without touching.
     const [hot, setHot] = useState(false);
     const [, setTick] = useState(0);
+    const t = useT();
 
     const refresh = () => {
         refreshHealth().then(() => setUpdatedAt(Date.now())).catch(() => {});
@@ -167,12 +172,12 @@ export default function Health() {
     const runningJob = jobs.find((j) => ACTIVE.includes(j.status));
     const checks = CHECKS(live, {
         jobsDir: live.jobs_dir,
-        gpuReason: live.gpu_reason,
+        gpuReason: health ? live.gpu_reason : t('Probing…'),
         sttModel,
         sttReady: !!models[sttModel]?.downloaded,
-        queueHint: runningJob ? `rendering ${runningJob.name}` : 'idle',
+        queueHint: runningJob ? t('rendering {name}', { name: runningJob.name }) : t('idle'),
         connected: conn === 'live',
-        socketHint: conn === 'live' ? 'local socket' : 'reconnecting…',
+        socketHint: conn === 'live' ? t('local socket') : t('reconnecting…'),
     });
     const ready = checks.filter((c) => c.value?.ok).length;
     const connected = conn === 'live';
@@ -190,16 +195,16 @@ export default function Health() {
                 <span aria-hidden className="absolute top-full left-6 h-[5px] w-px bg-border" />
                 <CardHeader className="h-10 justify-center px-4 py-0">
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                        <CardTitle className="text-[13px]">System health</CardTitle>
+                        <CardTitle className="text-[13px]">{t('System health')}</CardTitle>
                         <Badge variant={ready === checks.length ? 'success' : 'secondary'}>
-                            {ready}/{checks.length} ready
+                            {t('{ready}/{total} ready', { ready, total: checks.length })}
                         </Badge>
                         <span className="flex items-center justify-end gap-1.5 text-[11px] text-muted-foreground">
                             <span className={cn(
                                 'size-1.5 rounded-full',
                                 connected ? 'animate-pulse bg-[var(--viral)]' : 'bg-muted-foreground',
                             )} aria-hidden />
-                            {connected ? 'Live' : 'Updated'} · {ago(Date.now() - updatedAt)}
+                            {connected ? t('Live') : t('Updated')} · {ago(Date.now() - updatedAt)}
                         </span>
                     </div>
                 </CardHeader>
@@ -226,11 +231,11 @@ export default function Health() {
                         )}
                     >
                         <div className="grid grid-cols-5 divide-x divide-border rounded-md border">
-                            <Stat label="Working" value={working} />
-                            <Stat label="Paused" value={paused} />
-                            <Stat label="Ready" value={readyCount} />
-                            <Stat label="Rendered" value={rendered} />
-                            <Stat label="Failed" value={failed} alert />
+                            <Stat label={t('Working')} value={working} />
+                            <Stat label={t('Paused')} value={paused} />
+                            <Stat label={t('Ready|count')} value={readyCount} />
+                            <Stat label={t('Rendered')} value={rendered} />
+                            <Stat label={t('Failed|count')} value={failed} alert />
                         </div>
                     </Swap>
                     <div className="flex-1" aria-hidden />
@@ -240,7 +245,7 @@ export default function Health() {
                             onClick={() => window.dispatchEvent(new CustomEvent('digiclip:tour'))}
                             className="font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                         >
-                            Take the tour again
+                            {t('Take the tour again')}
                         </button>
                         <DiagnosticsButton />
                     </div>

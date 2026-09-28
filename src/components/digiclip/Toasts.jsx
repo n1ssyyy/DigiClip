@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { CheckCircle2, Info, X, XCircle } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
 const ICONS = {
     success: { Icon: CheckCircle2, cls: 'text-[var(--viral)]' },
@@ -17,6 +18,7 @@ const ICONS = {
 export function Toast({ toast, onDismiss }) {
     const { Icon, cls } = ICONS[toast.type] ?? ICONS.info;
     const timer = useRef(null);
+    const t = useT();
 
     const clear = () => {
         if (timer.current) clearTimeout(timer.current);
@@ -50,7 +52,7 @@ export function Toast({ toast, onDismiss }) {
             <button
                 type="button"
                 onClick={() => onDismiss(toast.id)}
-                aria-label={`Dismiss: ${toast.title}`}
+                aria-label={t('Dismiss: {title}', { title: toast.title })}
                 className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
                 <X className="size-3.5" aria-hidden />

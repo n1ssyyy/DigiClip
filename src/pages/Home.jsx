@@ -15,6 +15,7 @@ import OptionsButton, { toEngine, useJobOptions } from '../components/digiclip/J
 import ClipInsights, { overall, scoreTone } from '../components/digiclip/ClipInsights';
 import EditClipDialog from '../components/digiclip/EditClipDialog';
 import TranscriptDialog from '../components/digiclip/TranscriptDialog';
+import { useT } from '../lib/i18n';
 
 const VIDEO_RE = new RegExp(`\\.(${VIDEO_EXT.join('|')})$`, 'i');
 
@@ -126,18 +127,19 @@ const TONES = {
 };
 
 function Stepper({ status }) {
+    const t = useT();
     const st = stepState(status);
     const tone = TONES[st.failed ? 'red' : status === 'clips_ready' || status === 'done' ? 'green' : 'orange'];
     const current = status === 'downloading' ? 'Downloading' : st.active != null ? STEPS[st.active]?.label : (LIVE_LABEL[status] ?? 'Done');
     return (
-        <div className="flex items-center" aria-label={`Pipeline: ${current}`}>
+        <div className="flex items-center" aria-label={t('Pipeline: {step}', { step: current ? t(current) : current })}>
             {STEPS.map((s, i) => {
                 const done = i < st.done;
                 const active = i === st.active;
                 const failedDot = st.failed && i === 1;
                 return (
                     <div key={s.key} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
-                        <Tip label={s.label} side="top" className="shrink-0">
+                        <Tip label={t(s.label)} side="top" className="shrink-0">
                             <span
                                 className={cn(
                                 'size-2.5 shrink-0 rounded-full motion-safe:transition-colors motion-safe:duration-500',
@@ -173,6 +175,7 @@ function Stepper({ status }) {
  *  centers in the content page, not the viewport. Held mounted by the
  *  parent's ExitBeat (ms=200). */
 function CancelDialog({ project, onClose, leaving }) {
+    const t = useT();
     const keepRef = useRef(null);
 
     useEffect(() => {
@@ -199,17 +202,17 @@ function CancelDialog({ project, onClose, leaving }) {
                 aria-describedby="cancel-desc"
                 className={cn('w-[min(400px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl', leaving ? 'pop-out' : 'pop')}
             >
-                <h2 id="cancel-title" className="text-[13px] font-semibold">Cancel and remove?</h2>
+                <h2 id="cancel-title" className="text-[13px] font-semibold">{t('Cancel and remove?')}</h2>
                 <p id="cancel-desc" className="mt-1.5 text-[13px] text-muted-foreground">
                     <span className="font-medium text-foreground">{project.name}</span>
-                    {' '}stops processing and its clips are deleted. Your source file stays put. This can't be undone.
+                    {' '}{t('stops processing and its clips are deleted. Your source file stays put. This can\'t be undone.')}
                 </p>
                 <div className="mt-4 flex justify-end gap-2">
                     <Button ref={keepRef} variant="outline" size="sm" onClick={onClose}>
-                        Keep video
+                        {t('Keep video')}
                     </Button>
                     <Button variant="destructive" size="sm" onClick={confirm}>
-                        Remove
+                        {t('Remove')}
                     </Button>
                 </div>
             </div>
@@ -222,6 +225,7 @@ function CancelDialog({ project, onClose, leaving }) {
  *  centered in the content page; ExitBeat-held exit). Only finished jobs
  *  (done, failed, cancelled) leave; running work is never touched. */
 function ClearDialog({ count, onClose, onConfirm, leaving }) {
+    const t = useT();
     const keepRef = useRef(null);
 
     useEffect(() => {
@@ -243,17 +247,17 @@ function ClearDialog({ count, onClose, onConfirm, leaving }) {
                 aria-describedby="clear-desc"
                 className={cn('w-[min(400px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl', leaving ? 'pop-out' : 'pop')}
             >
-                <h2 id="clear-title" className="text-[13px] font-semibold">Remove finished?</h2>
+                <h2 id="clear-title" className="text-[13px] font-semibold">{t('Remove finished?')}</h2>
                 <p id="clear-desc" className="mt-1.5 text-[13px] text-muted-foreground">
-                    {count} finished job{count === 1 ? '' : 's'} leave{count === 1 ? 's' : ''} the queue.
-                    {' '}Running work stays put, and source files are never touched. This can't be undone.
+                    {count === 1 ? t('{n} finished job leaves the queue.', { n: count }) : t('{n} finished jobs leave the queue.', { n: count })}
+                    {' '}{t('Running work stays put, and source files are never touched. This can\'t be undone.')}
                 </p>
                 <div className="mt-4 flex justify-end gap-2">
                     <Button ref={keepRef} variant="outline" size="sm" onClick={onClose}>
-                        Keep
+                        {t('Keep')}
                     </Button>
                     <Button variant="destructive" size="sm" onClick={onConfirm}>
-                        Remove
+                        {t('Remove')}
                     </Button>
                 </div>
             </div>
@@ -268,18 +272,19 @@ function ClearDialog({ count, onClose, onConfirm, leaving }) {
  *  rows), held mounted by the parent's ExitBeat. */
 /** Short tags for a job's non-default look: its aspect when not the
  *  default 9:16, and the focus topic it was ranked for. */
-function jobTags(options) {
+function jobTags(options, t) {
     const tags = [];
     if (options?.aspect && options.aspect !== '9:16') tags.push(options.aspect);
-    if (options?.focus) tags.push(`focus: ${options.focus}`);
+    if (options?.focus) tags.push(t('focus: {topic}', { topic: options.focus }));
     return tags;
 }
 
 function QueueRow({ project, onCancel, leaving, edge }) {
+    const t = useT();
     const failed = project.status === 'failed';
     const cancelled = project.status === 'cancelled';
     const retryable = failed || cancelled;
-    const label = LIVE_LABEL[project.status] ?? project.status;
+    const label = LIVE_LABEL[project.status] ? t(LIVE_LABEL[project.status]) : project.status;
     const merged = project.options?.merge != null;
 
     return (
@@ -300,9 +305,9 @@ function QueueRow({ project, onCancel, leaving, edge }) {
                     <Tip label={project.name} side="top" className="min-w-0">
                         <p className="min-w-0 shrink truncate text-[13px] font-medium">
                             {project.name}
-                            {merged && <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">merged</span>}
-                            {jobTags(project.options).map((t) => (
-                                <span key={t} className="ml-1.5 font-mono text-[10px] text-muted-foreground">{t}</span>
+                            {merged && <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">{t('merged')}</span>}
+                            {jobTags(project.options, t).map((tag) => (
+                                <span key={tag} className="ml-1.5 font-mono text-[10px] text-muted-foreground">{tag}</span>
                             ))}
                         </p>
                     </Tip>
@@ -319,9 +324,9 @@ function QueueRow({ project, onCancel, leaving, edge }) {
                     </span>
                     <span className="flex shrink-0 items-center justify-end gap-0.5">
                         {retryable && (
-                            <Tip label="Retry" side="top">
+                            <Tip label={t('Retry')} side="top">
                                 <button
-                                    type="button" aria-label={`Retry ${project.name}`}
+                                    type="button" aria-label={t('Retry {name}', { name: project.name })}
                                     onClick={() => retryJob(project.id)}
                                     className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                                 >
@@ -329,9 +334,9 @@ function QueueRow({ project, onCancel, leaving, edge }) {
                                 </button>
                             </Tip>
                         )}
-                        <Tip label="Cancel and remove" side="top">
+                        <Tip label={t('Cancel and remove')} side="top">
                             <button
-                                type="button" aria-label={`Cancel ${project.name}`}
+                                type="button" aria-label={t('Cancel {name}', { name: project.name })}
                                 onClick={() => onCancel(project)}
                                 className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                             >
@@ -451,6 +456,7 @@ function clipShape(mp4) {
 }
 
 function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, jobId, onEdit, onClose, leaving }) {
+    const t = useT();
     const videoRef = useRef(null);
     const [waiting, setWaiting] = useState(true);
     const [ready, setReady] = useState(false);
@@ -518,9 +524,9 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, job
                     <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">{title}</p>
                     {sub && <p className="shrink-0 font-mono text-[10px] text-muted-foreground">{sub}</p>}
                     {clip && onEdit && (
-                        <Tip label="Edit and re-render" side="top">
+                        <Tip label={t('Edit and re-render')} side="top">
                             <button
-                                type="button" aria-label="Edit clip"
+                                type="button" aria-label={t('Edit clip')}
                                 onClick={onEdit}
                                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                             >
@@ -529,10 +535,10 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, job
                         </Tip>
                     )}
                     {kitText && kit && (
-                        <Tip label="Upload kit (title + hashtags)" side="top">
+                        <Tip label={t('Upload kit (title + hashtags)')} side="top">
                             <button
-                                type="button" aria-label="Download upload kit"
-                                onClick={() => downloadText(kitText, kit.filename ?? 'upload-kit.txt').catch((e) => flashMessage(`Couldn't save kit: ${e?.message ?? e}`))}
+                                type="button" aria-label={t('Download upload kit')}
+                                onClick={() => downloadText(kitText, kit.filename ?? 'upload-kit.txt').catch((e) => flashMessage(t('Couldn\'t save kit: {error}', { error: e?.message ?? e })))}
                                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                             >
                                 <FileText className="size-4" aria-hidden />
@@ -540,10 +546,10 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, job
                         </Tip>
                     )}
                     {download && (
-                        <Tip label="Download video" side="top">
+                        <Tip label={t('Download video')} side="top">
                             <button
-                                type="button" aria-label="Download video"
-                                onClick={() => downloadArt(download.url, download.filename).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`))}
+                                type="button" aria-label={t('Download video')}
+                                onClick={() => downloadArt(download.url, download.filename).catch((e) => flashMessage(t('Couldn\'t save video: {error}', { error: e?.message ?? e })))}
                                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                             >
                                 <Download className="size-4" aria-hidden />
@@ -551,7 +557,7 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, job
                         </Tip>
                     )}
                     <button
-                        type="button" aria-label="Close player" autoFocus
+                        type="button" aria-label={t('Close player')} autoFocus
                         onClick={onClose}
                         className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                     >
@@ -568,13 +574,13 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, job
                     )}
                     {failed && (
                         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-md bg-black/60 p-4 text-center">
-                            <p className="text-[13px] font-medium text-white">Couldn't load this video</p>
+                            <p className="text-[13px] font-medium text-white">{t('Couldn\'t load this video')}</p>
                             <button
                                 type="button"
                                 onClick={() => { setFailed(false); setWaiting(true); videoRef.current?.load(); }}
                                 className="rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-white/20"
                             >
-                                Retry
+                                {t('Retry')}
                             </button>
                         </div>
                     )}
@@ -611,13 +617,13 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, job
                         <ClipInsights clip={clip} />
                         {clip.variants?.length > 0 && (
                             <div className="space-y-1">
-                                <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">Other shapes</p>
+                                <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">{t('Other shapes')}</p>
                                 <div className="flex flex-wrap gap-1">
                                     {clip.variants.map((v) => (
                                         <button
                                             key={v.aspect}
                                             type="button"
-                                            onClick={() => downloadArt(artUrl(jobId, v.mp4, clip.rev), `digiclip-clip${clip.rank}-${v.aspect}.mp4`).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`))}
+                                            onClick={() => downloadArt(artUrl(jobId, v.mp4, clip.rev), `digiclip-clip${clip.rank}-${v.aspect}.mp4`).catch((e) => flashMessage(t('Couldn\'t save video: {error}', { error: e?.message ?? e })))}
                                             className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 font-mono text-[11px] hover:bg-accent"
                                         >
                                             <Download className="size-3" aria-hidden />
@@ -641,6 +647,7 @@ function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, job
  *  — plain transitions, no keyframes, so nothing can snap. Unpaged
  *  mounts keep the classic rise-in. */
 function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false, exitDelay = 0, entered = true, paged = false }) {
+    const t = useT();
     const playable = clip.render_status === 'done' && clip.mp4;
     // making -> done crossfade: the render pill melts between states
     // instead of snapping, and the poster fades in over the tile.
@@ -666,8 +673,9 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
     const shape = clipShape(clip.mp4);
     const fileName = `digiclip-clip${clip.rank}-${shape.tag}.mp4`;
     const score = overall(clip);
+    const clipTitle = clip.title || t('Clip #{n}', { n: clip.rank });
     const play = () => onPlay({
-        title: clip.title || `Clip #${clip.rank}`,
+        title: clipTitle,
         sub: projectName,
         src: artUrl(job.id, clip.mp4, clip.rev),
         shape,
@@ -679,7 +687,7 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
         <div
             role={playable ? 'button' : undefined}
             tabIndex={playable ? 0 : undefined}
-            aria-label={playable ? `Play ${clip.title || `Clip #${clip.rank}`}` : undefined}
+            aria-label={playable ? t('Play {name}', { name: clipTitle }) : undefined}
             onClick={playable ? play : undefined}
             onKeyDown={playable ? (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -701,13 +709,13 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
         >
             <span className="flex h-6 items-center gap-1.5 text-[11px] font-medium">
                 <Film className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="truncate">{clip.title || `Clip #${clip.rank}`}</span>
+                <span className="truncate">{clipTitle}</span>
             </span>
             <span className="relative my-1 min-h-0 flex-1 overflow-hidden rounded bg-muted/50">
                 <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
                 {playable && clip.poster && <FadeImg key={clip.rev ?? 0} src={artUrl(job.id, clip.poster, clip.rev)} />}
                 {score != null && (
-                    <Tip label="Virality score (open the clip for why)" side="top" className="absolute top-1 left-1">
+                    <Tip label={t('Virality score (open the clip for why)')} side="top" className="absolute top-1 left-1">
                         <span className="flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white tabular-nums">
                             <span className={cn('size-1.5 rounded-full', scoreTone(score))} aria-hidden />
                             {score}
@@ -729,13 +737,13 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
                     pillPhase === 'out' ? 'opacity-0' : 'opacity-100',
                 )}>
                 {pillShown === 'done' ? (
-                    <Tip label={`Download clip #${clip.rank}`} side="top">
+                    <Tip label={t('Download clip #{n}', { n: clip.rank })} side="top">
                         <button
                             type="button"
-                            aria-label={`Download clip #${clip.rank}`}
+                            aria-label={t('Download clip #{n}', { n: clip.rank })}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                downloadArt(artUrl(job.id, clip.mp4, clip.rev), fileName).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`));
+                                downloadArt(artUrl(job.id, clip.mp4, clip.rev), fileName).catch((e) => flashMessage(t('Couldn\'t save video: {error}', { error: e?.message ?? e })));
                             }}
                             className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
                         >
@@ -743,11 +751,11 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
                         </button>
                     </Tip>
                 ) : pillShown === 'failed' ? (
-                    <span className="shrink-0 text-red-500">failed</span>
+                    <span className="shrink-0 text-red-500">{t('failed')}</span>
                 ) : (
-                    <Tip label="Clip is being made" side="top">
+                    <Tip label={t('Clip is being made')} side="top">
                         <span className="flex shrink-0 items-center gap-1 justify-end">
-                            making
+                            {t('making')}
                             {rendering ? ` ${progress}%` : ''}
                             <Loader2 className="size-3 animate-spin" aria-hidden />
                         </span>
@@ -765,6 +773,7 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
  *  the grid as clickthrough labels. Scroll the panel (or tap a pill) to
  *  rotate. */
 function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds }) {
+    const t = useT();
     const n = projects.length;
     const idx = Math.max(0, projects.findIndex((p) => p.id === activeId));
     // Signal per project: white = opened, green = fresh/unviewed,
@@ -838,7 +847,7 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds })
         <div
             className="relative flex shrink-0 items-center self-stretch"
             role="navigation"
-            aria-label="Projects"
+            aria-label={t('Projects')}
         >
             {/* Names float over the grid as clickthrough labels; only the
                 pills take up space. */}
@@ -891,7 +900,7 @@ function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds })
                                 >
                                         <button
                                             type="button"
-                                            aria-label={`Jump to ${p.name}`}
+                                            aria-label={t('Jump to {name}', { name: p.name })}
                                             aria-current={current || undefined}
                                             onClick={() => onJump(p.id)}
                                             className={cn(
@@ -946,10 +955,11 @@ function PillExitBeat({ id, ids, top, bottom, children }) {
 }
 
 export default function Home() {
+    const t = useT();
     const projects = useStore((s) => s.jobs);
     const settings = useStore((s) => s.settings);
     const [jobOptions, setJobOptions] = useJobOptions(settings);
-    const limits = { accept: 'MP4 · MOV · MKV · WEBM', note: 'straight off your disk' };
+    const limits = { accept: 'MP4 · MOV · MKV · WEBM', note: t('straight off your disk') };
     const wheelLock = useRef(0);
     const wheelAcc = useRef(0);
     const touchY = useRef(null);
@@ -1183,12 +1193,12 @@ export default function Home() {
     function startFromLink() {
         const url = link.trim();
         if (!linkOk) {
-            flashMessage('Paste a full link, starting with https://');
+            flashMessage(t('Paste a full link, starting with https://'));
             return;
         }
         startJobUrl(url, baseOptions())
             .then(() => setLink(''))
-            .catch((e) => flashMessage(`Couldn't start the link: ${e?.message ?? e}`));
+            .catch((e) => flashMessage(t('Couldn\'t start the link: {error}', { error: e?.message ?? e })));
     }
 
     function startFromPath(path) {
@@ -1199,9 +1209,9 @@ export default function Home() {
         // but no job appears, the failure is downstream (and the catch
         // below will name it); if even this stays silent, the drop
         // event itself never arrived.
-        flashMessage(`Starting ${name}…`);
+        flashMessage(t('Starting {name}…', { name }));
         startJob(path, baseOptions())
-            .catch((e) => flashMessage(`Couldn't start ${name}: ${e?.message ?? e}`))
+            .catch((e) => flashMessage(t('Couldn\'t start {name}: {error}', { name, error: e?.message ?? e })))
             .finally(() => {
                 setTimeout(() => setUploading(null), 800);
             });
@@ -1211,13 +1221,13 @@ export default function Home() {
     function startFromPaths(paths) {
         const vids = (paths ?? []).filter((p) => VIDEO_RE.test(p));
         vids.forEach((p) => startFromPath(p));
-        if (vids.length > 1) flashMessage(`Queued ${vids.length} videos`);
+        if (vids.length > 1) flashMessage(t('Queued {n} videos', { n: vids.length }));
     }
 
     function browse() {
         pickVideos()
             .then(startFromPaths)
-            .catch((e) => flashMessage(`Browse failed: ${e?.message ?? e}`));
+            .catch((e) => flashMessage(t('Browse failed: {error}', { error: e?.message ?? e })));
     }
 
     // Window drops carry real paths (Tauri drag-drop event); the upload
@@ -1282,7 +1292,7 @@ export default function Home() {
                         <div
                             role="button"
                             tabIndex={0}
-                            aria-label="Pick a video to clip"
+                            aria-label={t('Pick a video to clip')}
                             onClick={browse}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' || e.key === ' ') {
@@ -1307,7 +1317,7 @@ export default function Home() {
                                     const names = files.map((f) => f.name).join(', ');
                                     setTimeout(() => {
                                         if (Date.now() - lastTauriDrop.current > 1500) {
-                                            flashMessage(`Got “${names}” but no file path arrived — the drop event isn't firing. Rebuild the desktop app to pick up the fix.`);
+                                            flashMessage(t('Got “{names}” but no file path arrived — the drop event isn\'t firing. Rebuild the desktop app to pick up the fix.', { names }));
                                         }
                                     }, 1500);
                                 }
@@ -1326,7 +1336,7 @@ export default function Home() {
                                 <OptionsButton options={jobOptions} onChange={setJobOptions} />
                             </div>
                             <UploadCloud className="size-6 shrink-0 text-muted-foreground" aria-hidden />
-                            <span className="text-[13px] font-medium">Drop a video here, or click to browse</span>
+                            <span className="text-[13px] font-medium">{t('Drop a video here, or click to browse')}</span>
                             <span className="font-mono text-[10px] text-muted-foreground">
                                 {limits.accept} · {limits.note}
                             </span>
@@ -1341,18 +1351,18 @@ export default function Home() {
                                     type="url"
                                     value={link}
                                     onChange={(e) => setLink(e.target.value)}
-                                    placeholder="…or paste a link (YouTube, Vimeo, X…)"
-                                    aria-label="Video link"
+                                    placeholder={t('…or paste a link (YouTube, Vimeo, X…)')}
+                                    aria-label={t('Video link')}
                                     className="h-full w-full min-w-0 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-2 pl-8 text-[12px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring"
                                 />
                             </div>
                             <Button type="submit" size="sm" variant="secondary" disabled={!linkOk} className="h-full">
-                                Fetch
+                                {t('Fetch')}
                             </Button>
                         </form>
                         {uploading && (
                             <p className="pt-1 font-mono text-[11px] text-muted-foreground">
-                                {uploading.name} — starting…
+                                {t('{name} — starting…', { name: uploading.name })}
                             </p>
                         )}
                     </CardContent>
@@ -1369,10 +1379,10 @@ export default function Home() {
                     <span aria-hidden className="absolute top-full left-6 h-[5px] w-px bg-border" />
                     <CardHeader className="h-10 justify-center py-0 pr-2 pl-4">
                         <div className="flex items-center justify-between gap-2">
-                            <CardTitle className="text-[13px]">Queue</CardTitle>
-                            <Tip label="Remove finished jobs" side="top">
+                            <CardTitle className="text-[13px]">{t('Queue')}</CardTitle>
+                            <Tip label={t('Remove finished jobs')} side="top">
                                 <button
-                                    type="button" aria-label="Remove finished jobs"
+                                    type="button" aria-label={t('Remove finished jobs')}
                                     disabled={finishedIds.length === 0}
                                     onClick={() => setConfirmClear(true)}
                                     className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
@@ -1392,7 +1402,7 @@ export default function Home() {
                         {projects.length === 0 ? (
                             <div className="flex min-h-full items-center justify-center">
                                 <p className="text-center text-[13px] text-muted-foreground">
-                                Queue is clear. Drop your first video above.
+                                {t('Queue is clear. Drop your first video above.')}
                             </p>
                             </div>
                         ) : (
@@ -1423,11 +1433,11 @@ export default function Home() {
                     <span aria-hidden className="absolute top-full left-6 h-[5px] w-px bg-border" />
                     <CardHeader className="h-10 justify-center py-0 pr-2 pl-4">
                         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-[13px]">
-                            <span className="font-semibold">Projects</span>
+                            <span className="font-semibold">{t('Projects')}</span>
                             {shown != null && (
                                 <>
                                     <Badge variant="secondary" className="gap-1.5">
-                                        {LIVE_LABEL[shown.status] ?? shown.status}
+                                        {LIVE_LABEL[shown.status] ? t(LIVE_LABEL[shown.status]) : shown.status}
                                         <span className={cn('size-1.5 rounded-full', statusDot(shown.status))} aria-hidden />
                                         <span className="font-mono text-[10px]">
                                             {shownIdx + 1}/{projects.length}
@@ -1436,20 +1446,20 @@ export default function Home() {
                                     <span className="flex min-w-0 items-center justify-end gap-1">
                                         {shown.options?.merge != null && (
                                             <Badge variant="secondary" className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                                                merged
+                                                {t('merged')}
                                             </Badge>
                                         )}
-                                        {jobTags(shown.options).map((t) => (
-                                            <Badge key={t} variant="secondary" className="max-w-32 shrink-0 truncate font-mono text-[10px] text-muted-foreground">
-                                                {t}
+                                        {jobTags(shown.options, t).map((tag) => (
+                                            <Badge key={tag} variant="secondary" className="max-w-32 shrink-0 truncate font-mono text-[10px] text-muted-foreground">
+                                                {tag}
                                             </Badge>
                                         ))}
                                         <span className="truncate font-medium">
                                             {shown.name}
                                         </span>
-                                        <Tip label="Transcript: make a clip from any stretch" side="top">
+                                        <Tip label={t('Transcript: make a clip from any stretch')} side="top">
                                             <button
-                                                type="button" aria-label={`Open the transcript of ${shown.name}`}
+                                                type="button" aria-label={t('Open the transcript of {name}', { name: shown.name })}
                                                 disabled={shown.status !== 'clips_ready' && shown.status !== 'done'}
                                                 onClick={() => setTranscriptJob(shown.id)}
                                                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
@@ -1457,9 +1467,9 @@ export default function Home() {
                                                 <ScrollText className="size-4" aria-hidden />
                                             </button>
                                         </Tip>
-                                        <Tip label="Merge picks into one video" side="top">
+                                        <Tip label={t('Merge picks into one video')} side="top">
                                             <button
-                                                type="button" aria-label={`Merge ${shown.name} into one video`}
+                                                type="button" aria-label={t('Merge {name} into one video', { name: shown.name })}
                                                 onClick={mergeShown}
                                                 className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                                             >
@@ -1501,7 +1511,7 @@ export default function Home() {
                     {shown == null ? (
                         <div className="flex h-full items-center justify-center px-4">
                             <p className="text-center text-[13px] text-muted-foreground">
-                            Nothing here yet. Uploads appear here grouped by project.
+                            {t('Nothing here yet. Uploads appear here grouped by project.')}
                         </p>
                         </div>
                     ) : (
@@ -1527,14 +1537,14 @@ export default function Home() {
                                     !leaving && dir === 'up' && 'proj-enter-up',
                                 )}
                             >
-                                <Tip label={`Play ${shown.name}`} side="top" className={cn('flex min-h-0', sourceCls)}>
+                                <Tip label={t('Play {name}', { name: shown.name })} side="top" className={cn('flex min-h-0', sourceCls)}>
                                 <div
                                     role="button"
                                     tabIndex={0}
-                                    aria-label={`Play ${shown.name}`}
+                                    aria-label={t('Play {name}', { name: shown.name })}
                                     onClick={() => setPlayer({
                                         title: shown.name,
-                                        sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
+                                        sub: t('Source') +(fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
                                         src: srcUrl(shown.id),
                                         poster: artUrl(shown.id, 'poster.jpg'),
                                         download: { url: srcUrl(shown.id), filename: `${shown.name}.mp4` },
@@ -1545,7 +1555,7 @@ export default function Home() {
                                             e.preventDefault();
                                             setPlayer({
                                                 title: shown.name,
-                                                sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
+                                                sub: t('Source') +(fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
                                                 src: srcUrl(shown.id),
                                                 poster: artUrl(shown.id, 'poster.jpg'),
                                                 download: { url: srcUrl(shown.id), filename: `${shown.name}.mp4` },
@@ -1567,11 +1577,11 @@ export default function Home() {
                                     <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
                                     <FadeImg src={artUrl(shown.id, 'poster.jpg')} eager />
                                     <span className="absolute top-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                                        SOURCE{fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''}
+                                        {t('SOURCE')}{fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''}
                                     </span>
                                     {clipCount === 0 && shown.status !== 'failed' && (
                                         <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
-                                            Clips land here
+                                            {t('Clips land here')}
                                         </span>
                                     )}
                                 </div>
@@ -1591,10 +1601,10 @@ export default function Home() {
                                 })}
                             </div>
                             {pageTotal > 1 && (
-                                <div className="flex h-6 shrink-0 items-center justify-center gap-1" role="navigation" aria-label="Clip pages">
+                                <div className="flex h-6 shrink-0 items-center justify-center gap-1" role="navigation" aria-label={t('Clip pages')}>
                                     <button
                                         type="button"
-                                        aria-label="Previous clips"
+                                        aria-label={t('Previous clips')}
                                         disabled={page === 0}
                                         onClick={() => flipPage(page - 1)}
                                         className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
@@ -1606,7 +1616,7 @@ export default function Home() {
                                     </span>
                                     <button
                                         type="button"
-                                        aria-label="Next clips"
+                                        aria-label={t('Next clips')}
                                         disabled={page >= pageTotal - 1}
                                         onClick={() => flipPage(page + 1)}
                                         className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"

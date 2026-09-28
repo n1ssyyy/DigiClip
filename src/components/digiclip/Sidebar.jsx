@@ -1,6 +1,7 @@
 import { Activity, House as HouseIcon, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { navigate, useStore } from '../../lib/socket';
+import { useT } from '../../lib/i18n';
 
 const noDrag = { WebkitAppRegion: 'no-drag' };
 
@@ -52,19 +53,20 @@ function SideLink({ page, label, active, children }) {
  */
 export default function Sidebar() {
     const page = useStore((s) => s.page);
+    const t = useT();
 
     return (
         <aside className="sticky top-[var(--chrome)] z-20 flex h-[calc(100vh_-_var(--chrome))] w-[var(--chrome)] shrink-0 flex-col gap-1 bg-background py-[5px] select-none">
-            <nav aria-label="Primary" className="flex flex-col gap-1">
-                <SideLink page="home" label="Home" active={page === 'home'}>
+            <nav aria-label={t('Primary')} className="flex flex-col gap-1">
+                <SideLink page="home" label={t('Home')} active={page === 'home'}>
                     <HouseIcon className="size-4" aria-hidden />
                 </SideLink>
-                <SideLink page="health" label="Health" active={page === 'health'}>
+                <SideLink page="health" label={t('Health')} active={page === 'health'}>
                     <Activity className="size-4" aria-hidden />
                 </SideLink>
             </nav>
             <div className="mt-auto">
-                <SideLink page="settings" label="Settings" active={page === 'settings'}>
+                <SideLink page="settings" label={t('Settings')} active={page === 'settings'}>
                     <SettingsIcon className="size-4" aria-hidden />
                 </SideLink>
             </div>
