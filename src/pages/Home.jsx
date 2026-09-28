@@ -8,10 +8,12 @@ import {
     artUrl, srcUrl, startJob, removeJob, retryJob,
     fetchKit, downloadArt, downloadText, flashMessage, useStore,
 } from '../lib/socket';
-import { isTauri, onDragHover, onFilesDropped, pickVideo } from '../lib/native';
+import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../lib/native';
 import Tip from '../components/digiclip/Tooltip';
 import { FadeImg } from '../components/digiclip/Skeleton';
-import OptionsButton, { useJobOptions } from '../components/digiclip/JobOptions';
+import OptionsButton, { lookOptions, useJobOptions } from '../components/digiclip/JobOptions';
+
+const VIDEO_RE = new RegExp(`\\.(${VIDEO_EXT.join('|')})$`, 'i');
 
 // Pipeline steps shown as dots joined by lines in the queue.
 const STEPS = [
@@ -423,7 +425,15 @@ function QueueExitBeat({ id, ids, project, onCancel }) {
  *  flash/cutout. State also resets only when the src actually changes,
  *  so background store updates can't yank a playing video back to its
  *  skeleton. */
-function PlayerDialog({ title, sub, src, poster, tall, download, kit, onClose, leaving }) {
+/** Clip shape from its file name (`clip-01-4x5.mp4`); 9:16 when untagged. */
+function clipShape(mp4) {
+    const m = /-(\d+)x(\d+)\.mp4$/i.exec(mp4 ?? '');
+    const w = m ? +m[1] : 9;
+    const h = m ? +m[2] : 16;
+    return { w, h, tag: `${w}x${h}` };
+}
+
+function PlayerDialog({ title, sub, src, poster, shape, download, kit, onClose, leaving }) {
     const videoRef = useRef(null);
     const [waiting, setWaiting] = useState(true);
     const [ready, setReady] = useState(false);
@@ -478,12 +488,13 @@ function PlayerDialog({ title, sub, src, poster, tall, download, kit, onClose, l
                 aria-label={title}
                 className={cn(
                     'rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-3 shadow-2xl',
-                    // Generated clips are 9:16 vertical: narrow portrait box
-                    // sized to land on true 9:16 (no pillar bars).
-                    // Source playback stays a wide landscape box.
-                    tall ? 'w-[min(340px,100%)]' : 'w-[min(760px,100%)]',
                     leaving ? 'pop-out' : 'pop',
                 )}
+                // Generated clips size the box to their own shape (a 9:16
+                // clip gets the same 340px portrait box as always, 1:1 and
+                // 4:5 grow wider) so the video lands without bars. Source
+                // playback stays a wide landscape box.
+                style={{ width: shape ? `min(${Math.min(760, Math.round(316 * shape.w / shape.h) + 24)}px, 100%)` : 'min(760px, 100%)' }}
             >
                 <div className="flex items-center gap-2 pb-2">
                     <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">{title}</p>
@@ -537,13 +548,16 @@ function PlayerDialog({ title, sub, src, poster, tall, download, kit, onClose, l
                             </button>
                         </div>
                     )}
-                    <div className={cn(
-                        'overflow-hidden rounded bg-black',
-                        // The frame owns the shape: portrait clips get a
-                        // full-width 9:16 box so the video fills the dialog
-                        // edge to edge; landscape keeps its wide box.
-                        tall ? 'mx-auto aspect-[9/16] max-h-[72dvh] w-full' : 'aspect-video w-full',
-                    )}>
+                    <div
+                        className={cn(
+                            'overflow-hidden rounded bg-black',
+                            // The frame owns the shape: clips get a full-width
+                            // box at their own aspect so the video fills the
+                            // dialog edge to edge; the source keeps 16:9.
+                            shape ? 'mx-auto max-h-[72dvh] w-full' : 'aspect-video w-full',
+                        )}
+                        style={shape ? { aspectRatio: `${shape.w} / ${shape.h}` } : undefined}
+                    >
                     <video
                         ref={videoRef}
                         className={cn(
@@ -595,12 +609,14 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
     // first (render_pct is still 0), the encode takes over after.
     const progress = (clip.render_pct ?? 0) > 0 ? clip.render_pct : (clip.track_pct ?? 0);
     const rendering = clip.render_status === 'rendering' && progress > 0;
+    const shape = clipShape(clip.mp4);
+    const fileName = `digiclip-clip${clip.rank}-${shape.tag}.mp4`;
     const play = () => onPlay({
         title: clip.title || `Clip #${clip.rank}`,
         sub: projectName,
         src: artUrl(job.id, clip.mp4),
-        tall: true,
-        download: { url: artUrl(job.id, clip.mp4), filename: `digiclip-clip${clip.rank}-9x16.mp4` },
+        shape,
+        download: { url: artUrl(job.id, clip.mp4), filename: fileName },
         kit: clip.kit ? { job: job.id, rank: clip.rank, filename: clip.kit } : null,
     });
     return (
@@ -655,7 +671,7 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
                             aria-label={`Download clip #${clip.rank}`}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                downloadArt(artUrl(job.id, clip.mp4), `digiclip-clip${clip.rank}-9x16.mp4`).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`));
+                                downloadArt(artUrl(job.id, clip.mp4), fileName).catch((e) => flashMessage(`Couldn't save video: ${e?.message ?? e}`));
                             }}
                             className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
                         >
@@ -1097,6 +1113,7 @@ export default function Home() {
             framing: 'smart',
             model: settings?.stt_model,
             gpu: settings?.gpu,
+            ...lookOptions(jobOptions),
         };
     }
 
@@ -1125,9 +1142,16 @@ export default function Home() {
             });
     }
 
+    // Several files at once queue one job each; the engine runs them in turn.
+    function startFromPaths(paths) {
+        const vids = (paths ?? []).filter((p) => VIDEO_RE.test(p));
+        vids.forEach((p) => startFromPath(p));
+        if (vids.length > 1) flashMessage(`Queued ${vids.length} videos`);
+    }
+
     function browse() {
-        pickVideo()
-            .then((path) => { if (path) startFromPath(path); })
+        pickVideos()
+            .then(startFromPaths)
             .catch((e) => flashMessage(`Browse failed: ${e?.message ?? e}`));
     }
 
@@ -1135,8 +1159,7 @@ export default function Home() {
     // card's own drag handlers are hover paint only.
     useEffect(() => onFilesDropped((paths) => {
         lastTauriDrop.current = Date.now();
-        const vid = (paths ?? []).find((p) => /\.(mp4|mov|mkv|webm|m4a)$/i.test(p));
-        if (vid) startFromPath(vid);
+        startFromPaths(paths);
     }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Hover paint rides the OS drag channel (enter/over lights the card,
@@ -1415,7 +1438,6 @@ export default function Home() {
                                         sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
                                         src: srcUrl(shown.id),
                                         poster: artUrl(shown.id, 'poster.jpg'),
-                                        tall: false,
                                         download: { url: srcUrl(shown.id), filename: `${shown.name}.mp4` },
                                         kit: null,
                                     })}
@@ -1427,7 +1449,6 @@ export default function Home() {
                                                 sub: 'Source' + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
                                                 src: srcUrl(shown.id),
                                                 poster: artUrl(shown.id, 'poster.jpg'),
-                                                tall: false,
                                                 download: { url: srcUrl(shown.id), filename: `${shown.name}.mp4` },
                                                 kit: null,
                                             });
