@@ -18,7 +18,7 @@ const S = {
     settings: null,
     models: {},
     health: null,
-    orModels: null,
+    aiModels: {}, // provider id -> last ai_models reply
     toasts: [],
     flash: null,
     mcp: null, // MCP server: port, token, clients, activity, tools, installed apps
@@ -253,14 +253,32 @@ function pushToast(type, title, body) {
     S.toasts = [...S.toasts.slice(-3), { id: toastSeq++, type, title, body }];
 }
 
+export const FLASH_MS = 6000;
+
 function flash(text) {
     S.flash = text;
     emit();
+    armFlash();
+}
+
+function armFlash() {
     if (flashTimer) clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
         S.flash = null;
         emit();
-    }, 6000);
+    }, FLASH_MS);
+}
+
+/** Hold the banner open while the pointer is on it; leaving gives it a
+ *  fresh full life again. */
+export function holdFlash(on) {
+    if (!S.flash) return;
+    if (on) {
+        if (flashTimer) clearTimeout(flashTimer);
+        flashTimer = null;
+    } else {
+        armFlash();
+    }
 }
 
 function apply(frame) {
@@ -349,6 +367,10 @@ function apply(frame) {
             break;
         case 'mcp':
             S.mcp = ev.mcp ?? S.mcp;
+            break;
+        case 'settings':
+            // Saved by the engine itself (a model was picked after a fetch).
+            S.settings = ev.settings ?? S.settings;
             break;
         case 'mcp_focus':
             // Only the main window follows; the tray menu has its own socket.
@@ -492,14 +514,20 @@ export function refreshHealth() {
     }).catch(() => null);
 }
 
-export function loadOrModels(refresh = false) {
-    return cmd('or_models', { refresh }, { busy: false, timeoutMs: 90000 }).then((data) => {
+/** Model list of a Clip AI provider. Reply: `{provider, models, fetched_ms,
+ *  picked}`; `picked` is the model the engine just saved for you. */
+export function loadAiModels(provider, refresh = false) {
+    return cmd('ai_models', { provider, refresh }, { busy: false, timeoutMs: 90000 }).then((data) => {
         if (data) {
-            S.orModels = data;
+            S.aiModels = { ...S.aiModels, [data.provider ?? provider]: data };
             emit();
         }
         return data;
     });
+}
+
+export function loadOrModels(refresh = false) {
+    return loadAiModels('openrouter', refresh);
 }
 
 // Word-timed transcripts per job: they never change once a job has

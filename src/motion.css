@@ -1,0 +1,619 @@
+/* Motion kit v2: the brand mark, boot splash, window chrome, rail marker
+   and icon life. Two easing voices run through the app: `--ease-out`
+   for things arriving and settling, `--spring` (slight overshoot) for
+   things the user pushed. Everything that moves sits behind
+   `prefers-reduced-motion: no-preference`. */
+:root {
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Brand clapperboard: the arm hinges on the board's top-left corner. */
+.brand-mark {
+    overflow: visible;
+}
+.brand-arm {
+    transform-box: view-box;
+    transform-origin: 3px 11px;
+}
+.brand-board {
+    transform-box: view-box;
+    transform-origin: 12px 21px;
+}
+/* One clap: the arm opens a touch (anticipation), snaps shut onto the
+   board, bounces once on impact and eases back open. */
+@keyframes brand-clap {
+    0% {
+        transform: rotate(0deg);
+        animation-timing-function: ease-out;
+    }
+    22% {
+        transform: rotate(-11deg);
+        animation-timing-function: cubic-bezier(0.6, 0, 1, 0.6);
+    }
+    40% {
+        transform: rotate(16deg);
+        animation-timing-function: ease-out;
+    }
+    47% {
+        transform: rotate(12.5deg);
+        animation-timing-function: ease-in;
+    }
+    53%,
+    62% {
+        transform: rotate(16deg);
+        animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+/* The board takes the hit: a tiny squash at the moment of impact. */
+@keyframes brand-thud {
+    0%,
+    38%,
+    52%,
+    100% {
+        transform: none;
+    }
+    42% {
+        transform: translateY(0.6px) scaleY(0.94);
+    }
+}
+/* The same clap tucked into the end of a long resting cycle. */
+@keyframes brand-clap-idle {
+    0%,
+    86% {
+        transform: rotate(0deg);
+    }
+    89% {
+        transform: rotate(-9deg);
+        animation-timing-function: cubic-bezier(0.6, 0, 1, 0.6);
+    }
+    91.5% {
+        transform: rotate(16deg);
+    }
+    92.5% {
+        transform: rotate(13deg);
+    }
+    93.5%,
+    95% {
+        transform: rotate(16deg);
+        animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes boot-halo {
+    0%,
+    100% {
+        transform: scale(0.8);
+        opacity: 0.35;
+    }
+    40% {
+        transform: scale(1.12);
+        opacity: 0.8;
+    }
+}
+@keyframes boot-sweep {
+    from {
+        transform: translateX(-110%);
+    }
+    to {
+        transform: translateX(330%);
+    }
+}
+@keyframes splash-out {
+    to {
+        opacity: 0;
+        transform: scale(1.03);
+        filter: blur(4px);
+    }
+}
+@keyframes swap-in {
+    from {
+        opacity: 0;
+        transform: translateY(3px) scale(0.85);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes shake-in {
+    0% {
+        transform: scale(0.6);
+        opacity: 0;
+    }
+    40% {
+        transform: scale(1.08);
+        opacity: 1;
+    }
+    55% {
+        transform: translateX(-3px) rotate(-6deg);
+    }
+    70% {
+        transform: translateX(3px) rotate(5deg);
+    }
+    85% {
+        transform: translateX(-1px) rotate(-2deg);
+    }
+    100% {
+        transform: none;
+    }
+}
+/* Shell arrival after the splash: the chrome slides in from its own
+   edge while the page rises in the middle. */
+@keyframes shell-top {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+}
+@keyframes shell-left {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+}
+/* The rail marker lands with a squash: stretched while it travels,
+   settling to its height at the destination. */
+@keyframes ind-land {
+    0% {
+        scale: 1 1.7;
+    }
+    55% {
+        scale: 1 0.8;
+    }
+    100% {
+        scale: 1 1;
+    }
+}
+/* Saved tick: draws itself, then fades. */
+@keyframes saved-pulse {
+    0% {
+        opacity: 0;
+        transform: translateY(2px) scale(0.9);
+    }
+    15%,
+    80% {
+        opacity: 1;
+        transform: none;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+@keyframes draw {
+    from {
+        stroke-dashoffset: var(--len, 24);
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+.side-ind {
+    top: 0;
+}
+.side-ind-land {
+    transform-origin: left center;
+}
+.no-idle .brand-idle .brand-arm {
+    animation: none;
+}
+.boot-sweep {
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.9), transparent);
+}
+.boot-halo {
+    background: radial-gradient(circle, rgb(255 255 255 / 0.1), transparent 68%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .brand-idle .brand-arm {
+        animation: brand-clap-idle 9s var(--idle-d, 3s) infinite;
+    }
+    .brand-loop .brand-arm {
+        animation: brand-clap 1.25s infinite;
+    }
+    .brand-loop .brand-board {
+        animation: brand-thud 1.25s infinite;
+    }
+    .brand-hover:not(:disabled):is(:hover, :focus-visible) .brand-arm {
+        animation: brand-clap 0.75s both;
+    }
+    .brand-hover:not(:disabled):is(:hover, :focus-visible) .brand-board {
+        animation: brand-thud 0.75s both;
+    }
+    .brand-mark {
+        transition: scale 160ms var(--spring);
+    }
+    .brand-hover:not(:disabled):active .brand-mark {
+        scale: 0.86;
+    }
+    .boot-halo {
+        animation: boot-halo 1.25s ease-in-out infinite;
+    }
+    .boot-sweep {
+        animation: boot-sweep 1.3s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+    }
+    .boot-mark {
+        animation: pop 420ms var(--ease-out) backwards;
+    }
+    .boot-text {
+        animation: rise 420ms var(--ease-out) 90ms backwards;
+    }
+    .boot-track {
+        animation: fade 400ms ease-out 200ms backwards;
+    }
+    .splash-out {
+        animation: splash-out 480ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    .swap-in {
+        animation: swap-in 240ms var(--spring);
+    }
+    .shake-in {
+        animation: shake-in 620ms var(--ease-out) 120ms backwards;
+    }
+    .shell-top {
+        animation: shell-top 420ms var(--ease-out) 120ms backwards;
+    }
+    .shell-left {
+        animation: shell-left 420ms var(--ease-out) 180ms backwards;
+    }
+    .side-ind {
+        transition:
+            transform 440ms var(--spring),
+            height 240ms var(--ease-out);
+    }
+    .side-ind-land {
+        animation: ind-land 460ms var(--ease-out);
+    }
+    .saved-pulse {
+        animation: saved-pulse 1.8s var(--ease-out) forwards;
+    }
+    .draw path,
+    .draw polyline {
+        stroke-dasharray: var(--len, 24);
+        animation: draw 360ms var(--ease-out) 80ms backwards;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Icon life. Every lucide icon with a gesture breathes: once a cycle   */
+/* (9-15s; phase and length scattered per icon by iconMotion.js so no   */
+/* two move together) it performs a small gesture that says what it     */
+/* does. Hovering its control plays the gesture bigger and at once;     */
+/* pressing squashes it. Spinners, disabled controls and `[data-still]` */
+/* subtrees stay still, and Settings can turn the idle part off.        */
+/* ------------------------------------------------------------------ */
+@keyframes g-nudge-r {
+    0%, 100% { transform: none; }
+    45% { transform: translateX(3px); }
+    70% { transform: translateX(-1px); }
+}
+@keyframes g-nudge-l {
+    0%, 100% { transform: none; }
+    45% { transform: translateX(-3px); }
+    70% { transform: translateX(1px); }
+}
+@keyframes g-nudge-d {
+    0%, 100% { transform: none; }
+    45% { transform: translateY(3px); }
+    70% { transform: translateY(-1px); }
+}
+@keyframes g-nudge-u {
+    0%, 100% { transform: none; }
+    45% { transform: translateY(-3px); }
+    70% { transform: translateY(1px); }
+}
+@keyframes g-nudge-ur {
+    0%, 100% { transform: none; }
+    45% { transform: translate(2px, -2px); }
+    70% { transform: translate(-1px, 1px); }
+}
+@keyframes g-nudge-dl {
+    0%, 100% { transform: none; }
+    45% { transform: translate(-2px, 2px); }
+    70% { transform: translate(1px, -1px); }
+}
+@keyframes g-pop {
+    0%, 100% { transform: none; }
+    35% { transform: scale(1.22); }
+    60% { transform: scale(0.94); }
+    80% { transform: scale(1.04); }
+}
+@keyframes g-wiggle {
+    0%, 100% { transform: none; }
+    20% { transform: rotate(-13deg); }
+    45% { transform: rotate(10deg); }
+    65% { transform: rotate(-5deg); }
+    82% { transform: rotate(2deg); }
+}
+@keyframes g-shake {
+    0%, 100% { transform: none; }
+    20% { transform: translateX(-2px) rotate(-4deg); }
+    40% { transform: translateX(2px) rotate(4deg); }
+    60% { transform: translateX(-1.5px) rotate(-2deg); }
+    80% { transform: translateX(1px); }
+}
+@keyframes g-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+@keyframes g-spin-back {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-360deg); }
+}
+@keyframes g-gear {
+    0% { transform: rotate(0deg); }
+    70% { transform: rotate(100deg); }
+    100% { transform: rotate(90deg); }
+}
+@keyframes g-beat {
+    0%, 65%, 100% { transform: none; }
+    15% { transform: scale(1.2); }
+    30% { transform: scale(0.96); }
+    45% { transform: scale(1.12); }
+}
+@keyframes g-blink {
+    0%, 100% { transform: none; }
+    40% { transform: scaleY(0.1); }
+    60% { transform: scaleY(1.05); }
+}
+@keyframes g-twinkle {
+    0%, 100% { transform: none; }
+    35% { transform: scale(1.25) rotate(20deg); }
+    65% { transform: scale(0.92) rotate(-8deg); }
+}
+@keyframes g-tilt {
+    0%, 100% { transform: none; }
+    35% { transform: rotate(-16deg) translateY(-1px); }
+    65% { transform: rotate(6deg); }
+}
+@keyframes g-write {
+    0%, 100% { transform: none; }
+    25%, 75% { transform: translate(-1.5px, 1px) rotate(-10deg); }
+    50% { transform: translate(1.5px, 0) rotate(-4deg); }
+}
+@keyframes g-hop {
+    0%, 100% { transform: none; }
+    30% { transform: translateY(-3px) scaleY(1.06); }
+    55% { transform: scale(1.06, 0.9); }
+    75% { transform: translateY(-1px); }
+}
+@keyframes g-peek {
+    0%, 100% { transform: none; }
+    40% { transform: translate(-1.5px, -1.5px) scale(1.1); }
+    70% { transform: translate(0.5px, 0.5px); }
+}
+@keyframes g-slide {
+    0%, 100% { transform: none; }
+    30% { transform: scaleX(0.82); }
+    60% { transform: scaleX(1.1); }
+}
+@keyframes g-turn {
+    0%, 100% { transform: none; }
+    50% { transform: rotate(90deg) scale(1.08); }
+}
+@keyframes g-power {
+    0%, 100% { transform: none; opacity: 1; }
+    30% { transform: scale(0.86); opacity: 0.55; }
+    60% { transform: scale(1.12); opacity: 1; }
+}
+
+/* Idle forms: the gesture, smaller, packed into the last ~10% of a long
+   cycle so the icon rests most of the time. */
+@keyframes i-nudge-r {
+    0%, 90%, 100% { transform: none; }
+    94% { transform: translateX(2px); }
+    97% { transform: translateX(-0.5px); }
+}
+@keyframes i-nudge-l {
+    0%, 90%, 100% { transform: none; }
+    94% { transform: translateX(-2px); }
+    97% { transform: translateX(0.5px); }
+}
+@keyframes i-nudge-d {
+    0%, 90%, 100% { transform: none; }
+    94% { transform: translateY(2px); }
+    97% { transform: translateY(-0.5px); }
+}
+@keyframes i-nudge-u {
+    0%, 90%, 100% { transform: none; }
+    94% { transform: translateY(-2px); }
+    97% { transform: translateY(0.5px); }
+}
+@keyframes i-pop {
+    0%, 90%, 100% { transform: none; }
+    93.5% { transform: scale(1.14); }
+    96.5% { transform: scale(0.97); }
+}
+@keyframes i-wiggle {
+    0%, 90%, 100% { transform: none; }
+    92% { transform: rotate(-9deg); }
+    94.5% { transform: rotate(7deg); }
+    97% { transform: rotate(-3deg); }
+}
+@keyframes i-shake {
+    0%, 91%, 100% { transform: none; }
+    93% { transform: translateX(-1px); }
+    95% { transform: translateX(1px); }
+    97% { transform: translateX(-0.5px); }
+}
+@keyframes i-gear {
+    0%, 88% { transform: rotate(0deg); }
+    97% { transform: rotate(64deg); }
+    100% { transform: rotate(60deg); }
+}
+@keyframes i-spin {
+    0%, 88% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+@keyframes i-beat {
+    0%, 89%, 97.5%, 100% { transform: none; }
+    91% { transform: scale(1.14); }
+    93% { transform: scale(0.98); }
+    95% { transform: scale(1.08); }
+}
+@keyframes i-blink {
+    0%, 93%, 97%, 100% { transform: none; }
+    95% { transform: scaleY(0.1); }
+}
+@keyframes i-twinkle {
+    0%, 89%, 100% { transform: none; }
+    93% { transform: scale(1.18) rotate(18deg); }
+    97% { transform: scale(0.96) rotate(-4deg); }
+}
+@keyframes i-tilt {
+    0%, 90%, 100% { transform: none; }
+    94% { transform: rotate(-11deg); }
+    97.5% { transform: rotate(3deg); }
+}
+@keyframes i-hop {
+    0%, 90%, 98%, 100% { transform: none; }
+    93.5% { transform: translateY(-2px); }
+    96% { transform: scale(1.04, 0.92); }
+}
+@keyframes i-slide {
+    0%, 91%, 100% { transform: none; }
+    94% { transform: scaleX(0.85); }
+    97% { transform: scaleX(1.06); }
+}
+
+/* The gesture vocabulary: which icon does what. */
+:is(.lucide-arrow-right, .lucide-chevron-right) { --g: g-nudge-r; --i: i-nudge-r; }
+:is(.lucide-arrow-left, .lucide-chevron-left) { --g: g-nudge-l; --i: i-nudge-l; }
+:is(.lucide-download, .lucide-arrow-down-to-line, .lucide-file-down, .lucide-chevron-down, .lucide-arrow-down-right, .lucide-arrow-down-left) { --g: g-nudge-d; --i: i-nudge-d; }
+:is(.lucide-cloud-upload, .lucide-chevron-up) { --g: g-nudge-u; --i: i-nudge-u; }
+:is(.lucide-arrow-up-right, .lucide-app-window, .lucide-external-link) { --g: g-nudge-ur; --i: i-nudge-u; }
+.lucide-arrow-up-left { --g: g-nudge-dl; --i: i-nudge-l; }
+:is(.lucide-plus, .lucide-check, .lucide-circle-check, .lucide-bookmark, .lucide-image-plus, .lucide-folder-plus, .lucide-save, .lucide-merge, .lucide-square, .lucide-copy, .lucide-plug, .lucide-unplug) { --g: g-pop; --i: i-pop; }
+:is(.lucide-bot, .lucide-house, .lucide-info, .lucide-circle-question-mark, .lucide-music, .lucide-languages, .lucide-globe) { --g: g-wiggle; --i: i-wiggle; }
+:is(.lucide-trash-2, .lucide-x, .lucide-circle-x, .lucide-triangle-alert, .lucide-minus, .lucide-circle-minus) { --g: g-shake; --i: i-shake; }
+.lucide-settings { --g: g-gear; --i: i-gear; --hov: 700ms; }
+:is(.lucide-refresh-cw, .lucide-rotate-cw) { --g: g-spin; --i: i-spin; --hov: 620ms; }
+.lucide-rotate-ccw { --g: g-spin-back; --i: i-spin; --hov: 620ms; }
+.lucide-activity { --g: g-beat; --i: i-beat; --hov: 800ms; }
+:is(.lucide-eye, .lucide-eye-off) { --g: g-blink; --i: i-blink; --hov: 420ms; }
+:is(.lucide-sparkles, .lucide-wand-sparkles) { --g: g-twinkle; --i: i-twinkle; --hov: 700ms; }
+:is(.lucide-clapperboard, .lucide-film, .lucide-file-play, .lucide-folder-open, .lucide-key-round, .lucide-link-2, .lucide-cpu, .lucide-mic, .lucide-gavel) { --g: g-tilt; --i: i-tilt; }
+.lucide-pencil { --g: g-write; --i: i-tilt; --hov: 640ms; }
+:is(.lucide-file-text, .lucide-scroll-text, .lucide-heart) { --g: g-hop; --i: i-hop; }
+.lucide-search { --g: g-peek; --i: i-tilt; }
+.lucide-sliders-horizontal { --g: g-slide; --i: i-slide; }
+.lucide-power { --g: g-power; --i: i-pop; }
+
+@media (prefers-reduced-motion: no-preference) {
+    svg.lucide {
+        transform-origin: 50% 50%;
+    }
+    svg.lucide:not([class*='transition']) {
+        transition: scale 180ms var(--spring);
+    }
+    /* Idle: icons that have a gesture, never the ones already animated. */
+    svg.lucide:not([class*='animate-']) {
+        animation: var(--i, none) var(--idle-t, 11s) var(--idle-d, 0s) infinite;
+    }
+    .no-idle svg.lucide:not([class*='animate-']),
+    [data-still] svg.lucide,
+    :disabled svg.lucide,
+    [aria-disabled='true'] svg.lucide {
+        animation: none;
+    }
+    /* Hover and keyboard focus: the full gesture, once. */
+    :is(button, a, [role='button'], [role='tab'], [role='menuitem'], [role='option'], label, summary):not(:disabled, [aria-disabled='true']):is(:hover, :focus-visible) svg.lucide:not([class*='animate-']),
+    .icon-hover:hover svg.lucide:not([class*='animate-']) {
+        animation: var(--g, g-pop) var(--hov, 560ms) var(--ease-out) both;
+    }
+    [data-still]:hover svg.lucide {
+        animation: none !important;
+    }
+    /* Press: squash the glyph. The `scale` property composes with the
+       gesture's `transform`, so a press mid-gesture never jumps. */
+    :is(button, a, [role='button'], [role='tab'], [role='menuitem'], label):not(:disabled):active svg.lucide {
+        scale: 0.84;
+        transition-duration: 60ms;
+    }
+    /* Window chrome speaks its own dialect (important: the generic
+       hover rule above is far more specific). */
+    .win-min:hover .lucide-minus {
+        animation: g-nudge-d 420ms var(--ease-out) both !important;
+    }
+    .win-close:hover .lucide-x {
+        animation: g-turn 360ms var(--spring) both !important;
+    }
+}
+
+/* Settings: the nav pill glides between categories; a jumped-to
+   section's icon glints once. */
+@keyframes glint {
+    0% { box-shadow: 0 0 0 0 rgb(255 255 255 / 0); }
+    30% { box-shadow: 0 0 0 4px rgb(255 255 255 / 0.12); }
+    100% { box-shadow: 0 0 0 10px rgb(255 255 255 / 0); }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .nav-pill {
+        transition: transform 380ms var(--spring);
+    }
+    .section-glint .set-section-icon {
+        animation: glint 700ms var(--ease-out) 250ms;
+    }
+    .section-glint .set-section-icon svg.lucide {
+        animation: var(--g, g-pop) 700ms var(--ease-out) 250ms both;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Toasts and the banner: spring up from below, slide down and fade    */
+/* out, and a hairline that drains with the time left.                 */
+/* ------------------------------------------------------------------ */
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes toast-out {
+    from {
+        opacity: 1;
+        transform: none;
+    }
+    to {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+}
+@keyframes life-drain {
+    from {
+        transform: scaleX(1);
+    }
+    to {
+        transform: scaleX(0);
+    }
+}
+.life-line {
+    display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .toast-in {
+        animation: toast-in 320ms var(--spring) backwards;
+    }
+    .toast-out {
+        animation: toast-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+    }
+    .life-line {
+        display: block;
+        animation: life-drain linear forwards;
+    }
+    .life-line[data-paused='true'],
+    .flash-hold:hover .life-line {
+        animation-play-state: paused;
+    }
+}

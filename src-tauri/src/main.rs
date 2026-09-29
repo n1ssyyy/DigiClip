@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use tauri::{AppHandle, Emitter as _, Manager, State};
 
@@ -563,6 +563,46 @@ fn open_url(url: String) -> Result<(), String> {
     }
 }
 
+/// The main window is placed once, the first time it is shown (at launch,
+/// or from the tray after a `--hidden` start). Later shows keep wherever
+/// the user moved it.
+static PLACED: AtomicBool = AtomicBool::new(false);
+
+/// Size and centre the main window on the monitor under the pointer (the
+/// one the user just launched from), inside that monitor's work area so
+/// it never tucks under the taskbar or straddles two screens. 1280x800
+/// when it fits, otherwise 92% of the work area, never below the minimum.
+pub(crate) fn place_main_once(win: &tauri::WebviewWindow) {
+    if PLACED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = win.app_handle();
+    let monitor = app
+        .cursor_position()
+        .ok()
+        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten())
+        .or_else(|| win.current_monitor().ok().flatten());
+    let Some(m) = monitor else {
+        let _ = win.center();
+        return;
+    };
+    let area = *m.work_area();
+    let scale = m.scale_factor();
+    let (aw, ah) = (area.size.width as f64, area.size.height as f64);
+    let fit = |want: f64, min: f64, avail: f64| {
+        (want * scale).min(avail * 0.92).max((min * scale).min(avail)).round()
+    };
+    let (w, h) = (fit(1280.0, 1024.0, aw), fit(800.0, 640.0, ah));
+    let x = area.position.x + ((aw - w) / 2.0).round() as i32;
+    let y = area.position.y + ((ah - h) / 2.0).round() as i32;
+    // Move first so a DPI change between monitors has already happened
+    // when the size lands, then settle the position for the final size.
+    let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+    let _ = win.set_size(tauri::PhysicalSize::new(w as u32, h as u32));
+    let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+}
+
 /// WebKitGTK renders pages in a separate process; if that process dies
 /// (e.g. a media pipeline crash) the window just goes white. Reload
 /// instead — the engine holds all state, so the UI reconnects to exactly
@@ -612,6 +652,7 @@ fn main() {
             // sign-in (`--hidden`) it stays in the tray.
             if let Some(win) = app.get_webview_window("main") {
                 if !hidden {
+                    place_main_once(&win);
                     let _ = win.show();
                 }
                 #[cfg(target_os = "linux")]

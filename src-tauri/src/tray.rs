@@ -111,6 +111,7 @@ pub fn quit(app: &AppHandle) {
 pub fn show_main(app: &AppHandle, page: Option<&str>) {
     hide_menu(app);
     if let Some(win) = app.get_webview_window("main") {
+        crate::place_main_once(&win);
         let _ = win.show();
         let _ = win.unminimize();
         let _ = win.set_focus();

@@ -1,8 +1,12 @@
 import { createRoot } from 'react-dom/client';
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, RotateCw } from 'lucide-react';
 import './app.css';
+import './motion.css';
+import { startIconMotion } from './lib/iconMotion';
 import AppLayout from './layouts/AppLayout';
+import BrandMark from './components/digiclip/BrandMark';
+import { ChromeBar } from './components/digiclip/Titlebar';
 import Home from './pages/Home';
 import Health from './pages/Health';
 import Settings from './pages/Settings';
@@ -11,13 +15,12 @@ import TrayMenu, { jobActivity } from './tray/TrayMenu';
 import { connect, navigate, useStore, whenSynced } from './lib/socket';
 import { getServe, isTauri, onNavigate, onServeFailed, onServeReady, setTrayText, windowLabel } from './lib/native';
 import { t, useLang, useT } from './lib/i18n';
+import { cn } from './lib/utils';
 
 // The tray menu is a second window running this bundle (see tray.rs).
 const IS_TRAY = windowLabel() === 'tray';
 if (IS_TRAY) document.documentElement.classList.add('tray-root');
 
-/** The shell boots the sidecar before first paint: either it is already
- *  up (`get_serve`) or the `serve-ready` event lands. No UI until then. */
 /** The shell boots the sidecar before first paint. Belt and suspenders:
  *  the shell emits `serve-ready`/`serve-failed`, but an event fired
  *  before this listener attaches would be missed — so a local `get_serve`
@@ -56,21 +59,59 @@ function waitServe() {
     });
 }
 
+/** Boot splash: the title bar (so the window can be moved and closed
+ *  while the engine starts), the clapperboard clapping on a beat, the
+ *  phase line and an indeterminate sweep. When the app is ready it stays
+ *  on top for one beat and dissolves into the shell. */
+function Splash({ phase, leaving = false }) {
+    const t = useT();
+    const line = phase === 'sync' ? t('Syncing…') : t('Starting engine…');
+    return (
+        <div className={cn('fixed inset-0 z-[300] flex flex-col rounded-[inherit] bg-background text-foreground', leaving && 'splash-out pointer-events-none')}>
+            <ChromeBar />
+            <div className="flex flex-1 flex-col items-center justify-center gap-5 pb-[var(--chrome)]">
+                <div className="boot-mark relative flex size-20 items-center justify-center">
+                    <span aria-hidden className="boot-halo absolute inset-0 rounded-full" />
+                    <BrandMark mode="loop" className="relative size-11" strokeWidth={1.6} />
+                </div>
+                <div className="boot-text flex flex-col items-center gap-1.5">
+                    <p className="text-[15px] font-semibold tracking-tight">DigiClip</p>
+                    <p key={line} role="status" className="swap-in font-mono text-[11px] text-muted-foreground">{line}</p>
+                </div>
+                <div aria-hidden className="boot-track h-[2px] w-36 overflow-hidden rounded-full bg-white/[0.07]">
+                    <div className="boot-sweep h-full w-1/3 rounded-full" />
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function BootFailed({ error }) {
     const t = useT();
     return (
-        <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 text-foreground">
-            <div className="pop w-[min(440px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl">
-                <h1 className="text-[13px] font-semibold">{t('Engine failed to start')}</h1>
-                <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">{String(error?.message ?? error)}</p>
-                <div className="mt-4 flex justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={() => window.location.reload()}
-                        className="rounded-md bg-primary px-4 py-1.5 text-[13px] font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                    >
-                        {t('Retry')}
-                    </button>
+        <div className="flex h-screen flex-col bg-background text-foreground">
+            <ChromeBar />
+            <div className="flex flex-1 items-center justify-center p-6 pb-[calc(var(--chrome)+1.5rem)]">
+                <div className="pop w-[min(440px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-t-white/20 border-b-black/60 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl">
+                    <div className="flex items-start gap-3">
+                        <span className="shake-in flex size-8 shrink-0 items-center justify-center rounded-md bg-destructive/15 text-red-400">
+                            <AlertTriangle className="size-4" aria-hidden />
+                        </span>
+                        <div className="min-w-0">
+                            <h1 className="text-[13px] font-semibold">{t('Engine failed to start')}</h1>
+                            <p className="mt-1.5 font-mono text-[11px] break-words text-muted-foreground">{String(error?.message ?? error)}</p>
+                        </div>
+                    </div>
+                    <div className="mt-4 flex justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => window.location.reload()}
+                            className="group flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-[13px] font-medium text-primary-foreground transition-[background-color,transform] hover:bg-primary/90 active:scale-95"
+                        >
+                            <RotateCw className="size-3.5" aria-hidden />
+                            {t('Retry')}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -109,7 +150,13 @@ function Shell() {
 
 function Boot() {
     const [phase, setPhase] = useState({ name: 'serve', error: null });
-    const t = useT();
+    // The splash lingers over the fresh shell for its exit beat.
+    const [splash, setSplash] = useState(true);
+    useEffect(() => {
+        if (phase.name !== 'ready') return undefined;
+        const tm = setTimeout(() => setSplash(false), 520);
+        return () => clearTimeout(tm);
+    }, [phase.name]);
 
     useEffect(() => {
         let dead = false;
@@ -145,17 +192,14 @@ function Boot() {
     // boot, and Quit must work even when the engine never comes up.
     if (IS_TRAY) return <TrayMenu />;
     if (phase.name === 'failed') return <BootFailed error={phase.error} />;
-    if (phase.name !== 'ready') {
-        return (
-            <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-foreground">
-                <Loader2 className="size-6 animate-spin text-muted-foreground" aria-hidden />
-                <p className="font-mono text-[11px] text-muted-foreground">
-                    {phase.name === 'sync' ? t('Syncing…') : t('Starting engine…')}
-                </p>
-            </div>
-        );
-    }
-    return <Shell />;
+    if (phase.name !== 'ready') return <Splash phase={phase.name} />;
+    return (
+        <>
+            <Shell />
+            {splash && <Splash phase="sync" leaving />}
+        </>
+    );
 }
 
+if (!IS_TRAY) startIconMotion();
 createRoot(document.getElementById('app')).render(<Boot />);

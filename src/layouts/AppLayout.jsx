@@ -1,24 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Bot, Clapperboard, HelpCircle, X } from 'lucide-react';
+import { Bot, HelpCircle, X } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import Sidebar from '../components/digiclip/Sidebar';
 import PageLine from '../components/digiclip/PageLine';
 import Toasts from '../components/digiclip/Toasts';
 import UpdateNotice from '../components/digiclip/UpdateNotice';
 import Onboarding, { shouldShowOnboarding } from '../components/digiclip/Onboarding';
-import WindowControls from '../components/digiclip/Titlebar';
+import { ChromeBar } from '../components/digiclip/Titlebar';
 import { toolTitle } from '../pages/Mcp';
-import { dismissFlash, dismissToast, navigate, useStore } from '../lib/socket';
+import { dismissFlash, dismissToast, FLASH_MS, holdFlash, navigate, useStore } from '../lib/socket';
 import { cn } from '../lib/utils';
 import { useT } from '../lib/i18n';
-import { dragWindow, isTauri, onMaximized, openExternal, queryMaximized, sendWindowAction } from '../lib/native';
+import { isTauri, openExternal } from '../lib/native';
 
 const noDrag = { WebkitAppRegion: 'no-drag' };
 
 // Sidebar order top to bottom: travel direction follows it, so going
-// Home -> Health -> AI apps -> Settings the new page rises from below, and going
-// back up it drops from above.
-const PAGE_ORDER = { home: 0, health: 1, mcp: 2, settings: 3 };
+// Home -> AI apps -> Health -> Settings the new page rises from below, and
+// going back up it drops from above.
+const PAGE_ORDER = { home: 0, mcp: 1, health: 2, settings: 3 };
 function orderOf(page) {
     return PAGE_ORDER[page] ?? 99;
 }
@@ -31,6 +31,7 @@ function orderOf(page) {
  *  jump. The last text stays rendered while the slot closes. */
 function FlashBar({ text }) {
     const [shown, setShown] = useState(text);
+    const [round, setRound] = useState(0);
     const t = useT();
     useEffect(() => {
         if (text) setShown(text);
@@ -46,7 +47,19 @@ function FlashBar({ text }) {
         >
             <div className="min-h-0 overflow-hidden">
                 <div className="pr-[5px] pb-[5px]">
-                    <Card role="status" aria-live="polite" className="flex h-10 items-center gap-2 pr-1.5 pl-4">
+                    <Card
+                        role="status"
+                        aria-live="polite"
+                        onMouseEnter={() => holdFlash(true)}
+                        onMouseLeave={() => {
+                            holdFlash(false);
+                            setRound((n) => n + 1);
+                        }}
+                        className={cn(
+                            'flash-hold relative flex h-10 items-center gap-2 overflow-hidden pr-1.5 pl-4 motion-safe:transition-[translate,opacity] motion-safe:duration-300 motion-safe:ease-[var(--ease-out)]',
+                            open ? 'translate-y-0' : 'translate-y-2',
+                        )}
+                    >
                         <p key={shown} className="fade min-w-0 flex-1 truncate text-[13px]" title={shown ?? ''}>
                             {shown}
                         </p>
@@ -59,6 +72,14 @@ function FlashBar({ text }) {
                         >
                             <X className="size-3.5" aria-hidden />
                         </button>
+                        {open && (
+                            <span
+                                key={`${shown}-${round}`}
+                                aria-hidden
+                                className="life-line absolute inset-x-0 bottom-0 h-px origin-left bg-foreground/30"
+                                style={{ animationDuration: `${FLASH_MS}ms` }}
+                            />
+                        )}
                     </Card>
                 </div>
             </div>
@@ -113,7 +134,6 @@ export default function AppLayout({ children }) {
     const flash = useStore((s) => s.flash);
     const toasts = useStore((s) => s.toasts);
     const t = useT();
-    const [maximized, setMaximized] = useState(false);
     // Page handoff: the outgoing page fades out first, then the incoming
     // one fades in from the travel direction.
     const childrenRef = useRef(children);
@@ -170,27 +190,6 @@ export default function AppLayout({ children }) {
         return () => window.removeEventListener('digiclip:tour', replay);
     }, [openTour]);
 
-    const toggleMaximize = useCallback(() => {
-        queryMaximized().then((maxed) => {
-            sendWindowAction(maxed ? 'unmaximize' : 'maximize');
-            setMaximized(!maxed);
-        });
-    }, []);
-
-    // Rounded shell: drop the radius when maximized so the window is edge-to-edge.
-    useEffect(() => {
-        document.documentElement.classList.toggle('window-maximized', maximized);
-    }, [maximized]);
-
-    // Stay in sync when the window is maximized via OS shortcuts.
-    useEffect(() => {
-        if (!isTauri()) return;
-        let off = null;
-        queryMaximized().then(setMaximized).catch(() => {});
-        onMaximized(setMaximized).then((f) => { off = f; }).catch(() => {});
-        return () => { off?.(); };
-    }, []);
-
     // External links (target _blank) leave the app via the OS browser
     // instead of spawning an app child window.
     useEffect(() => {
@@ -208,51 +207,26 @@ export default function AppLayout({ children }) {
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
             <PageLine />
-            {/* Custom window chrome: frameless shell, this header is the drag region. */}
-            <header
-                className="sticky top-0 z-10 flex h-[var(--chrome)] items-stretch bg-background/95 pr-0 pl-4 backdrop-blur select-none"
-                data-tauri-drag-region
-                onMouseDown={(e) => {
-                    // Belt and suspenders: the attribute above is the
-                    // native path; the shell drag is the fallback that
-                    // always works. Interactive children opt out.
-                    if (!isTauri() || e.button !== 0) return;
-                    if (e.target.closest('button, a, [data-no-drag]')) return;
-                    dragWindow();
-                }}
-                onDoubleClick={(e) => {
-                    if (!isTauri()) return;
-                    if (e.target.closest('button, a, [data-no-drag]')) return;
-                    toggleMaximize();
-                }}
-            >
-                <button
-                    type="button"
-                    onClick={() => navigate('home')}
-                    data-tauri-drag-region="false"
-                    data-no-drag
-                    style={noDrag}
-                    className="flex cursor-pointer items-center gap-1.5 bg-transparent text-[13px] font-semibold tracking-tight"
-                >
-                    <Clapperboard className="size-3.5" aria-hidden />
-                    DigiClip
-                </button>
-                <div className="flex-1" aria-hidden />
-                <AiPill />
-                <button
-                    type="button"
-                    aria-label={t('Take the tour')}
-                    title={t('Take the tour')}
-                    data-tauri-drag-region="false"
-                    data-no-drag
-                    style={noDrag}
-                    onClick={openTour}
-                    className="mr-0.5 flex items-center justify-center self-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                >
-                    <HelpCircle className="size-3.5" aria-hidden />
-                </button>
-                <WindowControls maximized={maximized} onToggleMaximize={toggleMaximize} />
-            </header>
+            {/* Frameless shell: this bar is the drag region and the window controls. */}
+            <ChromeBar
+                className="shell-top"
+                onBrand={() => navigate('home')}
+                center={<AiPill />}
+                actions={(
+                    <button
+                        type="button"
+                        aria-label={t('Take the tour')}
+                        title={t('Take the tour')}
+                        data-tauri-drag-region="false"
+                        data-no-drag
+                        style={noDrag}
+                        onClick={openTour}
+                        className="mr-0.5 flex items-center justify-center self-center rounded-md p-1.5 text-muted-foreground transition-[background-color,color,transform] hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:scale-90"
+                    >
+                        <HelpCircle className="size-3.5" aria-hidden />
+                    </button>
+                )}
+            />
             <div className="flex flex-1 items-start">
                 <Sidebar />
                 {/* Fixed-height column: the banner slot takes what it needs and
