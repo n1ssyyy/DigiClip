@@ -41,6 +41,21 @@ export function setLang(next) {
     subs.forEach((f) => f());
 }
 
+/** Pick up a language chosen in another window (the tray menu and the
+ *  app share this origin's storage). */
+export function syncLang() {
+    try {
+        const v = localStorage.getItem(STORE_KEY);
+        if (valid(v) && v !== lang) {
+            lang = v;
+            document.documentElement.lang = v;
+            subs.forEach((f) => f());
+        }
+    } catch {
+    }
+}
+if (typeof window !== 'undefined') window.addEventListener('storage', (e) => { if (e.key === STORE_KEY) syncLang(); });
+
 /** Translate `text` (the English source) into the current language.
  *  `{name}` placeholders are filled from `vars`. Works outside React too
  *  (toasts from the socket), reading the language at call time. A

@@ -9,6 +9,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { t } from './i18n';
+import { broadcastSettings, isTauri, onSettings } from './native';
 
 const S = {
     conn: 'boot', // boot | live | retry | failed
@@ -410,9 +411,19 @@ export function saveSettings(patch) {
         if (data) {
             S.settings = data;
             emit();
+            broadcastSettings(data);
         }
         return data;
     });
+}
+
+// The other window (app or tray menu) saved settings.
+if (isTauri()) {
+    onSettings((settings) => {
+        if (!settings) return;
+        S.settings = settings;
+        emit();
+    }).catch(() => {});
 }
 
 export function downloadModel(id) {

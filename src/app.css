@@ -630,3 +630,12 @@ video::-webkit-media-controls-time-remaining-display {
     font-size: 10px;
     color: rgb(255 255 255 / 0.9);
 }
+
+/* Tray menu window: the card paints itself; the window stays clear
+   around its rounded corners and never scrolls. */
+.tray-root #app {
+    height: auto;
+    overflow: hidden;
+    border-radius: 0;
+    background-color: transparent;
+}

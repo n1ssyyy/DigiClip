@@ -4,7 +4,7 @@
  * HTTP round-trip — these are direct shell invokes now.
  */
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { open, save } from '@tauri-apps/plugin-dialog';
@@ -177,4 +177,81 @@ export function onDragHover(cb) {
         dead = true;
         off();
     };
+}
+
+// ---------------------------------------------------------------------------
+// Tray: the app keeps running with its window closed. The tray menu is a
+// second webview (label `tray`) running this same bundle.
+// ---------------------------------------------------------------------------
+
+/** Which window this page runs in: `main` or `tray` (null in a browser). */
+export function windowLabel() {
+    if (!isTauri()) return null;
+    try {
+        return getCurrentWindow().label;
+    } catch {
+        return null;
+    }
+}
+
+/** `{ close_to_tray, tray_hint_seen, autostart, tray }` (null in a browser). */
+export function shellPrefs() {
+    if (!isTauri()) return Promise.resolve(null);
+    return invoke('shell_prefs').catch(() => null);
+}
+
+export function setCloseToTray(on) {
+    return invoke('set_close_to_tray', { on });
+}
+
+/** Launch at sign-in (starts hidden in the tray). */
+export function setAutostart(on) {
+    return invoke('set_autostart', { on });
+}
+
+/** Either window changed a shell pref: re-read them. */
+export function onShellPrefs(fn) {
+    return listen('digiclip:shell-prefs', () => fn());
+}
+
+/** Show the main window, optionally on a page (`home`, `settings`, …). */
+export function openMain(page) {
+    return invoke('open_main', { page: page ?? null }).catch(() => {});
+}
+
+export function hideTrayMenu() {
+    return invoke('hide_tray_menu').catch(() => {});
+}
+
+/** The menu window follows its content's height. */
+export function trayMenuSize(height) {
+    return invoke('tray_menu_size', { height }).catch(() => {});
+}
+
+/** Stop the engine and exit (the tray's Quit). */
+export function quitApp() {
+    return invoke('quit_app').catch(() => {});
+}
+
+export function setTrayText(tooltip, open, quit) {
+    return invoke('set_tray_text', { tooltip, open, quit }).catch(() => {});
+}
+
+export function onTrayOpen(fn) {
+    return listen('digiclip:tray-open', () => fn());
+}
+
+export function onNavigate(fn) {
+    return listen('digiclip:navigate', (e) => fn(e.payload));
+}
+
+/** Settings saved in one window reach the other: the engine answers a
+ *  save only to the socket that sent it. */
+export function broadcastSettings(settings) {
+    if (!isTauri()) return;
+    emit('digiclip:settings', settings).catch(() => {});
+}
+
+export function onSettings(fn) {
+    return listen('digiclip:settings', (e) => fn(e.payload));
 }

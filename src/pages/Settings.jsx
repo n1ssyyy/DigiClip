@@ -10,7 +10,7 @@ import SttModelPicker from '../components/digiclip/SttModelPicker';
 import { GpuToggle } from '../components/digiclip/controls';
 import Tip from '../components/digiclip/Tooltip';
 import { cn } from '../lib/utils';
-import { isTauri, pickFolder } from '../lib/native';
+import { isTauri, onShellPrefs, pickFolder, setAutostart, setCloseToTray, shellPrefs } from '../lib/native';
 import { LANGUAGES, setLang, useLang, useT } from '../lib/i18n';
 import { deleteModel, downloadModel, saveSettings, useStore } from '../lib/socket';
 import { checkForUpdates, ensureAppVersion, runSetup, setAutoUpdate, useUpdates } from '../lib/updates';
@@ -201,6 +201,58 @@ function watchPick(options, presets) {
     return Object.values(options ?? {}).every((v) => v == null) ? '' : '__custom';
 }
 
+/** Tray + sign-in: shell prefs, applied the moment they flip (they live
+ *  in the desktop shell, not the engine's settings form). */
+function BackgroundRows() {
+    const t = useT();
+    const [prefs, setPrefs] = useState(null);
+    useEffect(() => {
+        const refresh = () => shellPrefs().then(setPrefs);
+        refresh();
+        const off = onShellPrefs(refresh);
+        return () => {
+            off.then((f) => f()).catch(() => {});
+        };
+    }, []);
+    if (!prefs) return null;
+    const rows = [
+        {
+            key: 'tray',
+            on: prefs.tray && prefs.close_to_tray,
+            disabled: !prefs.tray,
+            set: (v) => setCloseToTray(v),
+            title: t('Keep running in the tray'),
+            hint: !prefs.tray
+                ? t('No tray on this desktop — closing the window quits.')
+                : prefs.close_to_tray
+                    ? t('Closing the window keeps jobs and the watch folder going. Quit from the tray icon.')
+                    : t('Closing the window quits DigiClip.'),
+        },
+        {
+            key: 'autostart',
+            on: prefs.autostart,
+            set: (v) => setAutostart(v),
+            title: t('Start when I sign in'),
+            hint: prefs.autostart
+                ? t('Starts quietly in the tray, so the watch folder is always on.')
+                : t('Start DigiClip yourself.'),
+        },
+    ];
+    return (
+        <div className="space-y-3">
+            {rows.map((r) => (
+                <div key={r.key} className="flex items-center gap-3">
+                    <GpuToggle checked={!!r.on} disabled={r.disabled} onChange={(v) => r.set(v).then(setPrefs).catch(() => {})} label={r.title} />
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-medium">{r.title}</p>
+                        <p className="text-[11px] text-muted-foreground">{r.hint}</p>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 /** App updates row: auto-check switch + status line + the action for
  *  whatever phase the updater is in (check / hand off to Setup). */
 function UpdatesRow() {
@@ -320,6 +372,12 @@ export default function Settings() {
             watch_options: settings.watch_options ?? {},
         });
     }, [settings]);
+    // The tray menu flips the watch folder on its own: follow it here
+    // instead of leaving the form a step behind (and "unsaved").
+    const savedWatchOn = !!settings?.watch_on;
+    useEffect(() => {
+        setForm((prev) => (prev && prev.watch_on !== savedWatchOn ? { ...prev, watch_on: savedWatchOn } : prev));
+    }, [savedWatchOn]);
     if (!settings || !form) return null;
     const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value });
 
@@ -442,6 +500,11 @@ export default function Settings() {
                             </Field>
                         </div>
                     </Section>
+                    {isTauri() && (
+                        <Section title={t('Background')} className="stagger-2">
+                            <BackgroundRows />
+                        </Section>
+                    )}
                     <form id="settings-form" className="space-y-5" onSubmit={save}>
                         <Section title={t('Connection')} className="stagger-2">
                             <Field

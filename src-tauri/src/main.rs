@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tauri::{AppHandle, Emitter as _, Manager, State};
 
+mod tray;
+
 #[derive(Debug, Clone, serde::Serialize)]
 struct ServeInfo {
     port: u16,
@@ -199,6 +201,22 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
     *state.child.lock().unwrap() = Some(child);
     eprintln!("[shell] serve ready on port {}", info.port);
     Ok(info)
+}
+
+/// Kill the sidecar now. `kill_on_drop` only fires if the whole runtime
+/// unwinds cleanly — a window close short-circuits that, which is how the
+/// engine used to survive as an orphan holding `resources\digiclip.exe`
+/// and breaking the next install ("Error opening file for writing").
+pub(crate) fn stop_engine(app: &AppHandle) {
+    if let Some(state) = app.try_state::<ShellState>() {
+        if let Ok(mut slot) = state.child.lock() {
+            if let Some(child) = slot.as_mut() {
+                let _ = child.start_kill();
+            }
+            *slot = None;
+        }
+        let _ = state.serve.lock().map(|mut s| *s = None);
+    }
 }
 
 #[tauri::command]
@@ -566,17 +584,27 @@ fn reload_on_web_process_crash(win: &tauri::WebviewWindow) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        // First: a second launch (start menu, sign-in entry racing a manual
+        // start) just brings the running app forward.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tray::show_main(app, None);
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(ShellState::default())
+        .manage(tray::TrayState::default())
         .setup(|app| {
+            let hidden = tray::setup(app.handle());
             // Created hidden (tauri.conf `visible: false`) and shown once it
             // is fully undecorated: mapped straight away, GNOME briefly
             // framed it with a title bar, and window-effect extensions
-            // (e.g. Blur my Shell) kept that frame's offset.
+            // (e.g. Blur my Shell) kept that frame's offset. Started at
+            // sign-in (`--hidden`) it stays in the tray.
             if let Some(win) = app.get_webview_window("main") {
-                let _ = win.show();
+                if !hidden {
+                    let _ = win.show();
+                }
                 #[cfg(target_os = "linux")]
                 reload_on_web_process_crash(&win);
             }
@@ -613,6 +641,13 @@ fn main() {
             Ok(())
         })
         .on_window_event(|win, ev| {
+            if win.label() == tray::MENU {
+                tray::menu_window_event(win, ev);
+                return;
+            }
+            if win.label() != "main" {
+                return;
+            }
             // Keep the shell's rounded/fused look in sync with maximize.
             if matches!(
                 ev,
@@ -622,25 +657,20 @@ fn main() {
                     let _ = win.emit("digiclip:maximized", maxed);
                 }
             }
-            // CloseRequested (user X / "close" action) and Destroyed (alt-F4
-            // tearing the webview down) both end the process. `kill_on_drop`
-            // only fires if the whole runtime unwinds cleanly — a window
-            // close short-circuits that, which is how the engine used to
-            // survive as an orphan holding `resources\digiclip.exe` and
-            // breaking the next install ("Error opening file for writing").
-            if matches!(
-                ev,
-                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
-            ) {
-                if let Some(state) = win.app_handle().try_state::<ShellState>() {
-                    if let Ok(mut slot) = state.child.lock() {
-                        if let Some(child) = slot.as_mut() {
-                            let _ = child.start_kill();
-                        }
-                        *slot = None;
+            match ev {
+                // The X (or alt-F4): with the tray on, the app keeps running
+                // — engine, queue and watch folder included — until Quit.
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let app = win.app_handle();
+                    if tray::keeps_running(app) {
+                        api.prevent_close();
+                        let _ = win.hide();
+                    } else {
+                        tray::quit(app);
                     }
-                    let _ = state.serve.lock().map(|mut s| *s = None);
                 }
+                tauri::WindowEvent::Destroyed => stop_engine(win.app_handle()),
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -652,8 +682,23 @@ fn main() {
             is_maximized,
             drag_window,
             reveal,
-            open_url
+            open_url,
+            tray::shell_prefs,
+            tray::set_close_to_tray,
+            tray::set_autostart,
+            tray::open_main,
+            tray::hide_tray_menu,
+            tray::tray_menu_size,
+            tray::quit_app,
+            tray::set_tray_text
         ])
-        .run(tauri::generate_context!())
-        .expect("tauri run");
+        .build(tauri::generate_context!())
+        .expect("tauri build");
+    app.run(|app, ev| match ev {
+        tauri::RunEvent::Exit => stop_engine(app),
+        // macOS: clicking the Dock icon of the running app.
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => tray::show_main(app, None),
+        _ => {}
+    });
 }

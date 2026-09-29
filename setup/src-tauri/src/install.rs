@@ -358,10 +358,29 @@ pub fn unregister() {
     ));
     let _ = std::fs::remove_file(start_menu_dir().join("DigiClip.lnk"));
     let _ = std::fs::remove_file(desktop_dir().join("DigiClip.lnk"));
+    // "Start when I sign in" (the app's Run entry and its Task Manager
+    // enabled/disabled flag).
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    for key in [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run",
+    ] {
+        if let Ok(k) = hkcu.open_subkey_with_flags(key, KEY_SET_VALUE) {
+            let _ = k.delete_value("DigiClip");
+        }
+    }
 }
 
+/// "Start when I sign in" is the app's LaunchAgent.
 #[cfg(target_os = "macos")]
-pub fn unregister() {}
+pub fn unregister() {
+    let _ = std::fs::remove_file(
+        sys::home_dir()
+            .join("Library")
+            .join("LaunchAgents")
+            .join("DigiClip.plist"),
+    );
+}
 
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 pub fn unregister() {
@@ -373,6 +392,13 @@ pub fn unregister() {
         }
     }
     touch_dir(&hicolor_dir());
+    // "Start when I sign in" (XDG autostart entry written by the app).
+    let _ = std::fs::remove_file(
+        sys::home_dir()
+            .join(".config")
+            .join("autostart")
+            .join("DigiClip.desktop"),
+    );
     // Setup ≤2.3.1 symlinked the AppImage as ~/.local/bin/digiclip. Remove
     // it only if it is that symlink — never a real `digiclip` CLI.
     let link = sys::home_dir().join(".local").join("bin").join("digiclip");

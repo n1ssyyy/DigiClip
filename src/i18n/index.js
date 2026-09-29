@@ -5,8 +5,9 @@ import home from './home';
 import settings from './settings';
 import options from './options';
 import clips from './clips';
+import tray from './tray';
 
-const AREAS = [home, settings, options, clips];
+const AREAS = [home, settings, options, clips, tray];
 const LANGS = ['sq', 'de', 'fr', 'es', 'it', 'tr'];
 
 const dicts = {};
