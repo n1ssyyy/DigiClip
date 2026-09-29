@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Clapperboard, HelpCircle, X } from 'lucide-react';
+import { Bot, Clapperboard, HelpCircle, X } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import Sidebar from '../components/digiclip/Sidebar';
 import PageLine from '../components/digiclip/PageLine';
@@ -7,6 +7,7 @@ import Toasts from '../components/digiclip/Toasts';
 import UpdateNotice from '../components/digiclip/UpdateNotice';
 import Onboarding, { shouldShowOnboarding } from '../components/digiclip/Onboarding';
 import WindowControls from '../components/digiclip/Titlebar';
+import { toolTitle } from '../pages/Mcp';
 import { dismissFlash, dismissToast, navigate, useStore } from '../lib/socket';
 import { cn } from '../lib/utils';
 import { useT } from '../lib/i18n';
@@ -15,9 +16,9 @@ import { dragWindow, isTauri, onMaximized, openExternal, queryMaximized, sendWin
 const noDrag = { WebkitAppRegion: 'no-drag' };
 
 // Sidebar order top to bottom: travel direction follows it, so going
-// Home -> Health -> Settings the new page rises from below, and going
+// Home -> Health -> AI apps -> Settings the new page rises from below, and going
 // back up it drops from above.
-const PAGE_ORDER = { home: 0, health: 1, settings: 2 };
+const PAGE_ORDER = { home: 0, health: 1, mcp: 2, settings: 3 };
 function orderOf(page) {
     return PAGE_ORDER[page] ?? 99;
 }
@@ -61,6 +62,48 @@ function FlashBar({ text }) {
                     </Card>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** Title bar pill while an AI app is using DigiClip over MCP: live while
+ *  a call runs, then a quiet "used" line for a minute. Opens the AI apps
+ *  page. */
+function AiPill() {
+    const activity = useStore((s) => s.mcp?.activity);
+    const t = useT();
+    const [now, setNow] = useState(Date.now());
+    const latest = activity?.[0];
+    const running = activity?.find((a) => a.state === 'running');
+    const recent = latest && now - latest.at_ms - (latest.ms ?? 0) < 60000;
+    useEffect(() => {
+        setNow(Date.now());
+        if (!latest) return undefined;
+        const tick = setInterval(() => setNow(Date.now()), 5000);
+        return () => clearInterval(tick);
+    }, [latest?.seq, latest?.state]); // eslint-disable-line react-hooks/exhaustive-deps
+    const show = !!(running || recent);
+    const a = running ?? latest;
+    return (
+        <div className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center">
+            {show && (
+                <button
+                    type="button"
+                    data-no-drag
+                    style={noDrag}
+                    onClick={() => navigate('mcp')}
+                    title={a.detail || undefined}
+                    className="fade pointer-events-auto flex max-w-[min(420px,40vw)] items-center gap-1.5 rounded-full border border-x-white/10 border-t-white/20 border-b-black/60 bg-card px-2.5 py-0.5 text-[11px] transition-colors hover:bg-accent"
+                >
+                    <Bot className="size-3.5 shrink-0" aria-hidden />
+                    <span className={cn('size-1.5 shrink-0 rounded-full', running ? 'animate-pulse bg-orange-500' : 'bg-[var(--viral)]')} aria-hidden />
+                    <span className="truncate">
+                        {running
+                            ? t('{app} is working · {tool}', { app: a.client, tool: toolTitle(a.tool) })
+                            : t('{app} used DigiClip · {tool}', { app: a.client, tool: toolTitle(a.tool) })}
+                    </span>
+                </button>
+            )}
         </div>
     );
 }
@@ -195,6 +238,7 @@ export default function AppLayout({ children }) {
                     DigiClip
                 </button>
                 <div className="flex-1" aria-hidden />
+                <AiPill />
                 <button
                     type="button"
                     aria-label={t('Take the tour')}

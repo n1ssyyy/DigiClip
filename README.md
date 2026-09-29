@@ -91,6 +91,7 @@
 - 📦 **Ready to post.** Each clip comes with `.srt` captions and an upload kit. Full-video mode adds YouTube chapters and a summary.
 - 🔗 **Feeds itself.** Paste a link (YouTube, TikTok, X, Vimeo and more), or point it at a **watch folder** and every video dropped in starts on its own. DigiClip lives in the tray and can start when you sign in, so the folder is always watched.
 - 🚀 **Fast.** Clips render side by side, GPU-encoded on NVENC or VideoToolbox. Three clips from a minute of video take about 15 seconds on a laptop RTX 3050. Audio lands on −14 LUFS, ready for every platform.
+- 🤖 **Claude can drive it.** DigiClip is an MCP server. On the **AI apps** page, one click adds it to Claude Desktop, Claude Code or Cursor. Then just ask: *“make 3 clips from talk.mp4 about pricing and retitle the best one.”* The AI gets the same controls you do (jobs, links, transcripts, clip edits, settings), and every call shows up live in the window.
 - 🌍 **Speaks your language.** The app itself comes in English, Albanian, German, French, Spanish, Italian and Turkish.
 - 🔒 **Yours, start to finish.** Video, transcripts and renders never leave your disk. The only thing that ever goes out is transcript text, and only if you turn on an online picker, judge or translation.
 

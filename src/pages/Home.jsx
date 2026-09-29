@@ -6,7 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { cn } from '../lib/utils';
 import {
     artUrl, srcUrl, startJob, startJobUrl, removeJob, retryJob,
-    fetchKit, downloadArt, downloadText, flashMessage, useStore,
+    fetchKit, downloadArt, downloadText, flashMessage, useStore, clearFocus,
 } from '../lib/socket';
 import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../lib/native';
 import Tip from '../components/digiclip/Tooltip';
@@ -270,10 +270,14 @@ function ClearDialog({ count, onClose, onConfirm, leaving }) {
  *  (.queue-in); exits via `leaving` (slide toward the nearest edge when
  *  the row sits at the top/bottom of the list, plain fade for middle
  *  rows), held mounted by the parent's ExitBeat. */
-/** Short tags for a job's non-default look: its aspect when not the
- *  default 9:16, and the focus topic it was ranked for. */
-function jobTags(options, t) {
+/** Short tags for a job: who started it when it wasn't you (an AI app
+ *  over MCP, the watch folder), its aspect when not the default 9:16,
+ *  and the focus topic it was ranked for. */
+function jobTags(job, t) {
     const tags = [];
+    const options = job?.options;
+    if (job?.origin === 'watch') tags.push(t('watch folder'));
+    else if (job?.origin?.startsWith('mcp:')) tags.push(t('via {app}', { app: job.origin.slice(4) || 'AI' }));
     if (options?.aspect && options.aspect !== '9:16') tags.push(options.aspect);
     if (options?.focus) tags.push(t('focus: {topic}', { topic: options.focus }));
     return tags;
@@ -306,7 +310,7 @@ function QueueRow({ project, onCancel, leaving, edge }) {
                         <p className="min-w-0 shrink truncate text-[13px] font-medium">
                             {project.name}
                             {merged && <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">{t('merged')}</span>}
-                            {jobTags(project.options, t).map((tag) => (
+                            {jobTags(project, t).map((tag) => (
                                 <span key={tag} className="ml-1.5 font-mono text-[10px] text-muted-foreground">{tag}</span>
                             ))}
                         </p>
@@ -1256,6 +1260,14 @@ export default function Home() {
         };
     }, []);
 
+    // An AI app asked (show_in_app) for this project: bring it up once.
+    const focus = useStore((s) => s.focus);
+    useEffect(() => {
+        if (!focus?.job || !ids.includes(focus.job)) return;
+        clearFocus();
+        goTo(focus.job);
+    }, [focus?.seq, ids.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Keep the viewer on a live project when the list reloads underneath it.
     useEffect(() => {
         if (projects.length === 0) return;
@@ -1458,7 +1470,7 @@ export default function Home() {
                                                 {t('merged')}
                                             </Badge>
                                         )}
-                                        {jobTags(shown.options, t).map((tag) => (
+                                        {jobTags(shown, t).map((tag) => (
                                             <Badge key={tag} variant="secondary" className="max-w-32 shrink-0 font-mono text-[10px] text-muted-foreground">
                                                 <span className="truncate">{tag}</span>
                                             </Badge>
