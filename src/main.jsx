@@ -6,9 +6,14 @@ import AppLayout from './layouts/AppLayout';
 import Home from './pages/Home';
 import Health from './pages/Health';
 import Settings from './pages/Settings';
-import { connect, useStore, whenSynced } from './lib/socket';
-import { getServe, isTauri, onServeFailed, onServeReady } from './lib/native';
-import { t, useT } from './lib/i18n';
+import TrayMenu, { jobActivity } from './tray/TrayMenu';
+import { connect, navigate, useStore, whenSynced } from './lib/socket';
+import { getServe, isTauri, onNavigate, onServeFailed, onServeReady, setTrayText, windowLabel } from './lib/native';
+import { t, useLang, useT } from './lib/i18n';
+
+// The tray menu is a second window running this bundle (see tray.rs).
+const IS_TRAY = windowLabel() === 'tray';
+if (IS_TRAY) document.documentElement.classList.add('tray-root');
 
 /** The shell boots the sidecar before first paint: either it is already
  *  up (`get_serve`) or the `serve-ready` event lands. No UI until then. */
@@ -71,10 +76,31 @@ function BootFailed({ error }) {
     );
 }
 
+/** Main window only: the tray can ask for a page when it opens the app,
+ *  and the tray icon's tooltip tracks what's running. */
+function TrayBridge() {
+    const lang = useLang();
+    const active = useStore((s) => s.jobs.filter((j) => jobActivity(j)).length);
+    useEffect(() => {
+        const off = onNavigate((page) => {
+            if (page) navigate(page);
+        });
+        return () => {
+            off.then((f) => f()).catch(() => {});
+        };
+    }, []);
+    useEffect(() => {
+        const tip = active ? t('DigiClip — {count} running', { count: active }) : 'DigiClip';
+        setTrayText(tip, t('Open DigiClip'), t('Quit DigiClip'));
+    }, [active, lang]);
+    return null;
+}
+
 function Shell() {
     const page = useStore((s) => s.page);
     return (
         <AppLayout>
+            {isTauri() && <TrayBridge />}
             {page === 'health' ? <Health /> : page === 'settings' ? <Settings /> : <Home />}
         </AppLayout>
     );
@@ -96,6 +122,7 @@ function Boot() {
             .then((synced) => {
                 if (dead || !synced) return;
                 setPhase({ name: 'ready', error: null });
+                if (IS_TRAY) return;
                 // Silent boot check for app updates (own channel, not the
                 // engine socket): no toast when up to date or offline.
                 if (isTauri()) {
@@ -113,6 +140,9 @@ function Boot() {
         };
     }, []);
 
+    // The tray menu never waits on the engine: its status dot covers the
+    // boot, and Quit must work even when the engine never comes up.
+    if (IS_TRAY) return <TrayMenu />;
     if (phase.name === 'failed') return <BootFailed error={phase.error} />;
     if (phase.name !== 'ready') {
         return (
