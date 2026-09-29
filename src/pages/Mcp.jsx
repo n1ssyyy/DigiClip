@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Check, CheckCircle2, Copy, Eye, EyeOff, Loader2, RefreshCw, Sparkles, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bot, Check, CheckCircle2, ChevronRight, Copy, Eye, EyeOff, Loader2, RefreshCw, Search, Sparkles, X, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { GpuToggle } from '../components/digiclip/controls';
+import { GpuToggle, Reveal } from '../components/digiclip/controls';
 import Tip from '../components/digiclip/Tooltip';
-import { cn } from '../lib/utils';
+import { cn, HOT_EDGE } from '../lib/utils';
 import { flashMessage, installMcp, refreshMcp, rotateMcpToken, saveSettings, useStore } from '../lib/socket';
 import { t as tr, useT } from '../lib/i18n';
 
@@ -30,6 +30,7 @@ export const TOOL_INFO = {
     list_models: ['Models', 'Speech models and the judge'],
     download_model: ['Download a model', 'Fetches a model'],
     delete_model: ['Delete a model', 'Frees the disk space'],
+    list_ai_models: ['AI models', 'Models from your Clip AI provider'],
     list_openrouter_models: ['OpenRouter models', 'Models for clip scoring'],
     export_diagnostics: ['Export diagnostics', 'Writes a report for a bug'],
     show_in_app: ['Show in DigiClip', 'Brings a project up in this window'],
@@ -40,10 +41,33 @@ export function toolTitle(name) {
     return info ? tr(info[0]) : name;
 }
 
+/** Every app the engine can set up (`mcp_apps::APPS`). `cli` ones pick
+ *  DigiClip up in their next session; `app` ones need a restart. */
 const CLIENTS = [
-    { id: 'claude_desktop', name: 'Claude Desktop' },
-    { id: 'claude_code', name: 'Claude Code' },
-    { id: 'cursor', name: 'Cursor' },
+    { id: 'claude_desktop', name: 'Claude Desktop', kind: 'app' },
+    { id: 'claude_code', name: 'Claude Code', kind: 'cli' },
+    { id: 'codex', name: 'Codex', kind: 'cli' },
+    { id: 'cursor', name: 'Cursor', kind: 'app' },
+    { id: 'vscode', name: 'VS Code', kind: 'app' },
+    { id: 'opencode', name: 'OpenCode', kind: 'cli' },
+    { id: 'hermes', name: 'Hermes', kind: 'cli' },
+    { id: 'gemini', name: 'Gemini CLI', kind: 'cli' },
+    { id: 'windsurf', name: 'Windsurf', kind: 'app' },
+    { id: 'zed', name: 'Zed', kind: 'app' },
+    { id: 'copilot', name: 'Copilot CLI', kind: 'cli' },
+    { id: 'cline', name: 'Cline', kind: 'app' },
+    { id: 'roo', name: 'Roo Code', kind: 'app' },
+    { id: 'kilo', name: 'Kilo Code', kind: 'cli' },
+    { id: 'continue', name: 'Continue', kind: 'app' },
+    { id: 'goose', name: 'Goose', kind: 'cli' },
+    { id: 'kiro', name: 'Kiro', kind: 'app' },
+    { id: 'amp', name: 'Amp', kind: 'cli' },
+    { id: 'qwen', name: 'Qwen Code', kind: 'cli' },
+    { id: 'lm_studio', name: 'LM Studio', kind: 'app' },
+    { id: 'factory', name: 'Factory Droid', kind: 'cli' },
+    { id: 'augment', name: 'Augment', kind: 'cli' },
+    { id: 'jan', name: 'Jan', kind: 'app' },
+    { id: 'anythingllm', name: 'AnythingLLM', kind: 'app' },
 ];
 
 function copy(text, what) {
@@ -110,7 +134,7 @@ function ago(ms) {
     return tr('{h}h ago', { h: Math.floor(s / 3600) });
 }
 
-function ClientRow({ client, state, bridge, busy, onRun }) {
+function ClientRow({ client, state, bridge, busy, onRun, index = 0, dim = false }) {
     const t = useT();
     const found = !!state?.found;
     const added = !!state?.added;
@@ -121,18 +145,24 @@ function ClientRow({ client, state, bridge, busy, onRun }) {
             : added ? t('Added, points at an old copy')
                 : t('Not added');
     const cmd = bridge ? `claude mcp add digiclip --scope user -- "${bridge}" --mcp` : '';
+    const paths = (state?.paths ?? []).join(', ');
     return (
-        <li className="flex items-center gap-3 py-2">
+        <li
+            className={cn('rise flex items-center gap-3 py-2 transition-opacity duration-200', dim && 'opacity-55')}
+            style={{ animationDelay: `${Math.min(index, 8) * 24}ms` }}
+        >
             <span className={cn(
-                'flex size-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold',
+                'flex size-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors duration-300',
                 added && current ? 'border-[var(--viral)]/40 text-[var(--viral)]' : 'text-muted-foreground',
             )}
             >
-                {added && current ? <Check className="size-3.5" aria-hidden /> : client.name[0]}
+                {added && current ? <Check key="added" className="draw size-3.5" aria-hidden /> : client.name[0]}
             </span>
             <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium">{client.name}</p>
-                <p className="truncate text-[11px] text-muted-foreground">{status}</p>
+                <Tip label={paths ? t('DigiClip writes to {paths}', { paths }) : null} side="top" wrap className="max-w-full">
+                    <p key={status} className="fade min-w-0 truncate text-[11px] text-muted-foreground">{status}</p>
+                </Tip>
             </div>
             {client.id === 'claude_code' && !found ? (
                 <CopyButton text={cmd} what={t('the command')} label={t('Copy command')} />
@@ -186,6 +216,8 @@ export default function Mcp() {
     const [showToken, setShowToken] = useState(false);
     const [port, setPort] = useState('');
     const [now, setNow] = useState(Date.now());
+    const [query, setQuery] = useState('');
+    const [showMissing, setShowMissing] = useState(false);
 
     // Fresh view of the AI apps' config files whenever the page opens.
     useEffect(() => {
@@ -227,7 +259,7 @@ export default function Mcp() {
         installMcp(client.id, remove)
             .then(() => {
                 if (remove) flashMessage(t('Removed DigiClip from {app}.', { app: client.name }));
-                else if (client.id === 'claude_code') flashMessage(t('Added. New Claude Code sessions can use DigiClip.'));
+                else if (client.kind === 'cli') flashMessage(t('Added. New {app} sessions can use DigiClip.', { app: client.name }));
                 else flashMessage(t('Added. Restart {app} to load DigiClip.', { app: client.name }));
             })
             .catch((e) => flashMessage(t("Couldn't change {app}: {error}", { app: client.name, error: e?.message ?? e })))
@@ -239,6 +271,21 @@ export default function Mcp() {
             .catch((e) => flashMessage(String(e?.message ?? e)));
     }
 
+    // Found apps first (added ones on top), the rest tucked away.
+    const known = !!mcp?.installed;
+    const { present, missing } = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        const hits = CLIENTS.filter((c) => !q || `${c.name} ${c.id} ${c.kind === 'cli' ? 'cli terminal' : 'app'}`.toLowerCase().includes(q));
+        const isFound = (c) => !known || !!mcp.installed[c.id]?.found;
+        const rank = (c) => (mcp?.installed?.[c.id]?.added ? 0 : 1);
+        return {
+            present: hits.filter(isFound).sort((a, b) => rank(a) - rank(b)),
+            missing: hits.filter((c) => !isFound(c)),
+        };
+    }, [query, known, mcp?.installed]);
+    const addedCount = CLIENTS.filter((c) => mcp?.installed?.[c.id]?.added).length;
+    const missingOpen = showMissing || (!!query.trim() && missing.length > 0);
+
     const activity = mcp?.activity ?? [];
     const stdio = mcp?.configs?.stdio ? JSON.stringify(mcp.configs.stdio, null, 2) : '';
     const http = mcp?.configs?.http ? JSON.stringify(mcp.configs.http, null, 2) : '';
@@ -247,7 +294,7 @@ export default function Mcp() {
     return (
         <div className="flex h-full min-h-[480px] flex-col gap-[5px]">
             <Card
-                className={cn('relative shrink-0 transition-colors', hot && 'border-t-white/25 border-x-white/[0.13]')}
+                className={cn('relative shrink-0 transition-colors', hot && HOT_EDGE)}
                 onMouseEnter={() => setHot(true)}
                 onMouseLeave={() => setHot(false)}
             >
@@ -275,12 +322,12 @@ export default function Mcp() {
                 </CardHeader>
             </Card>
             <Card
-                className={cn('stagger-1 flex min-h-0 flex-1 flex-col overflow-hidden transition-colors', hot && 'border-t-white/25 border-x-white/[0.13]')}
+                className={cn('stagger-1 flex min-h-0 flex-1 flex-col overflow-hidden transition-colors', hot && HOT_EDGE)}
                 onMouseEnter={() => setHot(true)}
                 onMouseLeave={() => setHot(false)}
             >
                 <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-4 pb-4">
-                    <div className="mx-auto my-auto grid w-full max-w-5xl gap-6 lg:grid-cols-2">
+                    <div className="mx-auto my-auto grid w-full max-w-5xl grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
                         <div className="space-y-5">
                             <div className="stagger-2 flex gap-3 rounded-md border p-3">
                                 <Sparkles className="mt-0.5 size-4 shrink-0 text-[var(--viral)]" aria-hidden />
@@ -295,19 +342,87 @@ export default function Mcp() {
                                 </div>
                             </div>
 
-                            <Section title={t('Connect an app')} className="stagger-2">
-                                <ul className="flex flex-col divide-y divide-border">
-                                    {CLIENTS.map((c) => (
-                                        <ClientRow
-                                            key={c.id}
-                                            client={c}
-                                            state={mcp?.installed?.[c.id]}
-                                            bridge={mcp?.bridge}
-                                            busy={busy === c.id}
-                                            onRun={run}
+                            <Section
+                                title={t('Connect an app')}
+                                className="stagger-2"
+                                aside={addedCount > 0 && <span className="pop rounded-full bg-[var(--viral)]/15 px-1.5 py-px text-[10px] text-[var(--viral)] normal-case">{t('{count} added', { count: addedCount })}</span>}
+                            >
+                                {CLIENTS.length > 8 && (
+                                    <label className="relative block">
+                                        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                                        <input
+                                            type="search"
+                                            value={query}
+                                            onChange={(e) => setQuery(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Escape' && query) {
+                                                    e.stopPropagation();
+                                                    setQuery('');
+                                                }
+                                            }}
+                                            placeholder={t('Find an app')}
+                                            aria-label={t('Find an app')}
+                                            className="flex h-8 w-full rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-7 pl-8 text-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-search-cancel-button]:hidden"
                                         />
-                                    ))}
-                                </ul>
+                                        {query && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setQuery('')}
+                                                aria-label={t('Clear search')}
+                                                className="fade absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                                            >
+                                                <X className="size-3.5" aria-hidden />
+                                            </button>
+                                        )}
+                                    </label>
+                                )}
+                                <div className="digi-scroll max-h-[min(26rem,calc(100dvh-24rem))] min-h-24 overflow-y-auto pr-1">
+                                    <ul className="flex flex-col divide-y divide-border">
+                                        {present.map((c, i) => (
+                                            <ClientRow
+                                                key={c.id}
+                                                client={c}
+                                                state={mcp?.installed?.[c.id]}
+                                                bridge={mcp?.bridge}
+                                                busy={busy === c.id}
+                                                onRun={run}
+                                                index={i}
+                                            />
+                                        ))}
+                                    </ul>
+                                    {missing.length > 0 && (
+                                        <div className="mt-1 border-t border-border">
+                                            <button
+                                                type="button"
+                                                aria-expanded={missingOpen}
+                                                onClick={() => setShowMissing((o) => !o)}
+                                                className="group/miss flex w-full items-center gap-1.5 py-2 text-left text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                                            >
+                                                <ChevronRight className={cn('size-3.5 transition-transform duration-300 ease-[var(--ease-out)] motion-reduce:transition-none', missingOpen && 'rotate-90')} aria-hidden />
+                                                {t('Not found on this computer ({n})', { n: missing.length })}
+                                            </button>
+                                            <Reveal open={missingOpen}>
+                                                <ul className="flex flex-col divide-y divide-border">
+                                                    {missing.map((c, i) => (
+                                                        <ClientRow
+                                                            key={c.id}
+                                                            client={c}
+                                                            state={mcp?.installed?.[c.id]}
+                                                            bridge={mcp?.bridge}
+                                                            busy={busy === c.id}
+                                                            onRun={run}
+                                                            index={i}
+                                                            dim
+                                                        />
+                                                    ))}
+                                                </ul>
+                                            </Reveal>
+                                        </div>
+                                    )}
+                                    {present.length === 0 && missing.length === 0 && (
+                                        <p className="fade py-6 text-center text-[12px] text-muted-foreground">{t('No app matches “{query}”', { query: query.trim() })}</p>
+                                    )}
+                                </div>
                                 {!on && <p className="text-[11px] text-orange-500">{t('MCP is off: connected apps get a “turned off” answer until you switch it back on.')}</p>}
                             </Section>
 
@@ -392,7 +507,8 @@ export default function Mcp() {
                                 aside={activity.some((a) => a.state === 'running') && <span className="size-1.5 animate-pulse rounded-full bg-orange-500" aria-hidden />}
                             >
                                 {activity.length === 0 ? (
-                                    <p className="rounded-md border border-dashed p-4 text-center text-[12px] text-muted-foreground">
+                                    <p className="flex flex-col items-center gap-2 rounded-md border border-dashed p-4 text-center text-[12px] text-muted-foreground">
+                                        <Bot className="size-5 text-muted-foreground/70" aria-hidden />
                                         {mcp?.clients?.length
                                             ? t('{app} is connected. Calls show up here as they happen.', { app: mcp.clients[0].name })
                                             : t('No AI app has called yet. Connect one on the left, then ask it for clips.')}
