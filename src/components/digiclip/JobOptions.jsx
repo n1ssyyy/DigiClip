@@ -4,7 +4,7 @@ import { ArrowDownLeft, ArrowDownRight, ArrowUpLeft, ArrowUpRight, Bookmark, Che
 import { cn } from '../../lib/utils';
 import Tip from './Tooltip';
 import CaptionPicker from './CaptionPicker';
-import { GpuToggle, Stepper, TightenSeg } from './controls';
+import { GpuToggle, Segmented, Stepper, TightenSeg } from './controls';
 import { usePanelBeat } from './usePanelBeat';
 import { useFloatingPanel } from './useFloatingPanel';
 import { pickAudio, pickImage } from '../../lib/native';
@@ -181,31 +181,19 @@ function Kicker({ children }) {
 
 function KindSeg({ value, onChange }) {
     const t = useT();
-    const opts = [
-        { id: 'smart', label: 'Smart', tip: 'Scored highlights — hook, retention, value.' },
-        { id: 'complete', label: 'Complete', tip: 'Finished thoughts, flexible length.' },
-        { id: 'moments', label: 'Moments', tip: 'Random windows — fast, unscored.' },
-        { id: 'timecut', label: 'Timecut', tip: 'Even slices of fixed length.' },
-    ];
     return (
-        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label={t('Picking')}>
-            {opts.map((o) => (
-                <Tip key={o.id} label={t(o.tip)} side="top" className="min-w-0 flex-1">
-                    <button
-                        type="button"
-                        role="radio"
-                        aria-checked={value === o.id}
-                        onClick={() => onChange(o.id)}
-                        className={cn(
-                            'flex min-w-0 flex-1 items-center justify-center truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
-                            value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
-                        )}
-                    >
-                        {typeof o.label === 'string' ? t(o.label) : o.label}
-                    </button>
-                </Tip>
-            ))}
-        </div>
+        <Segmented
+            label={t('Picking')}
+            size="sm"
+            value={value}
+            onChange={onChange}
+            options={[
+                { id: 'smart', label: 'Smart', tip: 'Scored highlights — hook, retention, value.' },
+                { id: 'complete', label: 'Complete', tip: 'Finished thoughts, flexible length.' },
+                { id: 'moments', label: 'Moments', tip: 'Random windows — fast, unscored.' },
+                { id: 'timecut', label: 'Timecut', tip: 'Even slices of fixed length.' },
+            ]}
+        />
     );
 }
 
@@ -213,56 +201,23 @@ function KindSeg({ value, onChange }) {
  *  one choice, three verbs, no dropdown. */
 function DurSeg({ value, onChange }) {
     const t = useT();
-    const opts = [
-        { id: 'auto', label: 'Auto', tip: 'Engine default window, 15–90s per clip.' },
-        { id: 'exact', label: 'Exact', tip: 'One length for every clip.' },
-        { id: 'minmax', label: 'Min–Max', tip: 'Grow short picks, trim long ones.' },
-    ];
     return (
-        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label={t('Duration')}>
-            {opts.map((o) => (
-                <Tip key={o.id} label={t(o.tip)} side="top" className="min-w-0 flex-1">
-                    <button
-                        type="button"
-                        role="radio"
-                        aria-checked={value === o.id}
-                        onClick={() => onChange(o.id)}
-                        className={cn(
-                            'flex min-w-0 flex-1 items-center justify-center truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
-                            value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
-                        )}
-                    >
-                        {typeof o.label === 'string' ? t(o.label) : o.label}
-                    </button>
-                </Tip>
-            ))}
-        </div>
+        <Segmented
+            label={t('Duration')}
+            size="sm"
+            value={value}
+            onChange={onChange}
+            options={[
+                { id: 'auto', label: 'Auto', tip: 'Engine default window, 15–90s per clip.' },
+                { id: 'exact', label: 'Exact', tip: 'One length for every clip.' },
+                { id: 'minmax', label: 'Min–Max', tip: 'Grow short picks, trim long ones.' },
+            ]}
+        />
     );
 }
 /** Generic segmented control in the same language as the two above. */
 function Seg({ label, value, options, onChange }) {
-    const t = useT();
-    return (
-        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label={label}>
-            {options.map((o) => (
-                <Tip key={o.id} label={t(o.tip)} side="top" className="min-w-0 flex-1">
-                    <button
-                        type="button"
-                        role="radio"
-                        aria-checked={value === o.id}
-                        aria-label={typeof o.label === 'string' ? undefined : t(o.tip)}
-                        onClick={() => onChange(o.id)}
-                        className={cn(
-                            'flex min-w-0 flex-1 items-center justify-center truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
-                            value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
-                        )}
-                    >
-                        {typeof o.label === 'string' ? t(o.label) : o.label}
-                    </button>
-                </Tip>
-            ))}
-        </div>
-    );
+    return <Segmented label={label} size="sm" value={value} options={options} onChange={onChange} />;
 }
 
 const ANIM_OPTS = [
@@ -620,7 +575,7 @@ export default function OptionsButton({ options, onChange }) {
                             <Kicker>{t('Caption language')}</Kicker>
                             <Select label={t('Caption language')} value={options.subs_lang ?? 'off'} options={SUBS_LANGS} onChange={set('subs_lang')} />
                             {options.subs_lang && options.subs_lang !== 'off' && (
-                                <p className="text-[11px] text-muted-foreground">{t('Translated through OpenRouter; without a key captions stay as spoken.')}</p>
+                                <p className="text-[11px] text-muted-foreground">{t('Translated by your Clip AI provider; without one, captions stay as spoken.')}</p>
                             )}
                         </div>
                         <div className="space-y-1">

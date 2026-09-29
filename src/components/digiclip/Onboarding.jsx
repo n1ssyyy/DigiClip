@@ -88,22 +88,12 @@ const STEPS = [
     },
     {
         key: 'apikey',
-        title: '3 · API key (for smart clips)',
+        title: '3 · Clip AI (for smart clips)',
         body: ({ t }) => (
             <>
                 <p>
-                    {rich(t('For AI-picked highlights, grab a free key at {link}, then paste it in {where}.'), {
-                        link: (
-                            <a
-                                href="https://openrouter.ai/keys"
-                                target="_blank"
-                                rel="noreferrer"
-                                className="font-medium text-foreground underline underline-offset-2"
-                            >
-                                openrouter.ai/keys
-                            </a>
-                        ),
-                        where: <span className="font-medium text-foreground">{t('Settings → Connection')}</span>,
+                    {rich(t('For AI-picked highlights, pick a provider (OpenAI, Anthropic, Gemini, OpenRouter, Ollama…) and paste its key in {where}. Ollama or LM Studio on this PC need no key.'), {
+                        where: <span className="font-medium text-foreground">{t('Settings → Clip AI')}</span>,
                     })}
                 </p>
                 <p className="mt-2">

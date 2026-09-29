@@ -12,6 +12,9 @@ import { cn } from '../../lib/utils';
  * clip it. It tracks the anchor every frame while open, so slides and
  * scrolls never detach it.
  */
+// Which edge of the bubble touches its anchor: it grows out of there.
+const ORIGIN = { top: 'bottom center', bottom: 'top center', left: 'center right', right: 'center left' };
+
 export default function Tip({ label, side = 'top', className, wrap = false, children }) {
     const [open, setOpen] = useState(false);
     const [pos, setPos] = useState(null);
@@ -73,7 +76,7 @@ export default function Tip({ label, side = 'top', className, wrap = false, chil
 
     function show() {
         if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => setOpen(true), 300);
+        timer.current = setTimeout(() => setOpen(true), 240);
     }
     function hide() {
         if (timer.current) clearTimeout(timer.current);
@@ -96,13 +99,13 @@ export default function Tip({ label, side = 'top', className, wrap = false, chil
                     ref={bubbleRef}
                     role="tooltip"
                     aria-hidden={!open}
-                    style={pos ? { top: pos.top, left: pos.left } : { visibility: 'hidden' }}
+                    style={pos ? { top: pos.top, left: pos.left, transformOrigin: ORIGIN[side] ?? ORIGIN.top } : { visibility: 'hidden' }}
                     className={cn(
                         'pointer-events-none fixed z-[100] font-mono text-[10px] text-popover-foreground',
                         wrap ? 'max-w-72 whitespace-normal break-words' : 'whitespace-nowrap',
                         'rounded-md border bg-popover px-2 py-1 shadow-lg',
-                        'motion-safe:transition-opacity motion-safe:duration-150',
-                        open && pos ? 'opacity-100' : 'opacity-0',
+                        'motion-safe:transition-[opacity,scale] motion-safe:ease-[var(--ease-out)]',
+                        open && pos ? 'scale-100 opacity-100 motion-safe:duration-[160ms]' : 'scale-95 opacity-0 motion-safe:duration-[90ms]',
                     )}
                 >
                     {label}
