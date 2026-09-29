@@ -1,11 +1,13 @@
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
 /**
  * Hollow circle that fills with progress — the download affordance for
  * transcription models. Track is the hairline border token, the fill is
  * foreground; a screen-reader percent backs it (never color alone).
  */
-export default function ProgressRing({ value = 0, size = 16, label = 'Downloading', className }) {
+export default function ProgressRing({ value = 0, size = 16, label, className }) {
+    const t = useT();
     const pct = Math.min(100, Math.max(0, Math.round(value ?? 0)));
     const stroke = 2;
     const r = (size - stroke) / 2;
@@ -17,7 +19,7 @@ export default function ProgressRing({ value = 0, size = 16, label = 'Downloadin
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={pct}
-            aria-label={`${label} ${pct}%`}
+            aria-label={`${label ?? t('Downloading')} ${pct}%`}
             className={cn('inline-flex shrink-0', className)}
         >
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>

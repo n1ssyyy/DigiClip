@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Minus, Plus } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 import { editClip, flashMessage, getTranscript } from '../../lib/socket';
 import CaptionPicker from './CaptionPicker';
 import Modal, { fmtTime, parseTime } from './Modal';
@@ -12,6 +13,7 @@ const inputCls = 'h-8 w-full min-w-0 rounded-md border border-x-white/10 border-
 
 /** Start/end field: typed `m:ss.s` plus half-second nudges. */
 function TimeField({ label, value, onChange, min, max }) {
+    const t = useT();
     const [text, setText] = useState(fmtTime(value));
     useEffect(() => setText(fmtTime(value)), [value]);
     const clamp = (v) => Math.max(min, Math.min(max, Math.round(v * 100) / 100));
@@ -24,7 +26,7 @@ function TimeField({ label, value, onChange, min, max }) {
         <div className="min-w-0 space-y-1">
             <p className="text-[10px] text-muted-foreground">{label}</p>
             <div className="flex h-8 items-stretch gap-1">
-                <button type="button" aria-label={`${label} earlier`} onClick={() => onChange(clamp(value - STEP_S))} className="rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+                <button type="button" aria-label={t('{label} earlier', { label })} onClick={() => onChange(clamp(value - STEP_S))} className="rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
                     <Minus className="size-3.5" aria-hidden />
                 </button>
                 <input
@@ -35,7 +37,7 @@ function TimeField({ label, value, onChange, min, max }) {
                     aria-label={label}
                     className={cn(inputCls, 'text-center font-mono tabular-nums')}
                 />
-                <button type="button" aria-label={`${label} later`} onClick={() => onChange(clamp(value + STEP_S))} className="rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+                <button type="button" aria-label={t('{label} later', { label })} onClick={() => onChange(clamp(value + STEP_S))} className="rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
                     <Plus className="size-3.5" aria-hidden />
                 </button>
             </div>
@@ -47,6 +49,7 @@ function TimeField({ label, value, onChange, min, max }) {
  *  misheard caption words, change title or caption style. The engine
  *  re-cuts and re-renders only this clip. */
 export default function EditClipDialog({ job, clip, onClose, leaving }) {
+    const t = useT();
     const [words, setWords] = useState(null);
     const [loadErr, setLoadErr] = useState(null);
     const [start, setStart] = useState(clip.start_s);
@@ -95,7 +98,7 @@ export default function EditClipDialog({ job, clip, onClose, leaving }) {
 
     function save() {
         if (len < 1) {
-            flashMessage('A clip needs at least a second.');
+            flashMessage(t('A clip needs at least a second.'));
             return;
         }
         const patch = {};
@@ -109,16 +112,16 @@ export default function EditClipDialog({ job, clip, onClose, leaving }) {
         setSaving(true);
         editClip(job.id, clip.rank, patch)
             .then(() => {
-                flashMessage(`Re-rendering clip #${clip.rank}…`);
+                flashMessage(t('Re-rendering clip #{rank}…', { rank: clip.rank }));
                 onClose();
             })
-            .catch((e) => flashMessage(`Couldn't edit clip #${clip.rank}: ${e?.message ?? e}`))
+            .catch((e) => flashMessage(t("Couldn't edit clip #{rank}: {error}", { rank: clip.rank, error: e?.message ?? e })))
             .finally(() => setSaving(false));
     }
 
     return (
         <Modal
-            title={`Edit clip #${clip.rank}`}
+            title={t('Edit clip #{rank}', { rank: clip.rank })}
             sub={`${fmtTime(start)} → ${fmtTime(end)} · ${len.toFixed(1)}s`}
             width={620}
             onClose={onClose}
@@ -126,24 +129,24 @@ export default function EditClipDialog({ job, clip, onClose, leaving }) {
             labelId="edit-clip-title"
             footer={(
                 <>
-                    <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+                    <Button variant="outline" size="sm" onClick={onClose}>{t('Cancel')}</Button>
                     <Button size="sm" disabled={!dirty || saving} onClick={save}>
                         {saving && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
-                        Re-render
+                        {t('Re-render')}
                     </Button>
                 </>
             )}
         >
             <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-2">
-                    <TimeField label="Start" value={start} min={0} max={end - 1} onChange={setStart} />
-                    <TimeField label="End" value={end} min={start + 1} max={duration} onChange={setEnd} />
+                    <TimeField label={t('Start')} value={start} min={0} max={end - 1} onChange={setStart} />
+                    <TimeField label={t('End')} value={end} min={start + 1} max={duration} onChange={setEnd} />
                 </div>
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                        <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">Transcript</p>
-                        <div className="flex overflow-hidden rounded-md border border-white/10 text-[11px]" role="radiogroup" aria-label="Click words to">
-                            {[{ id: 'range', label: 'Set range' }, { id: 'fix', label: 'Fix words' }].map((o) => (
+                        <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">{t('Transcript')}</p>
+                        <div className="flex overflow-hidden rounded-md border border-white/10 text-[11px]" role="radiogroup" aria-label={t('Click words to')}>
+                            {[{ id: 'range', label: t('Set range') }, { id: 'fix', label: t('Fix words') }].map((o) => (
                                 <button
                                     key={o.id} type="button" role="radio" aria-checked={mode === o.id}
                                     onClick={() => { setMode(o.id); setEditing(null); }}
@@ -156,14 +159,14 @@ export default function EditClipDialog({ job, clip, onClose, leaving }) {
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                         {mode === 'range'
-                            ? 'Click a word to move the nearer edge of the clip to it.'
-                            : 'Click a word inside the clip to correct its caption. Leave it empty to drop the word.'}
+                            ? t('Click a word to move the nearer edge of the clip to it.')
+                            : t('Click a word inside the clip to correct its caption. Leave it empty to drop the word.')}
                     </p>
                     <div className="max-h-56 overflow-y-auto rounded-md border border-white/10 bg-black/20 p-2 text-[13px] leading-7">
                         {loadErr ? (
-                            <p className="text-red-400">Couldn't load the transcript: {loadErr}</p>
+                            <p className="text-red-400">{t("Couldn't load the transcript: {error}", { error: loadErr })}</p>
                         ) : words == null ? (
-                            <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="size-3.5 animate-spin" aria-hidden /> Loading transcript…</p>
+                            <p className="flex items-center gap-2 text-muted-foreground"><Loader2 className="size-3.5 animate-spin" aria-hidden /> {t('Loading transcript…')}</p>
                         ) : near.map((w) => {
                             const inside = w.s >= start - 0.05 && w.e <= end + 0.05;
                             const fixed = fixes[w.s];
@@ -173,7 +176,7 @@ export default function EditClipDialog({ job, clip, onClose, leaving }) {
                                         key={w.s}
                                         ref={editRef}
                                         defaultValue={fixed ?? w.w}
-                                        aria-label={`Caption for “${w.w}”`}
+                                        aria-label={t('Caption for “{word}”', { word: w.w })}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Enter') e.currentTarget.blur();
                                             if (e.key === 'Escape') { e.stopPropagation(); setEditing(null); }
@@ -212,11 +215,11 @@ export default function EditClipDialog({ job, clip, onClose, leaving }) {
                 </div>
                 <div className="grid grid-cols-[1fr_auto] items-end gap-2">
                     <div className="min-w-0 space-y-1">
-                        <p className="text-[10px] text-muted-foreground">Title</p>
-                        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} aria-label="Clip title" className={inputCls} />
+                        <p className="text-[10px] text-muted-foreground">{t('Title')}</p>
+                        <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} aria-label={t('Clip title')} className={inputCls} />
                     </div>
                     <div className="w-44 space-y-1">
-                        <p className="text-[10px] text-muted-foreground">Caption style</p>
+                        <p className="text-[10px] text-muted-foreground">{t('Caption style')}</p>
                         <CaptionPicker value={style} onChange={setStyle} compact />
                     </div>
                 </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Search } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 import { addClip, flashMessage, getTranscript } from '../../lib/socket';
 import Modal, { fmtTime } from './Modal';
 
@@ -27,6 +28,7 @@ function paragraphs(words) {
 /** Make a clip from any stretch of the talk: click the first word, then
  *  the last. The engine cuts, captions and renders it as a new clip. */
 export default function TranscriptDialog({ job, onClose, leaving }) {
+    const t = useT();
     const [words, setWords] = useState(null);
     const [loadErr, setLoadErr] = useState(null);
     const [a, setA] = useState(null); // word index
@@ -73,17 +75,17 @@ export default function TranscriptDialog({ job, onClose, leaving }) {
         setSaving(true);
         addClip(job.id, range.s, range.e, title.trim() ? { title: title.trim() } : {})
             .then((d) => {
-                flashMessage(`Making clip #${d?.rank ?? ''} from the transcript…`);
+                flashMessage(t('Making clip #{rank} from the transcript…', { rank: d?.rank ?? '' }));
                 onClose();
             })
-            .catch((e) => flashMessage(`Couldn't make the clip: ${e?.message ?? e}`))
+            .catch((e) => flashMessage(t("Couldn't make the clip: {error}", { error: e?.message ?? e })))
             .finally(() => setSaving(false));
     }
 
     return (
         <Modal
-            title={`Transcript · ${job.name}`}
-            sub={range ? `${fmtTime(range.s)} → ${fmtTime(range.e)} · ${len.toFixed(1)}s` : 'Click the first word, then the last'}
+            title={t('Transcript · {name}', { name: job.name })}
+            sub={range ? `${fmtTime(range.s)} → ${fmtTime(range.e)} · ${len.toFixed(1)}s` : t('Click the first word, then the last')}
             width={720}
             onClose={onClose}
             leaving={leaving}
@@ -93,18 +95,18 @@ export default function TranscriptDialog({ job, onClose, leaving }) {
                     <input
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Title (optional)"
-                        aria-label="New clip title"
+                        placeholder={t('Title (optional)')}
+                        aria-label={t('New clip title')}
                         maxLength={120}
                         className={cn(inputCls, 'mr-auto max-w-64')}
                     />
                     {range && (len < 5 || len > 180) && (
-                        <span className="text-[11px] text-orange-400">{len < 5 ? 'Very short clip' : 'Long for a short'}</span>
+                        <span className="text-[11px] text-orange-400">{len < 5 ? t('Very short clip') : t('Long for a short')}</span>
                     )}
-                    <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+                    <Button variant="outline" size="sm" onClick={onClose}>{t('Cancel')}</Button>
                     <Button size="sm" disabled={!range || len < 1 || saving} onClick={make}>
                         {saving && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
-                        Make clip
+                        {t('Make clip')}
                     </Button>
                 </>
             )}
@@ -115,19 +117,19 @@ export default function TranscriptDialog({ job, onClose, leaving }) {
                     <input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Find a word or phrase"
-                        aria-label="Search the transcript"
+                        placeholder={t('Find a word or phrase')}
+                        aria-label={t('Search the transcript')}
                         className={cn(inputCls, 'pl-7')}
                     />
-                    {hits && <span className="absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[10px] text-muted-foreground">{hits.size} found</span>}
+                    {hits && <span className="absolute top-1/2 right-2 -translate-y-1/2 font-mono text-[10px] text-muted-foreground">{t('{count} found', { count: hits.size })}</span>}
                 </div>
             </div>
             {loadErr ? (
-                <p className="text-[13px] text-red-400">Couldn't load the transcript: {loadErr}</p>
+                <p className="text-[13px] text-red-400">{t("Couldn't load the transcript: {error}", { error: loadErr })}</p>
             ) : words == null ? (
-                <p className="flex items-center gap-2 text-[13px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin" aria-hidden /> Loading transcript…</p>
+                <p className="flex items-center gap-2 text-[13px] text-muted-foreground"><Loader2 className="size-3.5 animate-spin" aria-hidden /> {t('Loading transcript…')}</p>
             ) : words.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground">This video has no transcript.</p>
+                <p className="text-[13px] text-muted-foreground">{t('This video has no transcript.')}</p>
             ) : (
                 <div className="space-y-2 text-[13px] leading-7" onMouseLeave={() => setHover(null)}>
                     {paras.map((idx) => (

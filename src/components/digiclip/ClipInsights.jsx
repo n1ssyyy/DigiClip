@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
 const DIMS = [
     { key: 'hook', label: 'Hook', tip: 'How hard the opening grabs.' },
@@ -34,15 +35,15 @@ export function scoreTone(v) {
 }
 
 /** Who picked the clip, in words. */
-function pickedBy(source) {
+function pickedBy(source, t) {
     if (!source) return null;
     const parts = source.split('+');
     const names = parts.map((p) => {
         if (p.startsWith('llm:')) return p.slice(4).split('/').pop();
         if (p.startsWith('jev:')) return 'Jev';
         if (p === 'laya') return 'Laya';
-        if (p === 'heuristic') return 'offline scorer';
-        if (p === 'custom') return 'you';
+        if (p === 'heuristic') return t('offline scorer');
+        if (p === 'custom') return t('you');
         return p;
     });
     return names.join(' + ');
@@ -50,17 +51,18 @@ function pickedBy(source) {
 
 /** "Why this clip": score bars, the picker's reasoning, hashtags. */
 export default function ClipInsights({ clip, className }) {
+    const t = useT();
     const n = normScores(clip);
-    const by = pickedBy(clip.source);
+    const by = pickedBy(clip.source, t);
     // The judge's name already sits in the footer.
     const why = (clip.why ?? '').replace(/\s*Judged by [^.]+\.?\s*$/, '');
     return (
         <div className={cn('space-y-3 text-[12px]', className)}>
             {n ? (
-                <div className="space-y-1.5" aria-label="Virality scores">
+                <div className="space-y-1.5" aria-label={t('Virality scores')}>
                     {DIMS.map((d) => (
-                        <div key={d.key} title={d.tip} className="grid grid-cols-[4.5rem_1fr_2rem] items-center gap-2">
-                            <span className="text-muted-foreground">{d.label}</span>
+                        <div key={d.key} title={t(d.tip)} className="grid grid-cols-[4.5rem_1fr_2rem] items-center gap-2">
+                            <span className="text-muted-foreground">{t(d.label)}</span>
                             <span className="h-1.5 overflow-hidden rounded-full bg-white/10">
                                 <span
                                     className={cn('block h-full rounded-full motion-safe:transition-[width] motion-safe:duration-500', scoreTone(n[d.key]))}
@@ -72,11 +74,11 @@ export default function ClipInsights({ clip, className }) {
                     ))}
                 </div>
             ) : (
-                <p className="text-muted-foreground">No scores for this clip.</p>
+                <p className="text-muted-foreground">{t('No scores for this clip.')}</p>
             )}
             {why && (
                 <div className="space-y-1">
-                    <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">Why this clip</p>
+                    <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">{t('Why this clip')}</p>
                     <p className="leading-relaxed">{why}</p>
                 </div>
             )}
@@ -89,7 +91,7 @@ export default function ClipInsights({ clip, className }) {
                     ))}
                 </p>
             )}
-            {by && <p className="font-mono text-[10px] text-muted-foreground">Picked by {by}</p>}
+            {by && <p className="font-mono text-[10px] text-muted-foreground">{t('Picked by {by}', { by })}</p>}
         </div>
     );
 }

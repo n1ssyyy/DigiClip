@@ -9,6 +9,7 @@ import Onboarding, { shouldShowOnboarding } from '../components/digiclip/Onboard
 import WindowControls from '../components/digiclip/Titlebar';
 import { dismissFlash, dismissToast, navigate, useStore } from '../lib/socket';
 import { cn } from '../lib/utils';
+import { useT } from '../lib/i18n';
 import { dragWindow, isTauri, onMaximized, openExternal, queryMaximized, sendWindowAction } from '../lib/native';
 
 const noDrag = { WebkitAppRegion: 'no-drag' };
@@ -29,6 +30,7 @@ function orderOf(page) {
  *  jump. The last text stays rendered while the slot closes. */
 function FlashBar({ text }) {
     const [shown, setShown] = useState(text);
+    const t = useT();
     useEffect(() => {
         if (text) setShown(text);
     }, [text]);
@@ -51,7 +53,7 @@ function FlashBar({ text }) {
                             type="button"
                             onClick={dismissFlash}
                             tabIndex={open ? 0 : -1}
-                            aria-label="Dismiss"
+                            aria-label={t('Dismiss')}
                             className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                         >
                             <X className="size-3.5" aria-hidden />
@@ -67,6 +69,7 @@ export default function AppLayout({ children }) {
     const page = useStore((s) => s.page);
     const flash = useStore((s) => s.flash);
     const toasts = useStore((s) => s.toasts);
+    const t = useT();
     const [maximized, setMaximized] = useState(false);
     // Page handoff: the outgoing page fades out first, then the incoming
     // one fades in from the travel direction.
@@ -194,8 +197,8 @@ export default function AppLayout({ children }) {
                 <div className="flex-1" aria-hidden />
                 <button
                     type="button"
-                    aria-label="Take the tour"
-                    title="Take the tour"
+                    aria-label={t('Take the tour')}
+                    title={t('Take the tour')}
                     data-tauri-drag-region="false"
                     data-no-drag
                     style={noDrag}

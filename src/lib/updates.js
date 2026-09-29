@@ -14,6 +14,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { isTauri } from './native.js';
+import { t } from './i18n.js';
 
 const AUTO_KEY = 'digiclip.updates.auto';
 const RELEASES_URL = 'https://github.com/n1ssyyy/DigiClip/releases/latest';
@@ -128,7 +129,7 @@ export async function checkForUpdates({ silent = false } = {}) {
         const { invoke } = await import('@tauri-apps/api/core');
         const data = await invoke('check_update');
         const version = String(data.version ?? '').replace(/^[vV]/, '');
-        if (!version) throw new Error('Latest release has no version.');
+        if (!version) throw new Error(t('Latest release has no version.'));
         set({ lastCheck: Date.now(), current });
         if (cmpVersions(version, current) > 0) {
             const available = { version, notes: data.notes ?? '', date: data.date ?? '', setupUrl: data.setupUrl ?? null };
@@ -157,7 +158,7 @@ export async function runSetup() {
     if (!url) {
         set({
             phase: 'error',
-            error: `No DigiClip Setup for this platform in v${U.available?.version ?? '?'} — get it from ${RELEASES_URL}`,
+            error: t('No DigiClip Setup for this platform in v{version} — get it from {url}', { version: U.available?.version ?? '?', url: RELEASES_URL }),
         });
         return;
     }
@@ -174,7 +175,7 @@ export async function runSetup() {
         await invoke('run_setup', { path });
         // The shell exits right after launching; this is only reached if
         // the launch failed.
-        set({ phase: 'error', error: 'Setup could not be started.' });
+        set({ phase: 'error', error: t('Setup could not be started.') });
     } catch (e) {
         set({ phase: 'error', pct: null, error: e?.message ?? String(e) });
     } finally {

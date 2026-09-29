@@ -6,6 +6,7 @@ import Tip from './Tooltip';
 import { usePanelBeat } from './usePanelBeat';
 import { useFloatingPanel } from './useFloatingPanel';
 import { loadOrModels } from '../../lib/socket';
+import { useT } from '../../lib/i18n';
 
 export const isContributor = (id) => id.toLowerCase().includes('contributor');
 export const isFree = (id) => id.toLowerCase().endsWith(':free');
@@ -18,6 +19,7 @@ const inputCls = 'flex h-9 w-full rounded-md border border-x-white/10 border-b-b
  * parent form owns persistence (PUT /settings actually sets the model).
  */
 export default function ModelPicker({ value, onChange }) {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [contribOnly, setContribOnly] = useState(false);
@@ -83,7 +85,7 @@ export default function ModelPicker({ value, onChange }) {
                 onClick={() => setOpen((o) => !o)}
                 className={cn(inputCls, 'cursor-pointer items-center justify-between text-left')}
             >
-                <span className="truncate font-mono text-xs">{value || 'Select a model…'}</span>
+                <span className="truncate font-mono text-xs">{value || t('Select a model…')}</span>
                 <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>
 
@@ -97,15 +99,15 @@ export default function ModelPicker({ value, onChange }) {
                                     autoFocus
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
-                                    placeholder="Search models…"
-                                    aria-label="Search models"
+                                    placeholder={t('Search models…')}
+                                    aria-label={t('Search models')}
                                     className={cn(inputCls, 'h-8 pl-9')}
                                 />
                             </div>
-                            <Tip label="Refresh catalog" side="bottom">
+                            <Tip label={t('Refresh catalog')} side="bottom">
                                 <button
                                     type="button"
-                                    aria-label="Refresh catalog"
+                                    aria-label={t('Refresh catalog')}
                                     onClick={() => load(true)}
                                     className="rounded-md p-1.5 hover:bg-accent"
                                 >
@@ -134,7 +136,7 @@ export default function ModelPicker({ value, onChange }) {
                                     freeOnly ? 'border-transparent bg-[var(--viral)] text-black' : 'text-muted-foreground hover:bg-accent',
                                 )}
                             >
-                                FREE
+                                {t('FREE')}
                             </button>
                             {total > 0 && (
                                 <span className="ml-auto self-center font-mono text-[10px] text-muted-foreground">
@@ -143,8 +145,8 @@ export default function ModelPicker({ value, onChange }) {
                             )}
                         </div>
                     </div>
-                    <ul role="listbox" aria-label="Models" className="digi-scroll max-h-64 overflow-y-auto p-1">
-                        {error && <li className="px-2 py-3 text-[11px] text-muted-foreground">{error}</li>}
+                    <ul role="listbox" aria-label={t('Models')} className="digi-scroll max-h-64 overflow-y-auto p-1">
+                        {error && <li className="px-2 py-3 text-[11px] text-muted-foreground">{t(error)}</li>}
                         {!error && filtered.map((m) => (
                             <li key={m.id} role="option" aria-selected={m.id === value}>
                                 <button
@@ -160,7 +162,7 @@ export default function ModelPicker({ value, onChange }) {
                                         <span className="max-w-[42%] shrink-0 truncate text-right text-[10px] text-muted-foreground">{m.name}</span>
                                     )}
                                     {isFree(m.id) && (
-                                        <span className="shrink-0 rounded-full bg-[var(--viral)] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-black">FREE</span>
+                                        <span className="shrink-0 rounded-full bg-[var(--viral)] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-black">{t('FREE')}</span>
                                     )}
                                     {isContributor(m.id) && !isFree(m.id) && (
                                         <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">CONTRIBUTOR</span>
@@ -170,18 +172,18 @@ export default function ModelPicker({ value, onChange }) {
                             </li>
                         ))}
                         {!error && !loading && filtered.length === 0 && (
-                            <li className="px-2 py-3 text-[11px] text-muted-foreground">No models match. Clear search or filters.</li>
+                            <li className="px-2 py-3 text-[11px] text-muted-foreground">{t('No models match. Clear search or filters.')}</li>
                         )}
                         {!error && loading && models === null && (
-                            <li className="px-2 py-3 text-[11px] text-muted-foreground">Loading catalog…</li>
+                            <li className="px-2 py-3 text-[11px] text-muted-foreground">{t('Loading catalog…')}</li>
                         )}
                     </ul>
                     <div className="border-t p-2">
                         <input
                             value={value}
                             onChange={(e) => onChange(e.target.value)}
-                            placeholder="…or paste any model slug"
-                            aria-label="Custom model slug"
+                            placeholder={t('…or paste any model slug')}
+                            aria-label={t('Custom model slug')}
                             className={cn(inputCls, 'h-8 font-mono text-[11px]')}
                         />
                     </div>

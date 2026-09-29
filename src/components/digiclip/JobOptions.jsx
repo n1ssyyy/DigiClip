@@ -9,6 +9,7 @@ import { usePanelBeat } from './usePanelBeat';
 import { useFloatingPanel } from './useFloatingPanel';
 import { pickAudio, pickImage } from '../../lib/native';
 import { flashMessage, saveSettings, useStore } from '../../lib/socket';
+import { useT } from '../../lib/i18n';
 
 const STORE_KEY = 'digiclip.jobOptions';
 
@@ -179,6 +180,7 @@ function Kicker({ children }) {
 }
 
 function KindSeg({ value, onChange }) {
+    const t = useT();
     const opts = [
         { id: 'smart', label: 'Smart', tip: 'Scored highlights — hook, retention, value.' },
         { id: 'complete', label: 'Complete', tip: 'Finished thoughts, flexible length.' },
@@ -186,9 +188,9 @@ function KindSeg({ value, onChange }) {
         { id: 'timecut', label: 'Timecut', tip: 'Even slices of fixed length.' },
     ];
     return (
-        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label="Picking">
+        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label={t('Picking')}>
             {opts.map((o) => (
-                <Tip key={o.id} label={o.tip} side="top" className="min-w-0 flex-1">
+                <Tip key={o.id} label={t(o.tip)} side="top" className="min-w-0 flex-1">
                     <button
                         type="button"
                         role="radio"
@@ -199,7 +201,7 @@ function KindSeg({ value, onChange }) {
                             value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                         )}
                     >
-                        {o.label}
+                        {typeof o.label === 'string' ? t(o.label) : o.label}
                     </button>
                 </Tip>
             ))}
@@ -210,15 +212,16 @@ function KindSeg({ value, onChange }) {
 /** Duration mode picker: same segmented language as picking —
  *  one choice, three verbs, no dropdown. */
 function DurSeg({ value, onChange }) {
+    const t = useT();
     const opts = [
         { id: 'auto', label: 'Auto', tip: 'Engine default window, 15–90s per clip.' },
         { id: 'exact', label: 'Exact', tip: 'One length for every clip.' },
         { id: 'minmax', label: 'Min–Max', tip: 'Grow short picks, trim long ones.' },
     ];
     return (
-        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label="Duration">
+        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label={t('Duration')}>
             {opts.map((o) => (
-                <Tip key={o.id} label={o.tip} side="top" className="min-w-0 flex-1">
+                <Tip key={o.id} label={t(o.tip)} side="top" className="min-w-0 flex-1">
                     <button
                         type="button"
                         role="radio"
@@ -229,7 +232,7 @@ function DurSeg({ value, onChange }) {
                             value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                         )}
                     >
-                        {o.label}
+                        {typeof o.label === 'string' ? t(o.label) : o.label}
                     </button>
                 </Tip>
             ))}
@@ -238,22 +241,23 @@ function DurSeg({ value, onChange }) {
 }
 /** Generic segmented control in the same language as the two above. */
 function Seg({ label, value, options, onChange }) {
+    const t = useT();
     return (
         <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="radiogroup" aria-label={label}>
             {options.map((o) => (
-                <Tip key={o.id} label={o.tip} side="top" className="min-w-0 flex-1">
+                <Tip key={o.id} label={t(o.tip)} side="top" className="min-w-0 flex-1">
                     <button
                         type="button"
                         role="radio"
                         aria-checked={value === o.id}
-                        aria-label={typeof o.label === 'string' ? undefined : o.tip}
+                        aria-label={typeof o.label === 'string' ? undefined : t(o.tip)}
                         onClick={() => onChange(o.id)}
                         className={cn(
                             'flex min-w-0 flex-1 items-center justify-center truncate text-[11px] transition-colors hover:bg-accent hover:text-foreground',
                             value === o.id ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground',
                         )}
                     >
-                        {o.label}
+                        {typeof o.label === 'string' ? t(o.label) : o.label}
                     </button>
                 </Tip>
             ))}
@@ -306,6 +310,7 @@ function SwitchRow({ checked, onChange, title, hint }) {
 
 /** A file slot: pick button showing the chosen name, plus clear. */
 function FileSlot({ icon: Icon, value, empty, pick, onChange }) {
+    const t = useT();
     function browse() {
         pick().then((p) => { if (p) onChange(p); }).catch(() => {});
     }
@@ -321,10 +326,10 @@ function FileSlot({ icon: Icon, value, empty, pick, onChange }) {
                 <span className={cn('truncate', !value && 'text-muted-foreground')}>{value ? baseName(value) : empty}</span>
             </button>
             {value && (
-                <Tip label="Remove" side="top">
+                <Tip label={t('Remove')} side="top">
                     <button
                         type="button"
-                        aria-label="Remove"
+                        aria-label={t('Remove')}
                         onClick={() => onChange('')}
                         className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                     >
@@ -339,17 +344,18 @@ function FileSlot({ icon: Icon, value, empty, pick, onChange }) {
 /** Shapes to render: toggle any; the first picked is the main clip and
  *  the rest come out as extra files from the same run. */
 function AspectPicker({ value, onChange }) {
+    const t = useT();
     const list = aspectList(value);
     function toggle(id) {
         const next = list.includes(id) ? list.filter((a) => a !== id) : [...list, id];
         if (next.length) onChange(next.join(','));
     }
     return (
-        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="group" aria-label="Aspect">
+        <div className="flex h-8 w-full overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]" role="group" aria-label={t('Aspect')}>
             {ASPECT_OPTS.map((o) => {
                 const at = list.indexOf(o.id);
                 return (
-                    <Tip key={o.id} label={at === 0 ? `${o.tip} Main shape.` : at > 0 ? `${o.tip} Extra file.` : o.tip} side="top" className="min-w-0 flex-1">
+                    <Tip key={o.id} label={at === 0 ? `${t(o.tip)} ${t('Main shape.')}` : at > 0 ? `${t(o.tip)} ${t('Extra file.')}` : t(o.tip)} side="top" className="min-w-0 flex-1">
                         <button
                             type="button"
                             aria-pressed={at >= 0}
@@ -371,6 +377,7 @@ function AspectPicker({ value, onChange }) {
 
 /** Native select in the panel's input look. */
 function Select({ label, value, options, onChange }) {
+    const t = useT();
     return (
         <div className="relative">
             <select
@@ -379,7 +386,7 @@ function Select({ label, value, options, onChange }) {
                 aria-label={label}
                 className={cn(inputCls, 'appearance-none pr-8 [color-scheme:dark]')}
             >
-                {options.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                {options.map(([id, name]) => <option key={id} value={id}>{t(name)}</option>)}
             </select>
             <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
         </div>
@@ -389,6 +396,7 @@ function Select({ label, value, options, onChange }) {
 /** Saved option sets: apply one, save the panel as one, delete one.
  *  They live in the engine settings, so the watch folder can use them. */
 function PresetRow({ options, onApply }) {
+    const t = useT();
     const settings = useStore((s) => s.settings);
     const presets = settings?.presets ?? [];
     const [naming, setNaming] = useState(false);
@@ -401,7 +409,7 @@ function PresetRow({ options, onApply }) {
 
     function persist(next) {
         return saveSettings({ presets: next }).then(() => true).catch((e) => {
-            flashMessage(`Couldn't save presets: ${e?.message ?? e}`);
+            flashMessage(t("Couldn't save presets: {error}", { error: e?.message ?? e }));
             return false;
         });
     }
@@ -413,7 +421,7 @@ function PresetRow({ options, onApply }) {
             if (!ok) return;
             setNaming(false);
             setName('');
-            flashMessage(`Saved preset “${n}”.`);
+            flashMessage(t('Saved preset “{name}”.', { name: n }));
         });
     }
     function apply(n) {
@@ -436,16 +444,16 @@ function PresetRow({ options, onApply }) {
                         if (e.key === 'Enter') save();
                         if (e.key === 'Escape') { e.stopPropagation(); setNaming(false); }
                     }}
-                    placeholder="Preset name, e.g. Podcast"
-                    aria-label="Preset name"
+                    placeholder={t('Preset name, e.g. Podcast')}
+                    aria-label={t('Preset name')}
                     maxLength={40}
                     className={inputCls}
                 />
                 <button type="button" onClick={save} disabled={!name.trim()} className="shrink-0 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                    Save
+                    {t('Save')}
                 </button>
-                <Tip label="Cancel" side="top">
-                    <button type="button" aria-label="Cancel" onClick={() => setNaming(false)} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+                <Tip label={t('Cancel')} side="top">
+                    <button type="button" aria-label={t('Cancel')} onClick={() => setNaming(false)} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
                         <X className="size-3.5" aria-hidden />
                     </button>
                 </Tip>
@@ -459,23 +467,23 @@ function PresetRow({ options, onApply }) {
                 <select
                     value={picked}
                     onChange={(e) => apply(e.target.value)}
-                    aria-label="Apply a preset"
+                    aria-label={t('Apply a preset')}
                     disabled={!presets.length}
                     className={cn(inputCls, 'appearance-none pr-8 pl-7 [color-scheme:dark] disabled:opacity-60')}
                 >
-                    <option value="" disabled>{presets.length ? 'Apply a preset…' : 'No presets yet'}</option>
+                    <option value="" disabled>{presets.length ? t('Apply a preset…') : t('No presets yet')}</option>
                     {presets.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}
                 </select>
                 <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
             </div>
-            <Tip label="Save these options as a preset" side="top">
-                <button type="button" aria-label="Save as preset" onClick={() => { setName(known ? picked : ''); setNaming(true); }} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
+            <Tip label={t('Save these options as a preset')} side="top">
+                <button type="button" aria-label={t('Save as preset')} onClick={() => { setName(known ? picked : ''); setNaming(true); }} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground">
                     <Save className="size-3.5" aria-hidden />
                 </button>
             </Tip>
             {known && (
-                <Tip label={`Delete “${picked}”`} side="top">
-                    <button type="button" aria-label={`Delete preset ${picked}`} onClick={remove} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-red-400">
+                <Tip label={t('Delete “{name}”', { name: picked })} side="top">
+                    <button type="button" aria-label={t('Delete preset {name}', { name: picked })} onClick={remove} className="shrink-0 rounded-md px-1.5 text-muted-foreground hover:bg-accent hover:text-red-400">
                         <Trash2 className="size-3.5" aria-hidden />
                     </button>
                 </Tip>
@@ -493,6 +501,7 @@ const LAYOUT_OPTS = [
 /** Options popover for the upload card: same trigger/popover language
  *  as the pickers (digi-menu, pop/menu-out, floating panel). */
 export default function OptionsButton({ options, onChange }) {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const { show: panelShow, leaving: panelLeaving } = usePanelBeat(open);
     const rootRef = useRef(null);
@@ -504,10 +513,10 @@ export default function OptionsButton({ options, onChange }) {
 
     return (
         <div ref={rootRef} className="relative">
-            <Tip label="Job options" side="top">
+            <Tip label={t('Job options')} side="top">
                 <button
                     type="button"
-                    aria-label="Job options"
+                    aria-label={t('Job options')}
                     aria-haspopup="dialog"
                     aria-expanded={open}
                     onClick={() => setOpen((o) => !o)}
@@ -523,110 +532,110 @@ export default function OptionsButton({ options, onChange }) {
                 <div ref={panelRef} style={{ ...panelPos, width: 320 }} className={cn('digi-menu fixed z-[100] rounded-md border bg-popover p-2 text-popover-foreground shadow-md', panelLeaving ? 'menu-out' : 'pop')}>
                     <div className="digi-scroll max-h-[70dvh] space-y-2 overflow-y-auto pr-0.5">
                         <div className="space-y-1 border-b border-white/10 pb-2">
-                            <Kicker>Preset</Kicker>
+                            <Kicker>{t('Preset')}</Kicker>
                             <PresetRow options={options} onApply={onChange} />
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Picking</Kicker>
+                            <Kicker>{t('Picking')}</Kicker>
                             <KindSeg value={options.kind} onChange={set('kind')} />
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Clips (0 = auto)</Kicker>
-                            <Stepper label="Clips" value={options.count} min={0} max={10} onChange={set('count')} compact />
+                            <Kicker>{t('Clips (0 = auto)')}</Kicker>
+                            <Stepper label={t('Clips')} value={options.count} min={0} max={10} onChange={set('count')} compact />
                         </div>
                         <div className={cn('space-y-1', options.kind === 'timecut' && 'pointer-events-none opacity-50')}>
-                            <Kicker>Duration</Kicker>
+                            <Kicker>{t('Duration')}</Kicker>
                             <DurSeg value={options.dur_mode} onChange={set('dur_mode')} />
                             {options.kind === 'timecut' ? (
-                                <p className="text-[11px] text-muted-foreground">Timecut slices its own fixed length.</p>
+                                <p className="text-[11px] text-muted-foreground">{t('Timecut slices its own fixed length.')}</p>
                             ) : options.dur_mode === 'exact' ? (
                                 <>
-                                    <Stepper label="Exact clip length in seconds" value={options.dur_exact} min={5} max={300} onChange={set('dur_exact')} compact />
-                                    <p className="text-[11px] text-muted-foreground">Final videos land exactly on it.</p>
+                                    <Stepper label={t('Exact clip length in seconds')} value={options.dur_exact} min={5} max={300} onChange={set('dur_exact')} compact />
+                                    <p className="text-[11px] text-muted-foreground">{t('Final videos land exactly on it.')}</p>
                                 </>
                             ) : options.dur_mode === 'minmax' ? (
                                 <div className="grid grid-cols-2 gap-1.5">
                                     <div className="min-w-0 space-y-1">
-                                        <p className="text-[10px] text-muted-foreground">Min (s)</p>
-                                        <Stepper label="Minimum clip length in seconds" value={options.dur_min} min={5} max={300} onChange={(v) => onChange({ dur_min: v, ...(v > options.dur_max ? { dur_max: v } : {}) })} compact />
+                                        <p className="text-[10px] text-muted-foreground">{t('Min (s)')}</p>
+                                        <Stepper label={t('Minimum clip length in seconds')} value={options.dur_min} min={5} max={300} onChange={(v) => onChange({ dur_min: v, ...(v > options.dur_max ? { dur_max: v } : {}) })} compact />
                                     </div>
                                     <div className="min-w-0 space-y-1">
-                                        <p className="text-[10px] text-muted-foreground">Max (s)</p>
-                                        <Stepper label="Maximum clip length in seconds" value={options.dur_max} min={10} max={600} onChange={(v) => onChange({ dur_max: v, ...(v < options.dur_min ? { dur_min: v } : {}) })} compact />
+                                        <p className="text-[10px] text-muted-foreground">{t('Max (s)')}</p>
+                                        <Stepper label={t('Maximum clip length in seconds')} value={options.dur_max} min={10} max={600} onChange={(v) => onChange({ dur_max: v, ...(v < options.dur_min ? { dur_min: v } : {}) })} compact />
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-[11px] text-muted-foreground">Engine default: 15–90s per clip.</p>
+                                <p className="text-[11px] text-muted-foreground">{t('Engine default: 15–90s per clip.')}</p>
                             )}
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Caption style</Kicker>
+                            <Kicker>{t('Caption style')}</Kicker>
                             <CaptionPicker value={options.style} onChange={set('style')} compact />
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Tighten</Kicker>
+                            <Kicker>{t('Tighten')}</Kicker>
                             <TightenSeg value={options.tighten} onChange={set('tighten')} compact />
                         </div>
                         <div className="flex items-center gap-2">
-                            <GpuToggle checked={!!options.punch} disabled={false} onChange={set('punch')} label="Emphasis punch-ins" />
+                            <GpuToggle checked={!!options.punch} disabled={false} onChange={set('punch')} label={t('Emphasis punch-ins')} />
                             <div className="min-w-0">
-                                <p className="text-[13px] font-medium">Punch-ins</p>
-                                <p className="text-[11px] text-muted-foreground">Brief zoom on loud words.</p>
+                                <p className="text-[13px] font-medium">{t('Punch-ins')}</p>
+                                <p className="text-[11px] text-muted-foreground">{t('Brief zoom on loud words.')}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <GpuToggle checked={!!options.merge_flash} disabled={false} onChange={set('merge_flash')} label="Merge flash joins" />
+                            <GpuToggle checked={!!options.merge_flash} disabled={false} onChange={set('merge_flash')} label={t('Merge flash joins')} />
                             <div className="min-w-0">
-                                <p className="text-[13px] font-medium">Merge flashes</p>
-                                <p className="text-[11px] text-muted-foreground">White dips between compilation parts.</p>
+                                <p className="text-[13px] font-medium">{t('Merge flashes')}</p>
+                                <p className="text-[11px] text-muted-foreground">{t('White dips between compilation parts.')}</p>
                             </div>
                         </div>
                         <div className="space-y-1 border-t border-white/10 pt-2">
-                            <Kicker>Focus</Kicker>
+                            <Kicker>{t('Focus')}</Kicker>
                             <input
                                 type="text"
                                 value={options.focus ?? ''}
                                 onChange={(e) => onChange({ focus: e.target.value })}
-                                placeholder="Topic to favour, e.g. pricing"
-                                aria-label="Focus topic"
+                                placeholder={t('Topic to favour, e.g. pricing')}
+                                aria-label={t('Focus topic')}
                                 maxLength={120}
                                 className={inputCls}
                             />
-                            <p className="text-[11px] text-muted-foreground">Picks that talk about it rank first.</p>
+                            <p className="text-[11px] text-muted-foreground">{t('Picks that talk about it rank first.')}</p>
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Aspect</Kicker>
+                            <Kicker>{t('Aspect')}</Kicker>
                             <AspectPicker value={options.aspect} onChange={set('aspect')} />
                             <p className="text-[11px] text-muted-foreground">
                                 {aspectList(options.aspect).length > 1
-                                    ? `One run, ${aspectList(options.aspect).length} shapes. ${aspectList(options.aspect)[0]} is the main clip.`
-                                    : 'Pick more than one for extra shapes from the same run.'}
+                                    ? t('One run, {n} shapes. {main} is the main clip.', { n: aspectList(options.aspect).length, main: aspectList(options.aspect)[0] })
+                                    : t('Pick more than one for extra shapes from the same run.')}
                             </p>
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Layout</Kicker>
-                            <Seg label="Layout" value={options.layout ?? 'single'} options={LAYOUT_OPTS} onChange={set('layout')} />
+                            <Kicker>{t('Layout')}</Kicker>
+                            <Seg label={t('Layout')} value={options.layout ?? 'single'} options={LAYOUT_OPTS} onChange={set('layout')} />
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Caption language</Kicker>
-                            <Select label="Caption language" value={options.subs_lang ?? 'off'} options={SUBS_LANGS} onChange={set('subs_lang')} />
+                            <Kicker>{t('Caption language')}</Kicker>
+                            <Select label={t('Caption language')} value={options.subs_lang ?? 'off'} options={SUBS_LANGS} onChange={set('subs_lang')} />
                             {options.subs_lang && options.subs_lang !== 'off' && (
-                                <p className="text-[11px] text-muted-foreground">Translated through OpenRouter; without a key captions stay as spoken.</p>
+                                <p className="text-[11px] text-muted-foreground">{t('Translated through OpenRouter; without a key captions stay as spoken.')}</p>
                             )}
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Caption motion</Kicker>
-                            <Seg label="Caption motion" value={options.caption_anim ?? 'pop'} options={ANIM_OPTS} onChange={set('caption_anim')} />
+                            <Kicker>{t('Caption motion')}</Kicker>
+                            <Seg label={t('Caption motion')} value={options.caption_anim ?? 'pop'} options={ANIM_OPTS} onChange={set('caption_anim')} />
                         </div>
                         <div className="space-y-1.5">
-                            <SwitchRow checked={options.headline} onChange={set('headline')} title="Headline" hint="Title card pinned at the top." />
+                            <SwitchRow checked={options.headline} onChange={set('headline')} title={t('Headline')} hint={t('Title card pinned at the top.')} />
                             {options.headline && (
                                 <input
                                     type="text"
                                     value={options.headline_text ?? ''}
                                     onChange={(e) => onChange({ headline_text: e.target.value })}
-                                    placeholder="Empty = each clip's own title"
-                                    aria-label="Headline text"
+                                    placeholder={t("Empty = each clip's own title")}
+                                    aria-label={t('Headline text')}
                                     maxLength={80}
                                     className={inputCls}
                                 />
@@ -634,34 +643,34 @@ export default function OptionsButton({ options, onChange }) {
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="min-w-0 flex-1">
-                                <SwitchRow checked={options.progress_bar} onChange={set('progress_bar')} title="Progress bar" hint="Thin bar filling along the bottom." />
+                                <SwitchRow checked={options.progress_bar} onChange={set('progress_bar')} title={t('Progress bar')} hint={t('Thin bar filling along the bottom.')} />
                             </div>
                             {options.progress_bar && (
-                                <Tip label="Bar colour" side="top">
+                                <Tip label={t('Bar colour')} side="top">
                                     <input
                                         type="color"
                                         value={/^#[0-9a-f]{6}$/i.test(options.bar_color ?? '') ? options.bar_color : '#FFD400'}
                                         onChange={(e) => onChange({ bar_color: e.target.value.toUpperCase() })}
-                                        aria-label="Progress bar colour"
+                                        aria-label={t('Progress bar colour')}
                                         className="h-7 w-9 shrink-0 cursor-pointer rounded border border-white/15 bg-transparent p-0.5"
                                     />
                                 </Tip>
                             )}
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Logo</Kicker>
-                            <FileSlot icon={ImagePlus} value={options.logo} empty="Add a PNG or JPG…" pick={pickImage} onChange={set('logo')} />
+                            <Kicker>{t('Logo')}</Kicker>
+                            <FileSlot icon={ImagePlus} value={options.logo} empty={t('Add a PNG or JPG…')} pick={pickImage} onChange={set('logo')} />
                             {options.logo && (
-                                <Seg label="Logo corner" value={options.logo_pos ?? 'tr'} options={CORNER_OPTS} onChange={set('logo_pos')} />
+                                <Seg label={t('Logo corner')} value={options.logo_pos ?? 'tr'} options={CORNER_OPTS} onChange={set('logo_pos')} />
                             )}
                         </div>
                         <div className="space-y-1">
-                            <Kicker>Music</Kicker>
-                            <FileSlot icon={Music} value={options.music} empty="Add a music bed…" pick={pickAudio} onChange={set('music')} />
+                            <Kicker>{t('Music')}</Kicker>
+                            <FileSlot icon={Music} value={options.music} empty={t('Add a music bed…')} pick={pickAudio} onChange={set('music')} />
                             {options.music && (
                                 <>
-                                    <Seg label="Music level" value={options.music_db ?? -16} options={LEVEL_OPTS} onChange={set('music_db')} />
-                                    <p className="text-[11px] text-muted-foreground">Loops to length and ducks under speech.</p>
+                                    <Seg label={t('Music level')} value={options.music_db ?? -16} options={LEVEL_OPTS} onChange={set('music_db')} />
+                                    <p className="text-[11px] text-muted-foreground">{t('Loops to length and ducks under speech.')}</p>
                                 </>
                             )}
                         </div>

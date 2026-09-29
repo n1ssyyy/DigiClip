@@ -8,6 +8,7 @@
  * same socket, and the `ago` clock is a render tick, not a fetch.
  */
 import { useSyncExternalStore } from 'react';
+import { t } from './i18n';
 
 const S = {
     conn: 'boot', // boot | live | retry | failed
@@ -41,7 +42,7 @@ export function whenSynced(timeoutMs = 15000) {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             syncWaiters.delete(entry);
-            reject(new Error('engine did not answer'));
+            reject(new Error(t('engine did not answer')));
         }, timeoutMs);
         const entry = { resolve: () => resolve(true), timer };
         syncWaiters.add(entry);
@@ -155,7 +156,7 @@ function openSocket() {
             pending.delete(frame.id);
             clearTimeout(p.timer);
             if (frame.ok) p.resolve(frame.data ?? null);
-            else p.reject(new Error(frame.error || 'command failed'));
+            else p.reject(new Error(frame.error || t('command failed')));
             return;
         }
         if (frame?.type === 'ev') apply(frame);
@@ -190,7 +191,7 @@ function scheduleRetry() {
 export function cmd(name, params = {}, { busy = false, timeoutMs = 60000 } = {}) {
     return new Promise((resolve, reject) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-            reject(new Error('not connected'));
+            reject(new Error(t('not connected')));
             return;
         }
         const id = nextId++;
@@ -200,7 +201,7 @@ export function cmd(name, params = {}, { busy = false, timeoutMs = 60000 } = {})
                 S.busy = Math.max(0, S.busy - 1);
                 emit();
             }
-            reject(new Error('timed out'));
+            reject(new Error(t('timed out')));
         }, timeoutMs);
         pending.set(id, { resolve, reject, timer });
         if (busy) {
@@ -269,7 +270,7 @@ function apply(frame) {
             break;
         case 'job_created':
             upsertJob(ev.job);
-            flash(ev.job.status === 'downloading' ? `Fetching ${ev.job.name}…` : `Stored ${ev.job.name}, transcription queued.`);
+            flash(ev.job.status === 'downloading' ? t('Fetching {name}…', { name: ev.job.name }) : t('Stored {name}, transcription queued.', { name: ev.job.name }));
             break;
         case 'job_updated':
             upsertJob(ev.job);
@@ -415,11 +416,11 @@ export function saveSettings(patch) {
 }
 
 export function downloadModel(id) {
-    return cmd('models_download', { model: id }).catch((e) => flash(`Couldn't download ${id}: ${e?.message ?? e}`));
+    return cmd('models_download', { model: id }).catch((e) => flash(t("Couldn't download {model}: {error}", { model: id, error: e?.message ?? e })));
 }
 
 export function deleteModel(id) {
-    return cmd('models_delete', { model: id }).catch((e) => flash(`Couldn't delete ${id}: ${e?.message ?? e}`));
+    return cmd('models_delete', { model: id }).catch((e) => flash(t("Couldn't delete {model}: {error}", { model: id, error: e?.message ?? e })));
 }
 
 export function refreshHealth() {
@@ -478,18 +479,18 @@ export function fetchKit(job, rank) {
 export async function downloadArt(url, filename) {
     const { saveFile } = await import('./native.js');
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`download failed: ${res.status}`);
+    if (!res.ok) throw new Error(t('download failed: {status}', { status: res.status }));
     const bytes = new Uint8Array(await res.arrayBuffer());
     const ext = (filename.split('.').pop() ?? 'mp4').toLowerCase();
-    const dest = await saveFile(bytes, { filename, filters: [{ name: 'Video', extensions: [ext] }] });
-    if (dest) flashMessage(`Saved ${filename}`);
+    const dest = await saveFile(bytes, { filename, filters: [{ name: t('Video'), extensions: [ext] }] });
+    if (dest) flashMessage(t('Saved {file}', { file: filename }));
     return dest;
 }
 
 export async function downloadText(text, filename) {
     const { saveFile } = await import('./native.js');
-    const dest = await saveFile(new TextEncoder().encode(text), { filename, filters: [{ name: 'Text', extensions: ['txt'] }] });
-    if (dest) flashMessage(`Saved ${filename}`);
+    const dest = await saveFile(new TextEncoder().encode(text), { filename, filters: [{ name: t('Text'), extensions: ['txt'] }] });
+    if (dest) flashMessage(t('Saved {file}', { file: filename }));
     return dest;
 }
 

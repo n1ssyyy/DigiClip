@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useT } from '../../lib/i18n';
 
 /** Overlay + box in the same language as the cancel dialog (overlay
  *  fade/fade-out, box pop/pop-out, pinned below the title bar and
  *  centered in the page). The parent's ExitBeat holds it for `leaving`. */
 export default function Modal({ title, sub, width = 560, onClose, leaving, children, footer, labelId = 'modal-title' }) {
+    const t = useT();
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', onKey);
@@ -31,7 +33,7 @@ export default function Modal({ title, sub, width = 560, onClose, leaving, child
                     <h2 id={labelId} className="min-w-0 flex-1 truncate text-[13px] font-semibold">{title}</h2>
                     {sub && <p className="shrink-0 font-mono text-[10px] text-muted-foreground">{sub}</p>}
                     <button
-                        type="button" aria-label="Close"
+                        type="button" aria-label={t('Close')}
                         onClick={onClose}
                         className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
                     >

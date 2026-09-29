@@ -4,6 +4,7 @@ import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { usePanelBeat } from './usePanelBeat';
 import { useFloatingPanel } from './useFloatingPanel';
+import { useT } from '../../lib/i18n';
 
 export const CAPTION_STYLES = ['tiktok', 'karaoke', 'hormozi', 'minimal', 'beast', 'neon', 'highlight', 'ghost'];
 
@@ -62,6 +63,7 @@ const inputCls = 'flex h-9 w-full rounded-md border border-x-white/10 border-b-b
  * minus the catalog machinery (fixed style set with live previews).
  */
 export default function CaptionPicker({ value, onChange, compact = false }) {
+    const t = useT();
     const [open, setOpen] = useState(false);
     const { show: panelShow, leaving: panelLeaving } = usePanelBeat(open);
     const rootRef = useRef(null);
@@ -91,13 +93,13 @@ export default function CaptionPicker({ value, onChange, compact = false }) {
                 onClick={() => setOpen((o) => !o)}
                 className={cn(inputCls, 'cursor-pointer items-center justify-between text-left', compact && 'h-8')}
             >
-                <span className="truncate font-mono text-xs">{value || 'Select a style…'}</span>
+                <span className="truncate font-mono text-xs">{value || t('Select a style…')}</span>
                 <ChevronDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
             </button>
 
             {panelShow && panelPos && createPortal(
                 <div ref={panelRef} style={panelPos} className={cn('digi-menu fixed z-[100] rounded-md border bg-popover text-popover-foreground shadow-md', panelLeaving ? 'menu-out' : 'pop')}>
-                    <ul role="listbox" aria-label="Caption styles" className="digi-scroll max-h-72 overflow-y-auto p-1">
+                    <ul role="listbox" aria-label={t('Caption styles')} className="digi-scroll max-h-72 overflow-y-auto p-1">
                         {CAPTION_STYLES.map((s) => (
                             <li key={s} role="option" aria-selected={s === value}>
                                 <button
