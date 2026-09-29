@@ -1432,31 +1432,39 @@ export default function Home() {
                 >
                     <span aria-hidden className="absolute top-full left-6 h-[5px] w-px bg-border" />
                     <CardHeader className="h-10 justify-center py-0 pr-2 pl-4">
-                        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-[13px]">
+                        {/* Three zones: label left, buttons right, and the
+                            pills (status, title, tags) centred as one group.
+                            The side tracks never shrink below their content
+                            and split the spare room evenly, so the group
+                            stays centred; when space runs out only the title
+                            pill truncates. */}
+                        <div className="grid grid-cols-[minmax(max-content,1fr)_minmax(0,max-content)_minmax(max-content,1fr)] items-center gap-2 text-[13px]">
                             <span className="font-semibold">{t('Projects')}</span>
                             {shown != null && (
                                 <>
-                                    <Badge variant="secondary" className="gap-1.5">
-                                        {LIVE_LABEL[shown.status] ? t(LIVE_LABEL[shown.status]) : shown.status}
-                                        <span className={cn('size-1.5 rounded-full', statusDot(shown.status))} aria-hidden />
-                                        <span className="font-mono text-[10px]">
-                                            {shownIdx + 1}/{projects.length}
-                                        </span>
-                                    </Badge>
-                                    <span className="flex min-w-0 items-center justify-end gap-1">
+                                    <span className="flex min-w-0 items-center justify-center gap-1">
+                                        <Badge variant="secondary" className="shrink-0 gap-1.5">
+                                            {LIVE_LABEL[shown.status] ? t(LIVE_LABEL[shown.status]) : shown.status}
+                                            <span className={cn('size-1.5 rounded-full', statusDot(shown.status))} aria-hidden />
+                                            <span className="font-mono text-[10px]">
+                                                {shownIdx + 1}/{projects.length}
+                                            </span>
+                                        </Badge>
+                                        <Badge variant="secondary" className="min-w-0 text-[12px] text-foreground" title={shown.name}>
+                                            <span className="truncate">{shown.name}</span>
+                                        </Badge>
                                         {shown.options?.merge != null && (
                                             <Badge variant="secondary" className="shrink-0 font-mono text-[10px] text-muted-foreground">
                                                 {t('merged')}
                                             </Badge>
                                         )}
                                         {jobTags(shown.options, t).map((tag) => (
-                                            <Badge key={tag} variant="secondary" className="max-w-32 shrink-0 truncate font-mono text-[10px] text-muted-foreground">
-                                                {tag}
+                                            <Badge key={tag} variant="secondary" className="max-w-32 shrink-0 font-mono text-[10px] text-muted-foreground">
+                                                <span className="truncate">{tag}</span>
                                             </Badge>
                                         ))}
-                                        <span className="truncate font-medium">
-                                            {shown.name}
-                                        </span>
+                                    </span>
+                                    <span className="flex items-center justify-end gap-0.5">
                                         <Tip label={t('Transcript: make a clip from any stretch')} side="top">
                                             <button
                                                 type="button" aria-label={t('Open the transcript of {name}', { name: shown.name })}
