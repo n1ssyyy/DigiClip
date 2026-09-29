@@ -89,7 +89,7 @@
 - 🧩 **Every platform in one run.** Tick 9:16 *and* 4:5 *and* 16:9, and each clip renders in all of them.
 - ✏️ **Edit instead of re-running.** Nudge a clip's start or end, retitle it, switch caption style or fix a misheard word, and only that clip re-renders. Or open the transcript, click the first and last word, and make your own clip.
 - 📦 **Ready to post.** Each clip comes with `.srt` captions and an upload kit. Full-video mode adds YouTube chapters and a summary.
-- 🔗 **Feeds itself.** Paste a link (YouTube, TikTok, X, Vimeo and more), or point it at a **watch folder** and every video dropped in starts on its own.
+- 🔗 **Feeds itself.** Paste a link (YouTube, TikTok, X, Vimeo and more), or point it at a **watch folder** and every video dropped in starts on its own. DigiClip lives in the tray and can start when you sign in, so the folder is always watched.
 - 🚀 **Fast.** Clips render side by side, GPU-encoded on NVENC or VideoToolbox. Three clips from a minute of video take about 15 seconds on a laptop RTX 3050. Audio lands on −14 LUFS, ready for every platform.
 - 🌍 **Speaks your language.** The app itself comes in English, Albanian, German, French, Spanish, Italian and Turkish.
 - 🔒 **Yours, start to finish.** Video, transcripts and renders never leave your disk. The only thing that ever goes out is transcript text, and only if you turn on an online picker, judge or translation.
