@@ -1,11 +1,14 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
 /** Overlay + box in the same language as the cancel dialog (overlay
  *  fade/fade-out, box pop/pop-out, pinned below the title bar and
- *  centered in the page). The parent's ExitBeat holds it for `leaving`. */
+ *  centered in the page). The parent's ExitBeat holds it for `leaving`.
+ *  Portalled to <body>: a parent with a backdrop blur (the title bar)
+ *  would otherwise pin the "fixed" overlay to itself. */
 export default function Modal({ title, sub, width = 560, onClose, leaving, children, footer, labelId = 'modal-title' }) {
     const t = useT();
     useEffect(() => {
@@ -14,7 +17,7 @@ export default function Modal({ title, sub, width = 560, onClose, leaving, child
         return () => document.removeEventListener('keydown', onKey);
     }, [onClose]);
 
-    return (
+    return createPortal(
         <div
             className={cn('fixed inset-x-0 bottom-0 top-[var(--chrome)] z-50 flex items-center justify-center bg-black/60 p-4 pl-[calc(var(--chrome)_+_1rem)] backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
             onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -43,7 +46,8 @@ export default function Modal({ title, sub, width = 560, onClose, leaving, child
                 <div className="digi-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-3">{children}</div>
                 {footer && <div className="flex items-center justify-end gap-2 border-t border-white/10 px-4 py-3">{footer}</div>}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }
 
