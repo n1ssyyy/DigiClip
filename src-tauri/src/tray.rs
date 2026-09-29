@@ -312,9 +312,9 @@ fn linux_menu(
 // Launch at sign-in
 // ---------------------------------------------------------------------------
 
-/// What the sign-in entry runs. Quoted where the entry is a command line
-/// (Windows Run key, Linux `Exec=`), so a path with spaces still starts.
-fn launch_path() -> Option<String> {
+/// The executable that starts DigiClip (on Linux the AppImage/AppRun,
+/// not the unpacked binary).
+pub fn app_exe() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     #[cfg(target_os = "linux")]
     let exe = {
@@ -328,6 +328,13 @@ fn launch_path() -> Option<String> {
         });
         apprun.unwrap_or(exe)
     };
+    Some(exe)
+}
+
+/// What the sign-in entry runs. Quoted where the entry is a command line
+/// (Windows Run key, Linux `Exec=`), so a path with spaces still starts.
+fn launch_path() -> Option<String> {
+    let exe = app_exe()?;
     if cfg!(target_os = "macos") {
         Some(exe.display().to_string())
     } else {

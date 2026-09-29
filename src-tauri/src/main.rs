@@ -120,6 +120,11 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
     std_cmd.args(["--serve", "--port", &port.to_string(), "--token", &token]);
     // Dev override: a throwaway settings/data dir (test runs without
     // touching the user's saved settings).
+    // The MCP bridge starts the app (hidden) through this path when an AI
+    // app calls while DigiClip is closed.
+    if let Some(exe) = tray::app_exe() {
+        std_cmd.env("DIGICLIP_APP_EXE", exe);
+    }
     if let Some(dir) = std::env::var_os("DIGICLIP_DATA_DIR").filter(|d| !d.is_empty()) {
         std_cmd.arg("--data-dir").arg(dir);
     }
@@ -585,10 +590,14 @@ fn reload_on_web_process_crash(win: &tauri::WebviewWindow) {
 
 fn main() {
     let app = tauri::Builder::default()
-        // First: a second launch (start menu, sign-in entry racing a manual
-        // start) just brings the running app forward.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            tray::show_main(app, None);
+        // First: a second launch (start menu) just brings the running app
+        // forward.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // A hidden start (sign-in entry, the MCP bridge waking the app)
+            // must not pop the window of the running one.
+            if !args.iter().any(|a| a == tray::HIDDEN_ARG) {
+                tray::show_main(app, None);
+            }
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

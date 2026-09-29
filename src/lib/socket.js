@@ -9,7 +9,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { t } from './i18n';
-import { broadcastSettings, isTauri, onSettings } from './native';
+import { broadcastSettings, isTauri, onSettings, openMain, windowLabel } from './native';
 
 const S = {
     conn: 'boot', // boot | live | retry | failed
@@ -21,7 +21,9 @@ const S = {
     orModels: null,
     toasts: [],
     flash: null,
-    page: 'home', // home | health | settings
+    mcp: null, // MCP server: port, token, clients, activity, tools, installed apps
+    focus: null, // { job, seq }: an AI app asked to show this project
+    page: 'home', // home | health | mcp | settings
     busy: 0, // PageLine counter: full actions only, never background events
 };
 
@@ -140,6 +142,7 @@ function openSocket() {
             S.settings = data.settings ?? null;
             S.models = data.models ?? {};
             S.health = data.health ?? null;
+            S.mcp = data.mcp ?? null;
             markSynced();
             emit();
         }).catch(() => {});
@@ -344,6 +347,16 @@ function apply(frame) {
         case 'health':
             S.health = ev.health;
             break;
+        case 'mcp':
+            S.mcp = ev.mcp ?? S.mcp;
+            break;
+        case 'mcp_focus':
+            // Only the main window follows; the tray menu has its own socket.
+            if (windowLabel() === 'tray') return;
+            if (ev.job) S.focus = { job: ev.job, seq: (S.focus?.seq ?? 0) + 1 };
+            S.page = ev.page ?? (ev.job ? 'home' : S.page);
+            if (isTauri()) openMain();
+            break;
         case 'toast':
             pushToast(ev.tone === 'error' ? 'error' : ev.tone === 'success' ? 'success' : 'info', ev.title, ev.body);
             break;
@@ -374,6 +387,14 @@ export function dismissFlash() {
 export function navigate(page) {
     if (S.page !== page) {
         S.page = page;
+        emit();
+    }
+}
+
+/** The project an AI app asked to show has been shown. */
+export function clearFocus() {
+    if (S.focus) {
+        S.focus = null;
         emit();
     }
 }
@@ -424,6 +445,33 @@ if (isTauri()) {
         S.settings = settings;
         emit();
     }).catch(() => {});
+}
+
+export function refreshMcp() {
+    return cmd('mcp_state').then((data) => {
+        if (data) {
+            S.mcp = data;
+            emit();
+        }
+        return data;
+    }).catch(() => null);
+}
+
+/** New token: HTTP clients need the new one (the bridge reads it itself). */
+export function rotateMcpToken() {
+    return cmd('mcp_rotate_token', {}, { busy: true }).then((data) => {
+        if (data) {
+            S.mcp = data;
+            emit();
+        }
+        return data;
+    });
+}
+
+/** Add DigiClip to (or take it out of) an AI app's MCP config:
+ *  `claude_desktop`, `claude_code` or `cursor`. Resolves `{ path }`. */
+export function installMcp(client, remove = false) {
+    return cmd('mcp_install', { client, remove }, { busy: true, timeoutMs: 90000 });
 }
 
 export function downloadModel(id) {

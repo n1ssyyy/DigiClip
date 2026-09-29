@@ -1,11 +1,11 @@
-import { Activity, House as HouseIcon, Settings as SettingsIcon } from 'lucide-react';
+import { Activity, Bot, House as HouseIcon, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { navigate, useStore } from '../../lib/socket';
 import { useT } from '../../lib/i18n';
 
 const noDrag = { WebkitAppRegion: 'no-drag' };
 
-function SideLink({ page, label, active, children }) {
+function SideLink({ page, label, active, dot, children }) {
     return (
         <button
             type="button"
@@ -29,7 +29,10 @@ function SideLink({ page, label, active, children }) {
                 active && 'bg-accent/60 text-foreground',
             )}
         >
-            <span className="flex size-8 shrink-0 items-center justify-center">{children}</span>
+            <span className="relative flex size-8 shrink-0 items-center justify-center">
+                {children}
+                {dot && <span className="absolute top-1.5 right-1.5 size-1.5 animate-pulse rounded-full bg-orange-500" aria-hidden />}
+            </span>
             <span
                 aria-hidden
                 className={cn(
@@ -53,6 +56,8 @@ function SideLink({ page, label, active, children }) {
  */
 export default function Sidebar() {
     const page = useStore((s) => s.page);
+    // An AI app is mid-call: the MCP icon pulses.
+    const aiBusy = useStore((s) => !!s.mcp?.activity?.some((a) => a.state === 'running'));
     const t = useT();
 
     return (
@@ -63,6 +68,9 @@ export default function Sidebar() {
                 </SideLink>
                 <SideLink page="health" label={t('Health')} active={page === 'health'}>
                     <Activity className="size-4" aria-hidden />
+                </SideLink>
+                <SideLink page="mcp" label={t('AI apps')} active={page === 'mcp'} dot={aiBusy}>
+                    <Bot className="size-4" aria-hidden />
                 </SideLink>
             </nav>
             <div className="mt-auto">

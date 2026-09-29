@@ -6,6 +6,7 @@ import AppLayout from './layouts/AppLayout';
 import Home from './pages/Home';
 import Health from './pages/Health';
 import Settings from './pages/Settings';
+import Mcp from './pages/Mcp';
 import TrayMenu, { jobActivity } from './tray/TrayMenu';
 import { connect, navigate, useStore, whenSynced } from './lib/socket';
 import { getServe, isTauri, onNavigate, onServeFailed, onServeReady, setTrayText, windowLabel } from './lib/native';
@@ -101,7 +102,7 @@ function Shell() {
     return (
         <AppLayout>
             {isTauri() && <TrayBridge />}
-            {page === 'health' ? <Health /> : page === 'settings' ? <Settings /> : <Home />}
+            {page === 'health' ? <Health /> : page === 'settings' ? <Settings /> : page === 'mcp' ? <Mcp /> : <Home />}
         </AppLayout>
     );
 }
