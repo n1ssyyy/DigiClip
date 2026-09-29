@@ -7,8 +7,9 @@ import options from './options';
 import clips from './clips';
 import tray from './tray';
 import mcp from './mcp';
+import shell from './shell';
 
-const AREAS = [home, settings, options, clips, tray, mcp];
+const AREAS = [home, settings, options, clips, tray, mcp, shell];
 const LANGS = ['sq', 'de', 'fr', 'es', 'it', 'tr'];
 
 const dicts = {};

@@ -3,7 +3,7 @@ import { Button } from '../components/ui/button';
 import { UploadCloud, FileVideo, X, RotateCcw, Film, Download, Loader2, Merge, FileText, Trash2, ChevronLeft, ChevronRight, Pencil, ScrollText, Link2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { cn } from '../lib/utils';
+import { cn, HOT_EDGE } from '../lib/utils';
 import {
     artUrl, srcUrl, startJob, startJobUrl, removeJob, retryJob,
     fetchKit, downloadArt, downloadText, flashMessage, useStore, clearFocus,
@@ -703,7 +703,7 @@ function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false
                 'flex min-h-0 flex-col justify-between overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-card p-1.5',
                 !paged && fresh && 'tile-in',
                 tall && 'row-span-2',
-                playable && 'cursor-pointer transition-colors hover:border-muted-foreground/40',
+                playable && 'cursor-pointer transition-colors hover:border-t-white/30 hover:border-x-white/[0.16]',
                 paged && !entered && 'opacity-0 translate-y-3',
                 leaving && 'opacity-0 translate-y-3',
             )}
@@ -1384,7 +1384,7 @@ export default function Home() {
                     gap below points at the list so the two read as a pair
                     without touching. h-10 keeps all headers the same. */}
                 <Card
-                    className={cn('relative shrink-0 transition-colors', hotPair === 'queue' && 'border-t-white/25 border-x-white/[0.13]')}
+                    className={cn('relative shrink-0 transition-colors', hotPair === 'queue' && HOT_EDGE)}
                     onMouseEnter={() => setHotPair('queue')}
                     onMouseLeave={() => setHotPair(null)}
                 >
@@ -1406,16 +1406,17 @@ export default function Home() {
                     </CardHeader>
                 </Card>
                 <Card
-                    className={cn('stagger-2 flex min-h-0 flex-1 flex-col overflow-hidden transition-colors', hotPair === 'queue' && 'border-t-white/25 border-x-white/[0.13]')}
+                    className={cn('stagger-2 flex min-h-0 flex-1 flex-col overflow-hidden transition-colors', hotPair === 'queue' && HOT_EDGE)}
                     onMouseEnter={() => setHotPair('queue')}
                     onMouseLeave={() => setHotPair(null)}
                 >
                     <CardContent className="min-h-0 flex-1 overflow-y-auto p-2">
                         {projects.length === 0 ? (
-                            <div className="flex min-h-full items-center justify-center">
+                            <div className="flex min-h-full flex-col items-center justify-center gap-2.5">
+                                <UploadCloud className="size-6 text-muted-foreground/70" aria-hidden />
                                 <p className="text-center text-[13px] text-muted-foreground">
-                                {t('Queue is clear. Drop your first video above.')}
-                            </p>
+                                    {t('Queue is clear. Drop your first video above.')}
+                                </p>
                             </div>
                         ) : (
                             <div className="space-y-1" data-queue-list>
@@ -1438,7 +1439,7 @@ export default function Home() {
                 as Queue so the header points at the viewer below. */}
             <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[5px]">
                 <Card
-                    className={cn('relative shrink-0 transition-colors', hotPair === 'projects' && 'border-t-white/25 border-x-white/[0.13]')}
+                    className={cn('relative shrink-0 transition-colors', hotPair === 'projects' && HOT_EDGE)}
                     onMouseEnter={() => setHotPair('projects')}
                     onMouseLeave={() => setHotPair(null)}
                 >
@@ -1503,7 +1504,7 @@ export default function Home() {
                     </CardHeader>
                 </Card>
                 <Card
-                    className={cn('stagger-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-colors', hotPair === 'projects' && 'border-t-white/25 border-x-white/[0.13]')}
+                    className={cn('stagger-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-colors', hotPair === 'projects' && HOT_EDGE)}
                     onMouseEnter={() => setHotPair('projects')}
                     onMouseLeave={() => setHotPair(null)}
                 >
@@ -1529,10 +1530,11 @@ export default function Home() {
                     }}
                 >
                     {shown == null ? (
-                        <div className="flex h-full items-center justify-center px-4">
+                        <div className="flex h-full flex-col items-center justify-center gap-2.5 px-4">
+                            <Film className="size-6 text-muted-foreground/70" aria-hidden />
                             <p className="text-center text-[13px] text-muted-foreground">
-                            {t('Nothing here yet. Uploads appear here grouped by project.')}
-                        </p>
+                                {t('Nothing here yet. Uploads appear here grouped by project.')}
+                            </p>
                         </div>
                     ) : (
                         <div className="flex h-full min-h-0 gap-1.5 p-2">

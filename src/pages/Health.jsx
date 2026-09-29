@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { CheckCircle2, FileDown, Loader2, XCircle, MinusCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { cn } from '../lib/utils';
+import { cn, HOT_EDGE } from '../lib/utils';
 import Tip from '../components/digiclip/Tooltip';
 import { Skeleton, Swap } from '../components/digiclip/Skeleton';
 import { exportDiagnostics, flashMessage, refreshHealth, useStore } from '../lib/socket';
@@ -12,7 +12,15 @@ import { t as tr, useT } from '../lib/i18n';
 function StatusIcon({ ok }) {
     const t = useT();
     if (ok === true) return <CheckCircle2 className="size-4 text-[var(--viral)]" aria-label={t('ok')} />;
-    if (ok === false) return <XCircle className="size-4 text-destructive" aria-label={t('missing')} />;
+    if (ok === false) {
+        // A row in trouble breathes; healthy and unknown ones stay still.
+        return (
+            <span className="relative flex size-4 items-center justify-center">
+                <span className="absolute inset-0 rounded-full bg-destructive/40 motion-safe:animate-ping" aria-hidden />
+                <XCircle className="relative size-4 text-destructive" aria-label={t('missing')} />
+            </span>
+        );
+    }
     return <MinusCircle className="size-4 text-muted-foreground" aria-label={t('unknown')} />;
 }
 
@@ -188,7 +196,7 @@ export default function Health() {
     return (
         <div className="flex h-full min-h-[480px] flex-col gap-[5px]">
             <Card
-                className={cn('relative shrink-0 transition-colors', hot && 'border-t-white/25 border-x-white/[0.13]')}
+                className={cn('relative shrink-0 transition-colors', hot && HOT_EDGE)}
                 onMouseEnter={() => setHot(true)}
                 onMouseLeave={() => setHot(false)}
             >
@@ -210,7 +218,7 @@ export default function Health() {
                 </CardHeader>
             </Card>
             <Card
-                className={cn('stagger-1 flex min-h-0 flex-1 flex-col overflow-hidden transition-colors', hot && 'border-t-white/25 border-x-white/[0.13]')}
+                className={cn('stagger-1 flex min-h-0 flex-1 flex-col overflow-hidden transition-colors', hot && HOT_EDGE)}
                 onMouseEnter={() => setHot(true)}
                 onMouseLeave={() => setHot(false)}
             >

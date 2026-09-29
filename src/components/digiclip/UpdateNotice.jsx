@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, Loader2, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { dismissUpdate, runSetup, useUpdates } from '../../lib/updates';
+import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
 /**
@@ -17,7 +18,19 @@ export default function UpdateNotice() {
     const dismissed = useUpdates((s) => s.dismissed);
     const pct = useUpdates((s) => s.pct);
     const [notesOpen, setNotesOpen] = useState(false);
+    const [notesLeaving, setNotesLeaving] = useState(false);
+    const leaveTimer = useRef(null);
     const t = useT();
+    useEffect(() => () => clearTimeout(leaveTimer.current), []);
+    // Fade the notes out before unmounting them (180ms, like every dialog).
+    const closeNotes = () => {
+        setNotesLeaving(true);
+        clearTimeout(leaveTimer.current);
+        leaveTimer.current = setTimeout(() => {
+            setNotesOpen(false);
+            setNotesLeaving(false);
+        }, 190);
+    };
 
     const busy = phase === 'downloading' || phase === 'handing-off';
     const showBanner = (phase === 'available' || busy) && available && dismissed !== available.version;
@@ -62,14 +75,14 @@ export default function UpdateNotice() {
             </div>
             {notesOpen && (
                 <div
-                    className="fade fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-6"
-                    onClick={() => setNotesOpen(false)}
+                    className={cn('fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-6', notesLeaving ? 'fade-out' : 'fade')}
+                    onClick={closeNotes}
                 >
                     <div
                         role="dialog"
                         aria-modal="true"
                         aria-label={t('Release notes for v{version}', { version: available.version })}
-                        className="pop w-[min(480px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl"
+                        className={cn('w-[min(480px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl', notesLeaving ? 'pop-out' : 'pop')}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <h2 className="text-[13px] font-semibold">{t("What's new in v{version}", { version: available.version })}</h2>
@@ -80,14 +93,14 @@ export default function UpdateNotice() {
                             {available.notes || t('No notes published for this build.')}
                         </pre>
                         <div className="mt-4 flex justify-end gap-2">
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setNotesOpen(false)}>
+                            <Button type="button" variant="ghost" size="sm" onClick={closeNotes}>
                                 {t('Close')}
                             </Button>
                             <Button
                                 type="button"
                                 size="sm"
                                 onClick={() => {
-                                    setNotesOpen(false);
+                                    closeNotes();
                                     runSetup();
                                 }}
                             >
