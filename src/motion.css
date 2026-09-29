@@ -617,3 +617,25 @@
         animation-play-state: paused;
     }
 }
+
+/* Update banner exit: fade, slide down and collapse the height to 0 so */
+/* anything stacked with it closes up instead of jumping.               */
+@keyframes banner-out {
+    from {
+        grid-template-rows: 1fr;
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        grid-template-rows: 0fr;
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .banner-out {
+        display: grid;
+        pointer-events: none;
+        animation: banner-out 260ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+}
