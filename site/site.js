@@ -878,7 +878,9 @@
 
     /** The like buttons stay hidden until /api/likes answers, so a host
      *  without the function just shows the page without them. A click
-     *  paints at once and is put back if the server says no. */
+     *  paints at once and is put back if the server says no. After the
+     *  first answer the count is live: the server pushes every change down
+     *  one event stream, so a like from anyone shows here as it lands. */
     function initLikes() {
         const buttons = $$('[data-like]');
         const row = $('[data-like-row]');
@@ -940,10 +942,61 @@
             paint(false);
         };
 
+        /* The stream is only held open while somebody is here: it closes
+           when the tab is hidden or has sat untouched for five minutes, and
+           opens again on the next sign of life. Each (re)connection starts
+           with the current count, so nothing is missed in between. */
+        const live = () => {
+            if (!('EventSource' in window)) return;
+            const IDLE_MS = 5 * 60 * 1000;
+            let source = null;
+            let seen = Date.now();
+            const close = () => {
+                if (source) source.close();
+                source = null;
+            };
+            const open = () => {
+                if (source || document.hidden) return;
+                source = new EventSource('api/likes');
+                source.onmessage = (e) => {
+                    let data;
+                    try {
+                        data = JSON.parse(e.data);
+                    } catch {
+                        return;
+                    }
+                    /* While this visitor's own click is in flight its answer decides. */
+                    if (busy || typeof data.count !== 'number') return;
+                    const next = { count: data.count, liked: 'liked' in data ? Boolean(data.liked) : state.liked };
+                    if (next.count === state.count && next.liked === state.liked) return;
+                    state = next;
+                    paint(true);
+                };
+                /* The browser reconnects on its own after a dropped stream. If
+                   the server refused outright, stop until the next sign of life. */
+                source.onerror = () => {
+                    if (source && source.readyState === EventSource.CLOSED) close();
+                };
+            };
+            const awake = () => {
+                seen = Date.now();
+                open();
+            };
+            for (const type of ['pointerdown', 'pointermove', 'keydown', 'scroll']) {
+                addEventListener(type, awake, { passive: true });
+            }
+            document.addEventListener('visibilitychange', () => (document.hidden ? close() : awake()));
+            setInterval(() => {
+                if (Date.now() - seen > IDLE_MS) close();
+            }, 30000);
+            open();
+        };
+
         buttons.forEach((b) => b.addEventListener('click', () => toggle(b)));
         call('GET').then((data) => {
             state = data;
             paint(false);
+            live();
         }).catch(() => { /* no likes API on this host: keep the buttons hidden */ });
     }
 
