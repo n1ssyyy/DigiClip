@@ -763,6 +763,76 @@
     }
 
     /* ---------------------------------------------------------------- */
+    /* Likes                                                             */
+    /* ---------------------------------------------------------------- */
+
+    /** The like buttons stay hidden until /api/likes answers, so a host
+     *  without the function just shows the page without them. A click
+     *  paints at once and is put back if the server says no. */
+    function initLikes() {
+        const buttons = $$('[data-like]');
+        const row = $('[data-like-row]');
+        const msg = $('[data-like-msg]');
+        if (!buttons.length) return;
+        const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+        let state = null;
+        let busy = false;
+
+        const call = async (method) => {
+            const res = await fetch('api/likes', { method, headers: { Accept: 'application/json' } });
+            const data = await res.json();
+            if (!res.ok || typeof data.count !== 'number') throw new Error(data.error || 'likes unavailable');
+            return { count: data.count, liked: Boolean(data.liked) };
+        };
+        const paint = (tick) => {
+            for (const b of buttons) {
+                b.hidden = false;
+                b.setAttribute('aria-pressed', String(state.liked));
+                const n = state.count === 1 ? '1 like' : `${state.count} likes`;
+                b.setAttribute('aria-label', state.liked ? `Liked. Take your like back (${n})` : `Like DigiClip (${n})`);
+                const label = $('[data-like-label]', b);
+                if (label) label.textContent = state.liked ? 'Liked' : 'Like DigiClip';
+                const count = $('[data-like-count]', b);
+                count.textContent = compact.format(state.count);
+                if (tick) {
+                    count.classList.remove('tick');
+                    void count.offsetWidth;
+                    count.classList.add('tick');
+                }
+            }
+            if (row) row.hidden = false;
+        };
+        const toggle = async (button) => {
+            if (busy || !state) return;
+            busy = true;
+            const before = state;
+            state = { count: Math.max(0, before.count + (before.liked ? -1 : 1)), liked: !before.liked };
+            paint(true);
+            if (state.liked) {
+                button.classList.remove('landed');
+                void button.offsetWidth;
+                button.classList.add('landed');
+            }
+            if (msg) msg.textContent = '';
+            try {
+                state = await call(before.liked ? 'DELETE' : 'POST');
+                if (msg) msg.textContent = state.liked ? 'Liked. Thanks for backing it.' : 'Like removed.';
+            } catch {
+                state = before;
+                if (msg) msg.textContent = "That didn't save. Check your connection and try again.";
+            }
+            busy = false;
+            paint(false);
+        };
+
+        buttons.forEach((b) => b.addEventListener('click', () => toggle(b)));
+        call('GET').then((data) => {
+            state = data;
+            paint(false);
+        }).catch(() => { /* no likes API on this host: keep the buttons hidden */ });
+    }
+
+    /* ---------------------------------------------------------------- */
     /* Boot                                                              */
     /* ---------------------------------------------------------------- */
 
@@ -780,6 +850,7 @@
         initWords();
         initSpeed();
         initTerminal();
+        initLikes();
 
         loadReleases()
             .then((list) => paintReleases(list, true))
