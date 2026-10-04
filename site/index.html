@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DigiClip: the free AI clipper that runs on your machine</title>
+<meta name="description" content="DigiClip turns podcasts, streams and interviews into captioned short clips on your own computer. Free, open source, unlimited, no watermark, no upload.">
+<meta name="theme-color" content="#121212">
+<meta property="og:title" content="DigiClip: stop renting your clips">
+<meta property="og:description" content="The open-source AI clipper that does the job on your own machine. Free, unlimited, no watermark, no upload.">
+<meta property="og:type" content="website">
+<link rel="icon" href="icon.png">
+<link rel="preload" href="fonts/Anton-Regular.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="fonts/JetBrainsMono-Variable.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="stylesheet" href="site.css">
+<script>document.documentElement.classList.add('js');</script>
+</head>
+<body id="top">
+
+<!-- Icon sprite: lucide outlines, the same set the app uses. -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-square" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+  <symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+  <symbol id="i-columns" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="i-focus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></symbol>
+  <symbol id="i-audio" viewBox="0 0 24 24"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></symbol>
+  <symbol id="i-github" viewBox="0 0 24 24"><path class="solid" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></symbol>
+  <!-- The DigiClip clapperboard, split so the arm can hinge. -->
+  <symbol id="i-clapper" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+</svg>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="pageline" aria-hidden="true"><div class="pageline-bar" id="progress"></div></div>
+
+<header class="chrome">
+  <a class="brand brand-hover" href="#top" aria-label="DigiClip, back to top">
+    <svg class="brand-mark brand-idle" viewBox="0 0 24 24" aria-hidden="true">
+      <g class="brand-arm"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/></g>
+      <path class="brand-board" d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+    </svg>
+    <span>DigiClip</span>
+  </a>
+  <nav class="chrome-nav" aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#compare">Compare</a>
+    <a href="#versions">Versions</a>
+  </nav>
+  <div class="chrome-end">
+    <a class="chrome-icon" href="https://github.com/n1ssyyy/DigiClip" aria-label="DigiClip on GitHub">
+      <svg class="ico" data-g="pop" aria-hidden="true"><use href="#i-github"/></svg>
+    </a>
+    <a class="btn btn-primary btn-sm" href="#download">
+      <svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-download"/></svg>
+      <span>Download <span class="chrome-ver" data-version>v2.9.0</span></span>
+    </a>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ============================ HERO ============================ -->
+  <section class="hero">
+    <div class="hero-halo" aria-hidden="true"></div>
+    <div class="wrap">
+      <p class="eyebrow hero-eyebrow intro" style="--i:0">
+        <span class="dot" aria-hidden="true"></span>
+        Open-source AI clipper · free · MIT
+      </p>
+
+      <h1 class="cap-h1" id="headline" aria-label="Stop renting your clips.">
+        <span class="cap-line" aria-hidden="true"><span class="w">Stop</span> <span class="w">renting</span></span>
+        <span class="cap-line" aria-hidden="true"><span class="w">your</span> <span class="w">clips.</span></span>
+      </h1>
+
+      <div class="hero-row">
+        <p class="hero-sub intro" style="--i:1">
+          Drop a podcast, stream or interview. DigiClip transcribes it offline, finds the moments worth posting,
+          follows the speaker and burns in captions. All of it on <em>your</em> machine.
+          <strong>Unlimited. No watermark. No upload.</strong>
+        </p>
+        <div class="hero-cta intro" style="--i:2">
+          <a class="btn btn-primary btn-lg btn-sweep" href="#download" data-dl-main>
+            <svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-download"/></svg>
+            <span data-dl-label>Download DigiClip</span>
+          </a>
+          <a class="btn btn-outline btn-lg" href="https://github.com/n1ssyyy/DigiClip">
+            <svg class="ico" data-g="pop" aria-hidden="true"><use href="#i-github"/></svg>
+            <span>Source</span>
+          </a>
+          <p class="hero-meta">
+            <span data-dl-meta><span data-version>v2.9.0</span> · Windows, macOS, Linux</span>
+            <a href="#download">Other systems</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- The app, doing its job: one long video in, three clips out. -->
+      <div class="stage-tilt intro" style="--i:3">
+        <div class="stage metal" id="stage" role="img" aria-label="Animated preview: DigiClip scans a video's timeline, picks three moments, keeps the speaker framed in a vertical crop and renders three captioned clips.">
+          <div class="stage-chrome" aria-hidden="true">
+            <span class="stage-brand">
+              <svg class="ico" aria-hidden="true"><use href="#i-clapper"/></svg> DigiClip
+            </span>
+            <span class="stage-status"><span class="spin" id="stage-spin"></span>Pipeline: <b id="stage-step">3 clips ready</b></span>
+            <span class="stage-win">
+              <svg class="ico"><use href="#i-minus"/></svg>
+              <svg class="ico sm"><use href="#i-square"/></svg>
+              <svg class="ico"><use href="#i-x"/></svg>
+            </span>
+          </div>
+          <div class="stage-body" aria-hidden="true">
+            <div class="stage-source">
+              <div class="src" id="src">
+                <div class="person pa talk" id="pa" style="--x:27"><i class="voice"><b></b><b></b><b></b></i></div>
+                <div class="person pb" id="pb" style="--x:73"><i class="voice"><b></b><b></b><b></b></i></div>
+                <div class="crop" id="crop">
+                  <span class="crop-tag">9:16</span>
+                  <span class="crop-cap" id="crop-cap"><span class="cw on">HERE'S</span> <span class="cw on">THE</span> <span class="cw on hot">THING</span></span>
+                </div>
+                <span class="src-label">SOURCE · 16:9</span>
+              </div>
+              <div class="tl" id="tl">
+                <div class="tl-bars" id="tl-bars"></div>
+                <div class="tl-head" id="tl-head"></div>
+              </div>
+            </div>
+            <div class="stage-clips">
+              <p class="mini-label">Clips land here</p>
+              <div class="tiles">
+                <div class="tile done" data-tile data-score="92">
+                  <div class="tile-frame"><span class="tile-person pa"></span><span class="tile-cap">THE <b>THING</b></span><span class="tile-score">92</span><span class="tile-making"><span class="spin"></span>making</span></div>
+                  <span class="tile-name">Clip #1</span>
+                </div>
+                <div class="tile done" data-tile data-score="87">
+                  <div class="tile-frame"><span class="tile-person pb"></span><span class="tile-cap">MONTHLY <b>BILL</b></span><span class="tile-score">87</span><span class="tile-making"><span class="spin"></span>making</span></div>
+                  <span class="tile-name">Clip #2</span>
+                </div>
+                <div class="tile done" data-tile data-score="81">
+                  <div class="tile-frame"><span class="tile-person pb"></span><span class="tile-cap">YOUR <b>DISK</b></span><span class="tile-score">81</span><span class="tile-making"><span class="spin"></span>making</span></div>
+                  <span class="tile-name">Clip #3</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ TICKER ============================ -->
+  <div class="ticker" aria-label="No credits. No watermark. No three-day expiry. No monthly bill. No upload.">
+    <div class="ticker-track" aria-hidden="true">
+      <span>No credits</span><i></i><span class="hollow">No watermark</span><i></i><span>No 3-day expiry</span><i></i><span class="hollow">No monthly bill</span><i></i><span>No upload</span><i></i><span class="hollow">No account</span><i></i>
+      <span>No credits</span><i></i><span class="hollow">No watermark</span><i></i><span>No 3-day expiry</span><i></i><span class="hollow">No monthly bill</span><i></i><span>No upload</span><i></i><span class="hollow">No account</span><i></i>
+    </div>
+  </div>
+
+  <!-- ============================ HOW ============================ -->
+  <section class="sec" id="how">
+    <div class="wrap">
+      <header class="sec-head" data-reveal>
+        <p class="eyebrow">How it works</p>
+        <h2 class="h2">One drop in. <span class="lime">Clips out.</span></h2>
+        <p class="lede">The whole run happens inside one engine on your computer, and the app shows every step live.</p>
+      </header>
+
+      <ol class="rail" id="rail">
+        <li class="rail-fill" aria-hidden="true"><span id="rail-fill"></span></li>
+        <li class="step" data-reveal style="--i:0">
+          <span class="step-node"><svg class="ico" data-g="tilt" aria-hidden="true"><use href="#i-film"/></svg></span>
+          <h3>Video or link</h3>
+          <p>Drop a file, paste a link from YouTube, TikTok, X or Vimeo, or let a watch folder feed it.</p>
+        </li>
+        <li class="step" data-reveal style="--i:1">
+          <span class="step-node"><svg class="ico" data-g="beat" aria-hidden="true"><use href="#i-audio"/></svg></span>
+          <h3>Extract audio</h3>
+          <p>ffmpeg pulls the sound off the file. Nothing is sent anywhere.</p>
+        </li>
+        <li class="step" data-reveal style="--i:2">
+          <span class="step-node"><svg class="ico" data-g="tilt" aria-hidden="true"><use href="#i-mic"/></svg></span>
+          <h3>Transcribe</h3>
+          <p>whisper.cpp is compiled into the engine and times every single word, offline.</p>
+        </li>
+        <li class="step" data-reveal style="--i:3">
+          <span class="step-node"><svg class="ico" data-g="pop" aria-hidden="true"><use href="#i-target"/></svg></span>
+          <h3>Pick + judge</h3>
+          <p>Your LLM or the offline scorer ranks every stretch, then a judge re-scores the candidates.</p>
+        </li>
+        <li class="step" data-reveal style="--i:4">
+          <span class="step-node"><svg class="ico" data-g="pop" aria-hidden="true"><use href="#i-focus"/></svg></span>
+          <h3>Track the speaker</h3>
+          <p>Face tracking plans the camera: hold, follow, and cut where the source cuts.</p>
+        </li>
+        <li class="step" data-reveal style="--i:5">
+          <span class="step-node"><svg class="ico" data-g="tilt" aria-hidden="true"><use href="#i-cpu"/></svg></span>
+          <h3>Render</h3>
+          <p>Clips render side by side on the GPU, captions burned in, audio at −14 LUFS.</p>
+        </li>
+        <li class="step" data-reveal style="--i:6">
+          <span class="step-node"><svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-download"/></svg></span>
+          <h3>Clips</h3>
+          <p>9:16, 4:5, 1:1 and 16:9, each with .srt captions and an upload kit.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============================ FEATURES ============================ -->
+  <section class="sec" id="features">
+    <div class="wrap">
+      <header class="sec-head" data-reveal>
+        <p class="eyebrow">What it does</p>
+        <h2 class="h2">Built to make clips <span class="lime">that hit.</span></h2>
+      </header>
+
+      <div class="bento">
+
+        <!-- Captions -->
+        <article class="card metal b-7" data-reveal style="--i:0" id="f-captions">
+          <div class="card-text">
+            <h3 class="h3">Captions that pop</h3>
+            <p>Eight burned-in styles, timed to the word. They land line by line or word by word. Pick one:</p>
+          </div>
+          <div class="capdemo">
+            <div class="capdemo-frame">
+              <span class="tile-person pa big"></span>
+              <span class="capdemo-line cs-karaoke" id="cap-line"></span>
+            </div>
+            <div class="seg" id="cap-styles" role="group" aria-label="Caption style">
+              <button type="button" data-style="tiktok">tiktok</button>
+              <button type="button" data-style="karaoke" aria-pressed="true">karaoke</button>
+              <button type="button" data-style="hormozi">hormozi</button>
+              <button type="button" data-style="minimal">minimal</button>
+              <button type="button" data-style="beast">beast</button>
+              <button type="button" data-style="neon">neon</button>
+              <button type="button" data-style="highlight">highlight</button>
+              <button type="button" data-style="ghost">ghost</button>
+            </div>
+          </div>
+        </article>
+
+        <!-- Scores -->
+        <article class="card metal b-5" data-reveal style="--i:1" id="f-scores">
+          <div class="card-text">
+            <h3 class="h3">Shows its work</h3>
+            <p>Every clip is scored on four things and comes with a reason, so you post the winners first.</p>
+          </div>
+          <div class="insight">
+            <div class="bars" aria-label="Example scores">
+              <div class="bar"><span>Hook</span><i><b data-w="94" class="ok"></b></i><em data-count="94">94</em></div>
+              <div class="bar"><span>Retention</span><i><b data-w="88" class="ok"></b></i><em data-count="88">88</em></div>
+              <div class="bar"><span>Value</span><i><b data-w="81" class="ok"></b></i><em data-count="81">81</em></div>
+              <div class="bar"><span>Share</span><i><b data-w="62" class="mid"></b></i><em data-count="62">62</em></div>
+            </div>
+            <p class="mini-label">Why this clip</p>
+            <p class="why">Opens on a blunt claim, pays it off inside 20 seconds and ends on a line people repeat.</p>
+            <p class="picked">Example. Picked by offline scorer + Laya</p>
+          </div>
+        </article>
+
+        <!-- Aspect -->
+        <article class="card metal b-4" data-reveal style="--i:0" id="f-aspect">
+          <div class="card-text">
+            <h3 class="h3">Every platform, one run</h3>
+            <p>Tick the shapes you need and each clip renders in all of them.</p>
+          </div>
+          <div class="aspect">
+            <div class="aspect-box"><div class="aspect-frame" id="aspect-frame"><span class="tile-person pb"></span><span class="aspect-cap"></span></div></div>
+            <ul class="aspect-list" id="aspect-list">
+              <li data-r="9:16"><b>9:16</b> TikTok, Reels, Shorts</li>
+              <li data-r="4:5"><b>4:5</b> Instagram, LinkedIn</li>
+              <li data-r="1:1"><b>1:1</b> Square feeds</li>
+              <li data-r="16:9"><b>16:9</b> YouTube, X</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- Transcript -->
+        <article class="card metal b-4" data-reveal style="--i:1" id="f-words">
+          <div class="card-text">
+            <h3 class="h3">Hears every word, offline</h3>
+            <p>No Python, no upload, no per-minute bill. Click any two words to cut your own clip.</p>
+          </div>
+          <div class="words">
+            <p class="words-time"><span class="rec" aria-hidden="true"></span><span id="words-time">00:14.20</span></p>
+            <p class="words-text" id="words-text" aria-hidden="true"></p>
+          </div>
+        </article>
+
+        <!-- Speed -->
+        <article class="card metal b-4" data-reveal style="--i:2" id="f-speed">
+          <div class="card-text">
+            <h3 class="h3">Fast</h3>
+            <p>Three clips from a minute of video take about 15 seconds on a laptop RTX 3050.</p>
+          </div>
+          <div class="speed">
+            <p class="speed-num"><span id="speed-num">15.0</span><small>s</small></p>
+            <div class="speed-bars" id="speed-bars">
+              <i><b></b></i><i><b></b></i><i><b></b></i>
+            </div>
+            <p class="chips"><span>NVENC</span><span>VideoToolbox</span><span>−14 LUFS</span></p>
+          </div>
+        </article>
+
+        <!-- MCP -->
+        <article class="card metal b-7" data-reveal style="--i:0" id="f-mcp">
+          <div class="card-text">
+            <h3 class="h3">Your AI can drive it</h3>
+            <p>DigiClip is an MCP server. One click connects it to Claude, Cursor, VS Code and 21 more apps, and every call shows up live in the window.</p>
+          </div>
+          <div class="term" aria-hidden="true">
+            <p class="term-prompt"><span class="term-who">you</span><span id="term-type"></span><span class="caret"></span></p>
+            <ul class="term-log" id="term-log">
+              <li><svg class="ico draw"><use href="#i-check"/></svg>Job started · talk.mp4 · focus: pricing</li>
+              <li><svg class="ico draw"><use href="#i-check"/></svg>3 clips rendered · 9:16</li>
+              <li><svg class="ico draw"><use href="#i-check"/></svg>Clip #1 retitled · re-rendered</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- Privacy -->
+        <article class="card metal b-5 card-privacy" data-reveal style="--i:1">
+          <svg class="ico privacy-ico" data-g="pop" aria-hidden="true"><use href="#i-lock"/></svg>
+          <p class="privacy-big">Your video goes <span class="lime">nowhere.</span></p>
+          <p>Video, transcripts and renders never leave your disk. The only thing that ever goes out is transcript text, and only if you turn on an online picker, judge or translation.</p>
+          <p class="meter"><span>uploaded</span><i aria-hidden="true"></i><b>0 B</b></p>
+        </article>
+
+        <!-- The rest -->
+        <ul class="rest b-12">
+          <li data-reveal style="--i:0"><svg class="ico" data-g="pop" aria-hidden="true"><use href="#i-focus"/></svg><div><h3>Frames like a camera operator</h3><p>Holds on a still speaker, follows a walking one. No whip-pans.</p></div></li>
+          <li data-reveal style="--i:1"><svg class="ico" data-g="pop" aria-hidden="true"><use href="#i-columns"/></svg><div><h3>Split-screen</h3><p>Two people on a podcast get stacked, with captions on the seam.</p></div></li>
+          <li data-reveal style="--i:2"><svg class="ico" data-g="wiggle" aria-hidden="true"><use href="#i-scissors"/></svg><div><h3>Tightens the edit</h3><p>Dead air goes, filler words can too. Loud lines get a punch-in zoom.</p></div></li>
+          <li data-reveal style="--i:3"><svg class="ico" data-g="write" aria-hidden="true"><use href="#i-pencil"/></svg><div><h3>Edit, don't re-run</h3><p>Nudge a start, retitle, fix a misheard word. Only that clip re-renders.</p></div></li>
+          <li data-reveal style="--i:0"><svg class="ico" data-g="tilt" aria-hidden="true"><use href="#i-folder"/></svg><div><h3>Watch folder</h3><p>Every video dropped in starts on its own while DigiClip waits in the tray.</p></div></li>
+          <li data-reveal style="--i:1"><svg class="ico" data-g="wiggle" aria-hidden="true"><use href="#i-bot"/></svg><div><h3>15 Clip AI providers</h3><p>OpenRouter, OpenAI, Anthropic, Gemini, Ollama, LM Studio and more. Or no key at all.</p></div></li>
+          <li data-reveal style="--i:2"><svg class="ico" data-g="wiggle" aria-hidden="true"><use href="#i-music"/></svg><div><h3>Brand it</h3><p>Headline card, progress bar, your logo, and music ducked under speech.</p></div></li>
+          <li data-reveal style="--i:3"><svg class="ico" data-g="wiggle" aria-hidden="true"><use href="#i-globe"/></svg><div><h3>Speaks your language</h3><p>Captions translate and stay synced. The app itself comes in 7 languages.</p></div></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ COMPARE ============================ -->
+  <section class="sec" id="compare">
+    <div class="wrap">
+      <header class="sec-head" data-reveal>
+        <p class="eyebrow">Against the paid clippers</p>
+        <h2 class="h2">Same job. <span class="lime">No rent.</span></h2>
+        <p class="lede">The cloud clippers meter every minute of your footage, stamp their logo on it and delete it after three days. DigiClip runs on your hardware as often as you like, and the clips are yours to keep.</p>
+      </header>
+
+      <div class="cmp-scroll metal" data-reveal>
+        <table class="cmp">
+          <thead>
+            <tr><th scope="col"><span class="sr">What</span></th><th scope="col" class="us">DigiClip</th><th scope="col">OpusClip</th><th scope="col">Vizard</th><th scope="col">Klap</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Price</th><td class="us" data-label="DigiClip"><b>Free, MIT</b></td><td data-label="OpusClip">$15–29 / month</td><td data-label="Vizard">paid tiers</td><td data-label="Klap">from $14 / month, billed yearly</td></tr>
+            <tr><th scope="row">Free plan</th><td class="us" data-label="DigiClip"><b>Everything, unlimited</b></td><td data-label="OpusClip">watermarked captions, clips expire after 3 days</td><td data-label="Vizard">60 min / month, 720p, watermark, 3-day storage</td><td data-label="Klap">none listed</td></tr>
+            <tr><th scope="row">Your video goes</th><td class="us" data-label="DigiClip"><b>nowhere</b></td><td data-label="OpusClip">to their cloud</td><td data-label="Vizard">to their cloud</td><td data-label="Klap">to their cloud</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fine" data-reveal>From the official pricing pages on 29 Sep 2026:
+        <a href="https://www.opus.pro/pricing">OpusClip</a> · <a href="https://vizard.ai/pricing">Vizard</a> · <a href="https://klap.app/pricing">Klap</a>.
+        Out of date? <a href="https://github.com/n1ssyyy/DigiClip/issues">Open an issue</a>.</p>
+    </div>
+  </section>
+
+  <!-- ============================ VERSIONS ============================ -->
+  <section class="sec" id="versions">
+    <div class="wrap">
+      <header class="sec-head" data-reveal>
+        <p class="eyebrow">Versions</p>
+        <h2 class="h2">Shipping <span class="lime">fast.</span></h2>
+        <p class="lede">Every release, newest first, straight from GitHub. Once installed, DigiClip updates itself.</p>
+      </header>
+
+      <div class="rel-grid">
+        <article class="rel-latest metal" id="rel-latest" data-reveal>
+          <p class="rel-kicker"><span class="badge">Latest</span><span id="rel-date">30 Sep 2026</span></p>
+          <h3 class="rel-tag" id="rel-tag">v2.9.0</h3>
+          <ul class="rel-notes" id="rel-notes">
+            <li><b>Motion and living icons</b>: a shared motion language and icons that gesture when idle or hovered.</li>
+            <li><b>New Settings</b>: a redesigned page with search, segmented controls and clearer status lines.</li>
+            <li><b>15 Clip AI providers</b>, with model lists fetched automatically.</li>
+            <li><b>24 AI apps</b>: connect Claude, Cursor, VS Code and many more over MCP.</li>
+          </ul>
+          <div class="rel-actions" id="rel-actions">
+            <a class="btn btn-primary" href="https://github.com/n1ssyyy/DigiClip/releases/latest" data-dl-main>
+              <svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-download"/></svg><span data-dl-label>Download DigiClip</span>
+            </a>
+            <a class="btn btn-outline" id="rel-notes-link" href="https://github.com/n1ssyyy/DigiClip/releases/latest">
+              <span>Full notes</span><svg class="ico" data-g="nudge-ur" aria-hidden="true"><use href="#i-arrow-up-right"/></svg>
+            </a>
+          </div>
+        </article>
+
+        <div class="rel-older">
+          <p class="rel-status" id="rel-status" role="status" hidden></p>
+          <ol class="rel-list" id="rel-list">
+            <li class="rel"><a href="https://github.com/n1ssyyy/DigiClip/releases"><b>All releases</b><span>Open the release list on GitHub</span><svg class="ico" aria-hidden="true"><use href="#i-arrow-up-right"/></svg></a></li>
+          </ol>
+          <button type="button" class="btn btn-secondary rel-more" id="rel-more" hidden>
+            <span id="rel-more-label">Show older versions</span>
+            <svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ DOWNLOAD ============================ -->
+  <section class="sec sec-dl" id="download">
+    <div class="hero-halo low" aria-hidden="true"></div>
+    <div class="wrap">
+      <header class="sec-head center" data-reveal>
+        <p class="eyebrow">Get it</p>
+        <h2 class="h2 huge">Take your clips <span class="lime">back.</span></h2>
+        <p class="lede">One file with the whole app inside. No account, and no internet needed to install.</p>
+      </header>
+
+      <div class="plats">
+        <a class="plat metal" data-plat="win" data-reveal style="--i:0" href="https://github.com/n1ssyyy/DigiClip/releases/latest/download/DigiClip-Setup-Windows-x64.exe">
+          <span class="plat-you" hidden>Your system</span>
+          <span class="plat-name">Windows</span>
+          <span class="plat-req">10 / 11 · x64</span>
+          <span class="plat-file">DigiClip-Setup-Windows-x64.exe</span>
+          <span class="plat-go"><svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-download"/></svg><span>Download</span><em data-size="win">30.4 MB</em></span>
+        </a>
+        <a class="plat metal" data-plat="mac" data-reveal style="--i:1" href="https://github.com/n1ssyyy/DigiClip/releases/latest/download/DigiClip-Setup-macOS-arm64.zip">
+          <span class="plat-you" hidden>Your system</span>
+          <span class="plat-name">macOS</span>
+          <span class="plat-req">Apple Silicon</span>
+          <span class="plat-file">DigiClip-Setup-macOS-arm64.zip</span>
+          <span class="plat-go"><svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-download"/></svg><span>Download</span><em data-size="mac">23.7 MB</em></span>
+        </a>
+        <a class="plat metal" data-plat="linux" data-reveal style="--i:2" href="https://github.com/n1ssyyy/DigiClip/releases/latest/download/DigiClip-Setup-Linux-x86_64.AppImage">
+          <span class="plat-you" hidden>Your system</span>
+          <span class="plat-name">Linux</span>
+          <span class="plat-req">x86_64 · Ubuntu 24.04+, Fedora 40+, Debian 13+</span>
+          <span class="plat-file">DigiClip-Setup-Linux-x86_64.AppImage</span>
+          <span class="plat-go"><svg class="ico" data-g="nudge-d" aria-hidden="true"><use href="#i-download"/></svg><span>Download</span><em data-size="linux">237 MB</em></span>
+        </a>
+      </div>
+
+      <div class="notes" data-reveal>
+        <p><b>Heads up:</b> the installers aren't code-signed yet. On Windows choose <b>More info → Run anyway</b>. On macOS unzip, open <b>DigiClip Setup</b>, then <b>System Settings → Privacy &amp; Security → Open Anyway</b>. On Linux run <code>chmod +x</code> on the AppImage first.</p>
+        <p>Run the same Setup again any time to update, repair or uninstall.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <p class="foot-brand">
+      <svg class="ico" aria-hidden="true"><use href="#i-clapper"/></svg> DigiClip
+      <span>MIT licensed. Fork it, ship it, sell it.</span>
+    </p>
+    <nav class="foot-nav" aria-label="Project links">
+      <a href="https://github.com/n1ssyyy/DigiClip">App source</a>
+      <a href="https://github.com/n1ssyyy/DigiClip-CLI">Engine (CLI)</a>
+      <a href="https://github.com/n1ssyyy/DigiClip/releases">Releases</a>
+      <a href="https://github.com/n1ssyyy/DigiClip/issues">Report a problem</a>
+    </nav>
+    <p class="foot-credit">Developed by <a href="https://github.com/n1ssyyy">n1ssyyy</a> in collaboration with <a href="https://shkolladigjitale.com/">Shkolla Digjitale</a> (Prizren).</p>
+  </div>
+</footer>
+
+<script src="site.js" defer></script>
+</body>
+</html>
