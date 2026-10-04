@@ -1,6 +1,8 @@
 <p align="center">
-  <h1 align="center">DigiClip</h1>
+  <img src="src-tauri/icons/icon.png" alt="DigiClip logo" width="120" height="120" />
 </p>
+
+<h1 align="center">DigiClip</h1>
 
 <h2 align="center">Stop renting your clips.</h2>
 
