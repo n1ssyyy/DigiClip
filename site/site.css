@@ -100,6 +100,10 @@ code {
     color: #000;
 }
 
+/* `hidden` must win over any display rule on the same element. */
+[hidden] {
+    display: none !important;
+}
 .sprite {
     position: absolute;
     width: 0;
@@ -1633,16 +1637,19 @@ code {
     display: grid;
     gap: 4px;
     padding: clamp(18px, 2.2vw, 26px);
+    padding-top: calc(clamp(14px, 1.8vw, 20px) + 34px);
     transition: border-color 200ms ease-out, translate 320ms var(--spring);
 }
 .plat:hover {
     translate: 0 -4px;
     border-color: rgb(255 255 255 / 0.5);
 }
+/* Every card keeps a band above its name for this badge, so the names
+   line up whichever card carries it and it never sits on the name. */
 .plat-you {
     position: absolute;
-    top: 14px;
-    right: 14px;
+    top: clamp(14px, 1.8vw, 20px);
+    left: clamp(18px, 2.2vw, 26px);
     padding: 1px 8px;
     border-radius: 4px;
     background: var(--hi);
@@ -1704,6 +1711,94 @@ code {
 .notes b {
     color: var(--foreground);
     font-weight: 600;
+}
+
+/* Likes: an outlined heart and a count. Pressed, the heart fills. */
+.like {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, scale 160ms var(--spring);
+}
+.like:hover {
+    background: var(--secondary);
+    color: var(--foreground);
+}
+.like:active {
+    scale: 0.95;
+}
+.like-sm {
+    height: 28px;
+    padding: 0 9px;
+    font-size: 12px;
+}
+.like-lg {
+    height: 52px;
+    padding: 0 22px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--foreground);
+}
+.like-lg .ico {
+    width: 18px;
+    height: 18px;
+}
+.like-lg .like-count {
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+    font-weight: 400;
+    color: var(--muted-foreground);
+}
+.like-count {
+    display: inline-block;
+    min-width: 1ch;
+    text-align: center;
+}
+.like-heart {
+    transition: fill 180ms ease-out;
+}
+.like[aria-pressed='true'] {
+    border-color: rgb(255 255 255 / 0.5);
+    color: var(--foreground);
+}
+.like[aria-pressed='true'] .like-heart {
+    fill: currentColor;
+}
+/* The ring thrown off when a like lands. */
+.like::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border: 1px solid var(--hi);
+    border-radius: inherit;
+    opacity: 0;
+    pointer-events: none;
+}
+.like-row {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    margin-top: clamp(40px, 6vw, 72px);
+    text-align: center;
+}
+.like-ask {
+    font-family: var(--display);
+    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+    line-height: 1;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+.like-msg {
+    min-height: 1.6em;
+    font-size: 12px;
+    color: var(--muted-foreground);
 }
 
 /* Footer */
@@ -1970,6 +2065,21 @@ code {
     from { stroke-dashoffset: 24; }
     to { stroke-dashoffset: 0; }
 }
+@keyframes like-ring {
+    from { opacity: 0.9; transform: scale(1); }
+    to { opacity: 0; transform: scale(1.35, 1.9); }
+}
+@keyframes like-beat {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.45); }
+    50% { transform: scale(0.9); }
+    75% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+@keyframes swap-in {
+    from { opacity: 0; transform: translateY(4px) scale(0.85); }
+    to { opacity: 1; transform: none; }
+}
 @keyframes cut-flash {
     from { box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.58), inset 0 0 0 100vmax rgb(255 255 255 / 0.28); }
     to { box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.58), inset 0 0 0 100vmax rgb(255 255 255 / 0); }
@@ -2143,6 +2253,19 @@ code {
     }
     .plat-you {
         animation: pop 320ms var(--spring) backwards;
+    }
+    .like,
+    .like-row {
+        animation: pop 360ms var(--spring) backwards;
+    }
+    .like.landed::after {
+        animation: like-ring 620ms var(--ease-out);
+    }
+    .like.landed .like-heart {
+        animation: like-beat 620ms var(--ease-out);
+    }
+    .like-count.tick {
+        animation: swap-in 240ms var(--spring);
     }
 }
 
