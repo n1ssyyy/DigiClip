@@ -1,7 +1,8 @@
 /* DigiClip homepage. Same system as the app (src/app.css, src/motion.css):
-   JetBrains Mono as the house face, the neutral dark room, one lime
-   accent (--viral), bevelled metal panels, and the two easing voices,
-   --ease-out for things arriving and --spring for things you pushed.
+   JetBrains Mono as the house face, the neutral dark room, bevelled
+   metal panels, and the two easing voices, --ease-out for things
+   arriving and --spring for things you pushed. The page stays neutral:
+   emphasis is white on the dark room (--hi), never a colour.
    Anton and Archivo Black are the caption faces the engine burns in;
    here they carry the display type. */
 
@@ -33,9 +34,8 @@
     --muted-foreground: hsl(0 0% 64%);
     --border: hsl(0 0% 16%);
     --ring: hsl(0 0% 83%);
-    --viral: #a3e635;
-    --ok: #10b981;
-    --mid: #f97316;
+    --hi: #fff;
+    --dim: hsl(0 0% 46%);
     --panel: color-mix(in srgb, var(--card) 78%, black);
     --chrome: 42px;
     --radius: 6px;
@@ -96,7 +96,7 @@ code {
     outline-offset: 2px;
 }
 ::selection {
-    background: var(--viral);
+    background: var(--hi);
     color: #000;
 }
 
@@ -131,8 +131,9 @@ code {
     width: min(1180px, 100% - var(--gutter) * 2);
     margin-inline: auto;
 }
-.lime {
-    color: var(--viral);
+/* Emphasis in a display line: the set-up sits back, the punchline is lit. */
+.hi {
+    color: var(--hi);
 }
 
 /* Icons */
@@ -220,7 +221,7 @@ code {
     color: var(--primary-foreground);
 }
 .btn-primary:hover {
-    background: var(--viral);
+    background: hsl(0 0% 84%);
 }
 .btn-secondary {
     background: var(--secondary);
@@ -388,6 +389,7 @@ code {
     text-transform: uppercase;
     letter-spacing: 0.005em;
     text-wrap: balance;
+    color: var(--dim);
 }
 .h2.huge {
     font-size: clamp(3rem, 11vw, 9rem);
@@ -420,7 +422,7 @@ code {
 .fine a:hover,
 .foot a:hover,
 .hero-meta a:hover {
-    color: var(--viral);
+    color: var(--hi);
     text-decoration-color: currentColor;
 }
 
@@ -443,7 +445,7 @@ code {
 .hero-halo.low {
     top: auto;
     bottom: -60%;
-    background: radial-gradient(circle, rgb(163 230 53 / 0.1), transparent 62%);
+    background: radial-gradient(circle, rgb(255 255 255 / 0.06), transparent 62%);
 }
 .hero .wrap {
     position: relative;
@@ -458,15 +460,16 @@ code {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--viral);
-    box-shadow: 0 0 0 0 rgb(163 230 53 / 0.6);
+    background: var(--hi);
+    box-shadow: 0 0 0 0 rgb(255 255 255 / 0.5);
 }
 /* The headline is a burned-in caption: Anton, word by word. */
 .cap-h1 {
     font-family: var(--display);
     font-weight: 400;
-    font-size: clamp(3rem, 15.6vw, 12.8rem);
-    line-height: 0.88;
+    font-size: clamp(3rem, min(15.6vw, 31vh), 12.8rem);
+    /* Room between the lines for the slab behind the spoken word. */
+    line-height: 1;
     text-transform: uppercase;
     letter-spacing: 0.002em;
     margin-left: -0.02em;
@@ -476,21 +479,45 @@ code {
     white-space: nowrap;
 }
 .w {
+    position: relative;
     display: inline-block;
+    isolation: isolate;
     transform-origin: 50% 85%;
-    transition: color 220ms ease-out;
+    transition: color 200ms ease-out;
+}
+/* The spoken word: a white slab wipes in behind it and the type inverts,
+   then the slab leaves the way the sentence is going. */
+.w::before {
+    content: '';
+    position: absolute;
+    inset: 0.015em -0.05em -0.022em;
+    z-index: -1;
+    border-radius: 0.03em;
+    background: var(--hi);
+    transform: scaleX(0);
+    transform-origin: 100% 50%;
+    transition: transform 280ms var(--ease-out);
 }
 .w.hot {
-    color: var(--viral);
+    color: var(--background);
 }
+.w.hot::before {
+    transform: scaleX(1);
+    transform-origin: 0 50%;
+}
+/* Copy on the left, actions on the right. When both no longer fit side
+   by side the actions drop under the copy, so neither is ever squeezed. */
 .hero-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1.15fr) auto;
-    gap: 28px 48px;
-    align-items: end;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px 48px;
     margin-top: clamp(20px, 3vw, 38px);
 }
 .hero-sub {
+    flex: 1 1 27rem;
+    min-width: 0;
     max-width: 58ch;
     font-size: clamp(14px, 1.25vw, 16.5px);
     color: var(--muted-foreground);
@@ -506,16 +533,20 @@ code {
     font-weight: 700;
 }
 .hero-cta {
+    flex: 0 1 auto;
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+}
+.hero-btns {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    justify-content: flex-end;
 }
 .hero-meta {
-    flex-basis: 100%;
     display: flex;
-    gap: 14px;
-    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 4px 14px;
     font-size: 12px;
     color: var(--muted-foreground);
 }
@@ -529,7 +560,7 @@ code {
     transform-origin: 50% 0;
     transform: rotateX(var(--tilt, 0deg));
     border-radius: 12px;
-    box-shadow: 0 40px 120px -30px rgb(0 0 0 / 0.9), 0 0 90px -40px rgb(163 230 53 / 0.35);
+    box-shadow: 0 40px 120px -30px rgb(0 0 0 / 0.9), 0 0 90px -40px rgb(255 255 255 / 0.16);
     overflow: hidden;
     will-change: transform;
 }
@@ -579,12 +610,12 @@ code {
     width: 10px;
     height: 10px;
     border: 1.5px solid rgb(255 255 255 / 0.25);
-    border-top-color: var(--viral);
+    border-top-color: var(--hi);
     border-radius: 50%;
 }
 .spin.idle {
-    border-color: var(--viral);
-    background: var(--viral);
+    border-color: var(--hi);
+    background: var(--hi);
     scale: 0.6;
 }
 .stage-body {
@@ -682,7 +713,7 @@ code {
     width: 3px;
     height: 100%;
     border-radius: 2px;
-    background: var(--viral);
+    background: var(--hi);
     transform-origin: 50% 100%;
     transform: scaleY(0.35);
 }
@@ -733,8 +764,15 @@ code {
 .cw.on {
     opacity: 1;
 }
-.cw.hot {
-    color: var(--viral);
+/* The spoken word in a burned-in caption: inverted on a white box. The
+   box grows with a shadow, not padding, so the line never reflows. */
+.crop-cap .cw.hot,
+.tile-cap b {
+    border-radius: 1px;
+    background: var(--hi);
+    box-shadow: 0 0 0 0.16em var(--hi);
+    color: #000;
+    text-shadow: none;
 }
 /* Timeline */
 .tl {
@@ -760,7 +798,7 @@ code {
     transition: background-color 260ms ease-out, scale 320ms var(--spring);
 }
 .tl-bars i.pick {
-    background: var(--viral);
+    background: var(--hi);
     scale: 1 1.18;
 }
 .tl-head {
@@ -823,8 +861,8 @@ code {
     text-shadow: -1px 0 0 #000, 1px 0 0 #000, 0 -1px 0 #000, 0 1px 0 #000;
 }
 .tile-cap b {
+    margin-left: 0.2em;
     font-weight: 400;
-    color: var(--viral);
 }
 .tile-score {
     position: absolute;
@@ -833,7 +871,7 @@ code {
     min-width: 24px;
     padding: 0 5px;
     border-radius: 3px;
-    background: var(--viral);
+    background: var(--hi);
     color: #000;
     font-size: 11px;
     font-weight: 700;
@@ -897,7 +935,7 @@ code {
     height: 0.24em;
     flex: none;
     border-radius: 50%;
-    background: var(--viral);
+    background: var(--hi);
 }
 
 /* ------------------------------ SECTIONS ------------------------------ */
@@ -934,8 +972,8 @@ code {
     display: block;
     width: 100%;
     height: 100%;
-    background: var(--viral);
-    box-shadow: 0 0 12px rgb(163 230 53 / 0.7);
+    background: var(--hi);
+    box-shadow: 0 0 12px rgb(255 255 255 / 0.5);
     transform-origin: 0 50%;
     transform: scaleX(var(--p, 1));
     transition: transform 500ms var(--ease-out);
@@ -973,10 +1011,10 @@ code {
     color: var(--muted-foreground);
 }
 .step.lit .step-node {
-    background: var(--viral);
+    background: var(--hi);
     color: #000;
     scale: 1.08;
-    box-shadow: 0 0 26px -6px rgb(163 230 53 / 0.8);
+    box-shadow: 0 0 26px -6px rgb(255 255 255 / 0.45);
 }
 
 /* Bento */
@@ -1107,8 +1145,8 @@ code {
     border-radius: 999px;
     transition: width 900ms var(--ease-out);
 }
-.bar b.ok { background: var(--ok); }
-.bar b.mid { background: var(--mid); }
+.bar b.ok { background: var(--hi); }
+.bar b.mid { background: var(--dim); }
 .bar em {
     font-style: normal;
     font-size: 11px;
@@ -1160,7 +1198,7 @@ code {
     height: 7px;
     translate: -50% 0;
     border-radius: 2px;
-    background: var(--viral);
+    background: var(--hi);
 }
 .aspect-list {
     display: grid;
@@ -1184,7 +1222,7 @@ code {
     color: var(--foreground);
 }
 .aspect-list li.on b {
-    color: var(--viral);
+    color: var(--hi);
 }
 
 /* Transcript */
@@ -1208,7 +1246,7 @@ code {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--viral);
+    background: var(--hi);
 }
 .card .words-text {
     min-height: 5.2em;
@@ -1225,7 +1263,7 @@ code {
     color: var(--foreground);
 }
 .words-text span.now {
-    background: var(--viral);
+    background: var(--hi);
     color: #000;
 }
 
@@ -1244,7 +1282,7 @@ code {
 }
 .speed-num small {
     font-size: 0.45em;
-    color: var(--viral);
+    color: var(--dim);
 }
 .speed-bars {
     display: grid;
@@ -1261,7 +1299,7 @@ code {
     width: 100%;
     height: 100%;
     border-radius: 999px;
-    background: var(--viral);
+    background: var(--hi);
     transform-origin: 0 50%;
     transform: scaleX(var(--p, 1));
 }
@@ -1307,7 +1345,7 @@ code {
     height: 1.05em;
     margin-left: 2px;
     vertical-align: text-bottom;
-    background: var(--viral);
+    background: var(--hi);
 }
 .term-log {
     display: grid;
@@ -1320,7 +1358,7 @@ code {
     gap: 8px;
 }
 .term-log .ico {
-    color: var(--viral);
+    color: var(--hi);
     width: 14px;
     height: 14px;
 }
@@ -1333,13 +1371,13 @@ code {
     justify-content: flex-end;
     gap: 12px;
     background:
-        radial-gradient(120% 90% at 100% 0%, rgb(163 230 53 / 0.12), transparent 60%),
+        radial-gradient(120% 90% at 100% 0%, rgb(255 255 255 / 0.07), transparent 60%),
         var(--panel);
 }
 .privacy-ico {
     width: 26px;
     height: 26px;
-    color: var(--viral);
+    color: var(--hi);
     margin-bottom: auto;
 }
 .card .privacy-big {
@@ -1347,7 +1385,7 @@ code {
     font-size: clamp(2.2rem, 4.4vw, 3.5rem);
     line-height: 0.95;
     text-transform: uppercase;
-    color: var(--foreground);
+    color: var(--dim);
 }
 .card .meter {
     display: grid;
@@ -1358,11 +1396,11 @@ code {
 }
 .meter i {
     height: 1px;
-    background: repeating-linear-gradient(90deg, var(--viral) 0 6px, transparent 6px 12px);
+    background: repeating-linear-gradient(90deg, var(--hi) 0 6px, transparent 6px 12px);
     background-size: 24px 1px;
 }
 .meter b {
-    color: var(--viral);
+    color: var(--hi);
 }
 
 /* The rest */
@@ -1383,7 +1421,7 @@ code {
     width: 18px;
     height: 18px;
     margin-top: 2px;
-    color: var(--viral);
+    color: var(--hi);
 }
 .rest h3 {
     font-size: 13px;
@@ -1434,11 +1472,11 @@ code {
     color: var(--muted-foreground);
 }
 .cmp .us {
-    background: rgb(163 230 53 / 0.07);
+    background: rgb(255 255 255 / 0.05);
     color: var(--foreground);
 }
 .cmp thead .us {
-    color: var(--viral);
+    color: var(--hi);
 }
 .cmp td.us b {
     font-family: var(--display);
@@ -1446,7 +1484,7 @@ code {
     font-size: 1.5rem;
     line-height: 1.1;
     text-transform: uppercase;
-    color: var(--viral);
+    color: var(--hi);
 }
 
 /* Versions */
@@ -1474,7 +1512,7 @@ code {
 .badge {
     padding: 1px 8px;
     border-radius: 4px;
-    background: var(--viral);
+    background: var(--hi);
     color: #000;
     font-size: 11px;
     font-weight: 700;
@@ -1502,7 +1540,7 @@ code {
     left: 0;
     width: 6px;
     height: 2px;
-    background: var(--viral);
+    background: var(--hi);
 }
 .rel-notes b {
     color: var(--foreground);
@@ -1567,8 +1605,8 @@ code {
     transition: background-color 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
 }
 .rel-links a:hover {
-    border-color: var(--viral);
-    color: var(--viral);
+    border-color: var(--hi);
+    color: var(--hi);
 }
 .rel-links .ico {
     width: 12px;
@@ -1599,7 +1637,7 @@ code {
 }
 .plat:hover {
     translate: 0 -4px;
-    border-color: var(--viral);
+    border-color: rgb(255 255 255 / 0.5);
 }
 .plat-you {
     position: absolute;
@@ -1607,7 +1645,7 @@ code {
     right: 14px;
     padding: 1px 8px;
     border-radius: 4px;
-    background: var(--viral);
+    background: var(--hi);
     color: #000;
     font-size: 11px;
     font-weight: 700;
@@ -1646,13 +1684,13 @@ code {
     color: var(--muted-foreground);
 }
 .plat.you {
-    border-color: var(--viral);
+    border-color: var(--hi);
     background:
-        radial-gradient(120% 90% at 0% 0%, rgb(163 230 53 / 0.12), transparent 60%),
+        radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 0.07), transparent 60%),
         var(--panel);
 }
 .plat.you .plat-go {
-    color: var(--viral);
+    color: var(--hi);
 }
 .notes {
     display: grid;
@@ -1702,7 +1740,22 @@ code {
 }
 
 /* ------------------------------ RESPONSIVE ------------------------------ */
-@media (max-width: 1000px) {
+/* Seven steps across need about 150px each. Below that the rail turns
+   vertical; on mid-size screens it sits beside its heading. */
+@media (min-width: 821px) and (max-width: 1239px) {
+    .how-wrap {
+        display: grid;
+        grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        gap: 48px;
+        align-items: start;
+    }
+    .how-wrap .sec-head {
+        position: sticky;
+        top: calc(var(--chrome) + 32px);
+        margin-bottom: 0;
+    }
+}
+@media (max-width: 1239px) {
     .rail {
         grid-template-columns: 1fr;
         gap: 0;
@@ -1736,6 +1789,8 @@ code {
     .step h3 {
         align-self: end;
     }
+}
+@media (max-width: 1000px) {
     .b-7,
     .b-5 {
         grid-column: span 12;
@@ -1760,13 +1815,6 @@ code {
     .chrome-nav {
         display: none;
     }
-    .hero-row {
-        grid-template-columns: 1fr;
-    }
-    .hero-cta,
-    .hero-meta {
-        justify-content: flex-start;
-    }
     .stage-body {
         grid-template-columns: 1fr;
     }
@@ -1784,7 +1832,7 @@ code {
     }
 }
 /* Narrow screens: the comparison becomes one block per question. */
-@media (max-width: 720px) {
+@media (max-width: 1000px) {
     .cmp {
         min-width: 0;
     }
@@ -1829,7 +1877,7 @@ code {
         background: none;
     }
     .cmp td.us::before {
-        color: var(--viral);
+        color: var(--hi);
     }
 }
 @media (max-width: 600px) {
@@ -1839,7 +1887,10 @@ code {
     .rest {
         grid-template-columns: 1fr;
     }
-    .hero-cta .btn {
+    .hero-cta {
+        flex-basis: 100%;
+    }
+    .hero-btns .btn {
         flex: 1 1 auto;
     }
     .rel > a,
@@ -1849,7 +1900,8 @@ code {
     .rel-links {
         grid-column: 1 / -1;
     }
-    .chrome-ver {
+    .chrome-ver,
+    .stage-status-k {
         display: none;
     }
 }
@@ -1900,8 +1952,8 @@ code {
     45% { transform: scale(1.06); opacity: 1; }
 }
 @keyframes dot-ping {
-    0% { box-shadow: 0 0 0 0 rgb(163 230 53 / 0.6); }
-    70%, 100% { box-shadow: 0 0 0 9px rgb(163 230 53 / 0); }
+    0% { box-shadow: 0 0 0 0 rgb(255 255 255 / 0.5); }
+    70%, 100% { box-shadow: 0 0 0 9px rgb(255 255 255 / 0); }
 }
 @keyframes sweep {
     from { transform: translateX(-130%); }
