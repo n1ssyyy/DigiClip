@@ -77,15 +77,61 @@
         return node;
     }
 
-    function icon(name, gesture) {
+    /* ---------------------------------------------------------------- */
+    /* Icons                                                             */
+    /* ---------------------------------------------------------------- */
+
+    /** Draws an icon from the sprite as real nodes. A <use> reference
+     *  cannot be styled from outside, and each icon's motion is one part
+     *  moving against the others (site.css, "Icon choreography"). */
+    function draw(svg, name) {
+        const symbol = document.getElementById(`i-${name}`);
+        if (!symbol) return svg;
+        svg.setAttribute('viewBox', symbol.getAttribute('viewBox'));
+        svg.dataset.icon = name;
+        svg.replaceChildren(...[...symbol.children].map((part) => part.cloneNode(true)));
+        return svg;
+    }
+
+    function icon(name) {
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('class', 'ico');
         svg.setAttribute('aria-hidden', 'true');
-        if (gesture) svg.dataset.g = gesture;
-        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-        use.setAttribute('href', `#i-${name}`);
-        svg.append(use);
-        return svg;
+        return draw(svg, name);
+    }
+
+    /** Plays an icon's motion once, start to finish. A play that is
+     *  already running is left alone, so hovering in and out never cuts
+     *  one off halfway. */
+    function play(svg) {
+        if (REDUCED || svg.classList.contains('go')) return;
+        svg.classList.add('go');
+        setTimeout(() => svg.classList.remove('go'), 1000);
+    }
+    const playIn = (root, delay = 0) => {
+        const icons = $$('.ico[data-icon]', root);
+        if (delay) setTimeout(() => icons.forEach(play), delay);
+        else icons.forEach(play);
+    };
+
+    function initIcons() {
+        for (const svg of $$('svg.ico')) {
+            const use = $('use', svg);
+            if (use) draw(svg, use.getAttribute('href').slice(3));
+        }
+        if (REDUCED) return;
+        /* An icon moves when the thing it belongs to is pointed at,
+           focused or tapped. */
+        const HOSTS = 'a, button, .step, .feat, .card-privacy';
+        const enter = (e) => {
+            const host = e.target.closest && e.target.closest(HOSTS);
+            if (!host || (e.relatedTarget && host.contains(e.relatedTarget))) return;
+            playIn(host);
+        };
+        document.addEventListener('pointerover', enter);
+        document.addEventListener('focusin', enter);
+        /* The clapper claps once as the page arrives. */
+        playIn($('.brand'), 900);
     }
 
     /* ---------------------------------------------------------------- */
@@ -131,6 +177,7 @@
         if (mine) {
             mine.classList.add('you');
             $('.plat-you', mine).hidden = false;
+            $('.plat-go', mine).classList.replace('btn-secondary', 'btn-primary');
         }
     }
 
@@ -225,12 +272,12 @@
         const links = el('span', { class: 'rel-links' });
         for (const [key, p] of Object.entries(PLATFORMS)) {
             if (!rel.assets[key]) continue;
-            links.append(el('a', { href: rel.assets[key].url, 'aria-label': `Download ${rel.tag} for ${p.label}` }, [icon('download'), p.short]));
+            links.append(el('a', { class: 'btn btn-ghost btn-sm', href: rel.assets[key].url, 'aria-label': `Download ${rel.tag} for ${p.label}` }, [icon('download'), p.short]));
         }
-        links.append(el('a', { href: rel.url, 'aria-label': `${rel.tag} release notes on GitHub` }, ['Notes', icon('arrow-up-right')]));
+        links.append(el('a', { class: 'btn btn-ghost btn-sm', href: rel.url, 'aria-label': `${rel.tag} release notes on GitHub` }, ['Notes', icon('arrow-up-right')]));
         const summary = rel.notes.length ? plain(rel.notes[0]) : 'Release notes on GitHub';
         const row = el('li', { class: 'rel new', style: `--i:${i}` }, [
-            el('div', {}, [el('b', { text: rel.tag }), el('span', { text: summary, title: summary }), links]),
+            el('div', {}, [el('b', { text: rel.tag }), el('span', { class: 'rel-sum', text: summary, title: summary }), links]),
         ]);
         return row;
     }
@@ -303,23 +350,22 @@
                 if (!e.isIntersecting) continue;
                 e.target.classList.add('in');
                 io.unobserve(e.target);
+                /* Icons act once as they arrive, after the rise has
+                   mostly settled. The rail's icons wait for their step
+                   to light instead (initScroll). */
+                if (!e.target.classList.contains('step')) {
+                    const order = +e.target.style.getPropertyValue('--i') || 0;
+                    playIn(e.target, 320 + order * 45);
+                }
             }
         }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
         targets.forEach((t) => io.observe(t));
     }
 
-    /** Scatter the idle gestures, so no two icons move together. */
-    function initIcons() {
-        for (const ico of $$('.ico[data-g]')) {
-            ico.style.setProperty('--idle-t', `${(9 + Math.random() * 6).toFixed(1)}s`);
-            ico.style.setProperty('--idle-d', `${(Math.random() * 8).toFixed(1)}s`);
-        }
-    }
-
     function initPointerLight() {
         if (!matchMedia('(hover: hover)').matches) return;
         document.addEventListener('pointermove', (e) => {
-            const panel = e.target.closest && e.target.closest('.metal');
+            const panel = e.target.closest && e.target.closest('.panel');
             if (!panel) return;
             const r = panel.getBoundingClientRect();
             panel.style.setProperty('--mx', `${e.clientX - r.left}px`);
@@ -342,7 +388,7 @@
             queued = false;
             const vh = innerHeight;
             const max = document.documentElement.scrollHeight - vh;
-            bar.style.width = `${clamp(scrollY / Math.max(1, max)) * 100}%`;
+            bar.style.setProperty('--p', clamp(scrollY / Math.max(1, max)).toFixed(4));
 
             if (!REDUCED) {
                 const top = stage.getBoundingClientRect().top;
@@ -355,7 +401,12 @@
             const upto = Math.min(steps.length - 1, Math.floor(p * steps.length - 0.001));
             fill.style.setProperty('--p', p.toFixed(3));
             if (upto !== lit) {
-                steps.forEach((s, i) => s.classList.toggle('lit', i <= upto && p > 0));
+                steps.forEach((s, i) => {
+                    const on = i <= upto && p > 0;
+                    const node = $('.node', s);
+                    if (on && !node.classList.contains('lit')) playIn(node, 120);
+                    node.classList.toggle('lit', on);
+                });
                 lit = upto;
             }
         };
@@ -719,7 +770,7 @@
     function initSpeed() {
         if (REDUCED) return;
         const num = $('#speed-num');
-        const bars = $$('#speed-bars b');
+        const bars = $$('#speed-bars .bar').map((bar) => ({ fill: $('b', bar), pct: $('em', bar), shown: -1 }));
         const RATES = [1, 0.9, 0.82];
         const RUN = 2.4; // seconds of animation standing in for the 15 s run
         let clock = 0;
@@ -728,7 +779,13 @@
             if (clock > RUN + 2.2) clock = 0;
             const p = clamp(clock / RUN);
             num.textContent = (15 * p).toFixed(1);
-            bars.forEach((b, i) => b.style.setProperty('--p', clamp(p / RATES[i]).toFixed(3)));
+            bars.forEach((bar, i) => {
+                const pct = Math.round(clamp(p / RATES[i]) * 100);
+                if (pct === bar.shown) return;
+                bar.shown = pct;
+                bar.fill.style.setProperty('--w', pct);
+                bar.pct.textContent = `${pct}%`;
+            });
         });
     }
 
@@ -757,7 +814,9 @@
                 out.textContent = PROMPT.slice(0, n);
             }
             rows.forEach((r, i) => {
-                if (clock > typed + 0.5 + i * 0.75) r.classList.remove('off');
+                if (clock <= typed + 0.5 + i * 0.75 || !r.classList.contains('off')) return;
+                r.classList.remove('off');
+                playIn(r, 80);
             });
         });
     }
@@ -812,6 +871,11 @@
                 button.classList.remove('landed');
                 void button.offsetWidth;
                 button.classList.add('landed');
+                $$('.ico', button).forEach((svg) => {
+                    svg.classList.remove('go');
+                    void svg.getBoundingClientRect();
+                    play(svg);
+                });
             }
             if (msg) msg.textContent = '';
             try {
@@ -837,9 +901,9 @@
     /* ---------------------------------------------------------------- */
 
     function boot() {
+        initIcons();
         paintDownloads();
         initReveals();
-        initIcons();
         initPointerLight();
         initHeadline();
         initStage();
