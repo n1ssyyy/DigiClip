@@ -13,10 +13,17 @@ import crypto from 'node:crypto';
 
 const KEY = 'digiclip:likes';
 
+/** Where the store is. Vercel names the pair KV_REST_API_URL and
+ *  KV_REST_API_TOKEN, Upstash names it UPSTASH_REDIS_REST_*, and a prefix
+ *  typed when the store was connected lands in front of either
+ *  (STORAGE_KV_REST_API_URL, ...). The token is always the URL's twin. */
 function store() {
-    const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    return url && token ? { url: url.replace(/\/$/, ''), token } : null;
+    const env = process.env;
+    const urlName = ['KV_REST_API_URL', 'UPSTASH_REDIS_REST_URL'].find((k) => env[k])
+        || Object.keys(env).sort().find((k) => /(_REST_API|_REDIS_REST)_URL$/.test(k) && env[k]);
+    if (!urlName) return null;
+    const token = env[urlName.replace(/_URL$/, '_TOKEN')];
+    return token ? { url: env[urlName].replace(/\/$/, ''), token } : null;
 }
 
 /** Runs Redis commands in one round trip and returns their results. */
