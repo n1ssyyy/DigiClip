@@ -26,9 +26,18 @@ if (!process.env.KV_REST_API_URL && !process.env.UPSTASH_REDIS_REST_URL) {
     process.env.KV_REST_API_TOKEN = 'local-dev-token';
 }
 
-/* The four set commands the function uses, nothing more. */
+/* The four set commands the function uses and PUBLISH, nothing more.
+   Subscribers hold an event stream open at /__kv/subscribe/<channel> and
+   get each message as `data: message,<channel>,<payload>`, the way
+   Upstash sends them. */
 const sets = new Map();
+const subscribers = new Map();
 function redis([op, key, member]) {
+    if (String(op).toUpperCase() === 'PUBLISH') {
+        const listening = subscribers.get(key) || new Set();
+        for (const res of listening) res.write(`data: message,${key},${member}\n\n`);
+        return { result: listening.size };
+    }
     if (!sets.has(key)) sets.set(key, new Set());
     const set = sets.get(key);
     switch (String(op).toUpperCase()) {
@@ -63,6 +72,18 @@ http.createServer(async (req, res) => {
         const authorised = req.headers.authorization === `Bearer ${process.env.KV_REST_API_TOKEN}`;
         res.writeHead(authorised ? 200 : 401, { 'Content-Type': 'application/json' });
         return res.end(authorised ? JSON.stringify(JSON.parse(await body(req)).map(redis)) : '{"error":"Unauthorized"}');
+    }
+    if (url.startsWith('/__kv/subscribe/')) {
+        if (req.headers.authorization !== `Bearer ${process.env.KV_REST_API_TOKEN}`) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            return res.end('{"error":"Unauthorized"}');
+        }
+        const channel = url.slice('/__kv/subscribe/'.length);
+        if (!subscribers.has(channel)) subscribers.set(channel, new Set());
+        subscribers.get(channel).add(res);
+        req.on('close', () => subscribers.get(channel).delete(res));
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store' });
+        return res.write(`data: subscribe,${channel},1\n\n`);
     }
     if (url === '/api/likes') return likes(req, res);
 
