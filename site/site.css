@@ -323,6 +323,10 @@ a:hover > .btn-secondary {
     background: var(--secondary);
     color: var(--foreground);
 }
+/* The section being read. */
+.btn-ghost[aria-current='true'] {
+    color: var(--foreground);
+}
 /* A toggle that is on. */
 .btn[aria-pressed='true'] {
     border-color: var(--border-strong);
@@ -370,20 +374,6 @@ a:hover > .btn-secondary {
     border-color: rgb(255 255 255 / 0.15) rgb(255 255 255 / 0.08) rgb(0 0 0 / 0.5);
     border-radius: var(--r);
     background: var(--panel);
-}
-/* A soft light follows the pointer across a panel. */
-.panel::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: radial-gradient(340px circle at var(--mx, 50%) var(--my, 0%), rgb(255 255 255 / 0.05), transparent 65%);
-    opacity: 0;
-    transition: opacity var(--move) ease-out;
-    pointer-events: none;
-}
-.panel:hover::after {
-    opacity: 1;
 }
 
 /* Well: sunk into a panel, for anything that plays or prints. */
@@ -486,7 +476,8 @@ a:hover > .btn-secondary {
 }
 
 /* ------------------------------ CHROME ------------------------------ */
-/* Scroll progress, the app's page line. */
+/* The page is a timeline: a playhead line under the chrome, with a
+   marker where each section starts. Markers light as they are passed. */
 .pageline {
     position: fixed;
     top: var(--chrome);
@@ -501,6 +492,20 @@ a:hover > .btn-secondary {
     background: var(--hi);
     transform-origin: 0 50%;
     transform: scaleX(var(--p, 0));
+}
+.pageline-mark {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 6px;
+    background: var(--dim);
+    transition: background-color var(--fast) ease-out, height var(--move) var(--spring);
+}
+.pageline-mark.passed {
+    background: var(--hi);
+}
+.pageline-mark.here {
+    height: 10px;
 }
 .chrome {
     position: sticky;
@@ -562,7 +567,8 @@ a:hover > .btn-secondary {
     gap: 10px;
     margin-bottom: clamp(10px, 2vw, 22px);
 }
-/* The headline is a burned-in caption: Anton, word by word. */
+/* The headline is a burned-in caption: Anton, word by word. Section
+   titles are spoken the same way when they scroll in (.w, below). */
 .cap-h1 {
     font-size: var(--d-xl);
     /* Room between the lines for the slab behind the spoken word. */
@@ -996,7 +1002,8 @@ a:hover > .btn-secondary {
 .rail-fill {
     position: absolute;
     top: 19px;
-    right: 0;
+    /* Stops at the last node: one column minus the node's width. */
+    right: calc((100% - var(--gap) * 6) / 7 - 40px);
     left: 0;
     height: 2px;
     background: var(--border);
@@ -1592,6 +1599,7 @@ a:hover > .btn-secondary {
     }
     .rail-fill {
         top: 0;
+        right: auto;
         bottom: 0;
         left: 19px;
         width: 2px;
@@ -1610,6 +1618,7 @@ a:hover > .btn-secondary {
     .step:last-of-type {
         padding-bottom: 0;
         background: var(--background);
+        box-shadow: 0 2px 0 var(--background);
     }
     .step .node {
         grid-row: span 2;

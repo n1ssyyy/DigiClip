@@ -339,10 +339,42 @@
     /* Page-level motion                                                 */
     /* ---------------------------------------------------------------- */
 
+    /** Section titles are captions too. Each one is split into words here
+     *  and spoken when it scrolls in: the words land in turn with the
+     *  highlight on the one being said, then the highlight moves on. */
+    function initTitles() {
+        for (const title of $$('.h2')) {
+            title.setAttribute('aria-label', title.textContent.replace(/\s+/g, ' ').trim());
+            const split = (node) => {
+                for (const child of [...node.childNodes]) {
+                    if (child.nodeType !== Node.TEXT_NODE) {
+                        split(child);
+                        continue;
+                    }
+                    const words = document.createDocumentFragment();
+                    for (const part of child.textContent.split(/(\s+)/)) {
+                        if (!part) continue;
+                        words.append(part.trim() ? el('span', { class: 'w', text: part, 'aria-hidden': 'true' }) : ' ');
+                    }
+                    child.replaceWith(words);
+                }
+            };
+            split(title);
+        }
+    }
+    function speak(words, step = 130) {
+        words.forEach((w, i) => setTimeout(() => {
+            w.classList.add('on');
+            words.forEach((other, k) => other.classList.toggle('hot', k === i));
+        }, i * step));
+        setTimeout(() => words.forEach((w) => w.classList.remove('hot')), words.length * step + 240);
+    }
+
     function initReveals() {
         const targets = $$('[data-reveal]');
         if (REDUCED || !('IntersectionObserver' in window)) {
             targets.forEach((t) => t.classList.add('in'));
+            $$('.h2 .w').forEach((w) => w.classList.add('on'));
             return;
         }
         const io = new IntersectionObserver((entries) => {
@@ -350,6 +382,7 @@
                 if (!e.isIntersecting) continue;
                 e.target.classList.add('in');
                 io.unobserve(e.target);
+                speak($$('.h2 .w', e.target));
                 /* Icons act once as they arrive, after the rise has
                    mostly settled. The rail's icons wait for their step
                    to light instead (initScroll). */
@@ -360,17 +393,6 @@
             }
         }, { threshold: 0.12, rootMargin: '0px 0px -6% 0px' });
         targets.forEach((t) => io.observe(t));
-    }
-
-    function initPointerLight() {
-        if (!matchMedia('(hover: hover)').matches) return;
-        document.addEventListener('pointermove', (e) => {
-            const panel = e.target.closest && e.target.closest('.panel');
-            if (!panel) return;
-            const r = panel.getBoundingClientRect();
-            panel.style.setProperty('--mx', `${e.clientX - r.left}px`);
-            panel.style.setProperty('--my', `${e.clientY - r.top}px`);
-        }, { passive: true });
     }
 
     /** Scroll drives three things: the progress line under the chrome,
@@ -384,11 +406,36 @@
         let lit = -1;
         let queued = false;
 
+        /* A marker on the page line where each section starts, and the
+           matching header link marked as the one being read. */
+        const marks = $$('main section[id]').map((section) => {
+            const mark = el('i', { class: 'pageline-mark' });
+            bar.parentNode.append(mark);
+            return { section, mark, link: $(`.chrome-nav a[href="#${section.id}"]`), left: '' };
+        });
+
         const update = () => {
             queued = false;
             const vh = innerHeight;
             const max = document.documentElement.scrollHeight - vh;
-            bar.style.setProperty('--p', clamp(scrollY / Math.max(1, max)).toFixed(4));
+            const done = clamp(scrollY / Math.max(1, max));
+            bar.style.setProperty('--p', done.toFixed(4));
+
+            let here = -1;
+            marks.forEach((m, i) => {
+                const top = m.section.getBoundingClientRect().top + scrollY;
+                const at = clamp(top / Math.max(1, max));
+                const left = `${(at * 100).toFixed(2)}%`;
+                if (left !== m.left) m.mark.style.left = m.left = left;
+                m.mark.classList.toggle('passed', done >= at);
+                if (top <= scrollY + vh * 0.4) here = i;
+            });
+            marks.forEach((m, i) => {
+                m.mark.classList.toggle('here', i === here);
+                if (!m.link) return;
+                if (i === here) m.link.setAttribute('aria-current', 'true');
+                else m.link.removeAttribute('aria-current');
+            });
 
             if (!REDUCED) {
                 const top = stage.getBoundingClientRect().top;
@@ -440,7 +487,11 @@
         const sweep = () => {
             words.forEach((_, i) => setTimeout(() => hot(i), i * 330));
         };
-        setInterval(() => { if (!document.hidden) sweep(); }, 6400);
+        let onScreen = true;
+        new IntersectionObserver((entries) => {
+            onScreen = entries[entries.length - 1].isIntersecting;
+        }).observe($('#headline'));
+        setInterval(() => { if (onScreen && !document.hidden) sweep(); }, 6400);
     }
 
     /* ---------------------------------------------------------------- */
@@ -903,8 +954,8 @@
     function boot() {
         initIcons();
         paintDownloads();
+        initTitles();
         initReveals();
-        initPointerLight();
         initHeadline();
         initStage();
         initScroll();
