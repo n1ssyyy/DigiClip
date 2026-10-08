@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { aspectList, useLook } from '../lib/look';
 import { CANVASES, captionLines, clamp, resolveCaptions } from '../lib/captionStyles';
+import { captionBlocks } from '../lib/captionMotion';
 import { logoClear, resolveBar, resolveHeadline, resolveLogo, stageHeadline } from '../lib/layers';
 import { useStore } from '../lib/socket';
 import { useT } from '../lib/i18n';
@@ -11,6 +12,7 @@ import Inspector from '../components/studio/Inspector';
 import Transport from '../components/studio/Transport';
 import { prefersReducedMotion } from '../components/studio/CaptionLayer';
 import { useSample } from '../components/studio/useSample';
+import { useMeasure } from '../components/studio/useMeasure';
 import { usePlayer } from '../components/studio/usePlayer';
 
 // Below this page width the Layers pane shrinks to icons.
@@ -93,10 +95,13 @@ export default function Studio() {
     );
     // Grouping depends on words, the words-per-line budget and whether the
     // motion is a moving one, not on colours or position.
+    // The word-level model also groups by characters and rows, which depend on
+    // how wide the type is, so it follows the whole style and the text measure.
+    const measure = useMeasure();
     const lines = useMemo(
-        () => captionLines(sample.words, resolved),
+        () => (resolved.wordLevel ? captionBlocks(sample.words, resolved, measure) : captionLines(sample.words, resolved)),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [sample.words, resolved.maxWords, resolved.maxChars, resolved.wordCap, resolved.caps, resolved.anim === 'none'],
+        [sample.words, resolved.maxWords, resolved.maxChars, resolved.wordCap, resolved.caps, resolved.anim === 'none', resolved.wordLevel ? resolved : null, resolved.wordLevel ? measure : null],
     );
 
     // The other layers, as the engine would draw them. The headline is the
@@ -230,6 +235,7 @@ export default function Studio() {
                     canvas={canvas}
                     resolved={resolved}
                     lines={lines}
+                    measure={measure}
                     layers={{ headline, bar, logo }}
                     selected={onStage}
                     edit={edit}

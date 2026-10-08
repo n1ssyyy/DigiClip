@@ -6,6 +6,8 @@
 // engine is right. Pure data and functions: no React, no DOM, importable
 // from Node for the tests.
 
+import { cleanBoxFx, cleanFx, cleanShadowFx, effectiveMotion, isWordLevel } from './captionFields.js';
+
 export const CAPTION_STYLES = ['tiktok', 'karaoke', 'hormozi', 'minimal', 'beast', 'neon', 'highlight', 'ghost'];
 
 /** Output canvases (the engine's PlayRes per shape). */
@@ -185,16 +187,26 @@ export function cleanCaptions(c) {
     }
     const ow = num(o.outline_w, 0, 8);
     if (ow !== undefined) out.outline_w = ow;
+    // `shadow` and `box` take either form: the v1 number / colour or the v2 object.
     const sh = num(o.shadow, 0, 6);
     if (sh !== undefined) out.shadow = sh;
+    else {
+        const sf = cleanShadowFx(o.shadow);
+        if (sf) out.shadow = sf;
+    }
     if (o.box === null || (typeof o.box === 'string' && o.box.trim().toLowerCase() === 'none')) out.box = 'none';
     else if (typeof o.box === 'string' && hex(o.box)) out.box = hex(o.box);
+    else {
+        const bf = cleanBoxFx(o.box);
+        if (bf) out.box = bf;
+    }
     const bo = num(o.box_opacity, 0, 1);
     if (bo !== undefined) out.box_opacity = bo;
     const mw = num(o.max_words, 1, 8);
     if (mw !== undefined) out.max_words = Math.round(mw);
     const an = animName(o.anim);
     if (an) out.anim = an;
+    Object.assign(out, cleanFx(o));
     return out;
 }
 
@@ -266,15 +278,19 @@ export function resolveCaptions(styleId, canvas, look, flat = {}) {
     const accent = c.accent ?? st.accent;
 
     // Box: BorderStyle 3 draws it in the outline colour, `outline_w` wide.
+    // A box object is a drawn shape instead (the word-level writer): the
+    // style's own box and a v1 colour step aside for it.
     const boxAlpha = (op) => Math.round((1 - clamp(op, 0, 1)) * 255);
+    const vectorBox = !!c.box && typeof c.box === 'object';
+    const boxColour = typeof c.box === 'string' && c.box !== 'none' ? c.box : null;
     let border = st.border;
     let outlineHex = st.outline;
     let outlineAlpha = st.outlineAlpha;
     let outlineW = px(st.outlineW);
-    if (c.box === 'none') {
+    if (vectorBox || c.box === 'none') {
         border = 1;
-    } else if (c.box) {
-        outlineHex = c.box;
+    } else if (boxColour) {
+        outlineHex = boxColour;
         outlineAlpha = boxAlpha(c.box_opacity ?? 1);
         if (border !== 3) {
             border = 3;
@@ -287,9 +303,27 @@ export function resolveCaptions(styleId, canvas, look, flat = {}) {
         outlineHex = c.outline;
         outlineAlpha = 0;
     }
-    if (c.outline_w !== undefined) outlineW = c.outline_w * k;
+    if (vectorBox && st.border === 3) outlineW = 0; // its outline width was the box's padding
+    else if (c.outline_w !== undefined) outlineW = c.outline_w * k;
+    // The text's own stroke: what the style draws, the Look's `stroke` on
+    // top (it wins over `outline` / `outline_w`).
+    let strokeColor = border === 3 ? '#000000' : outlineHex;
+    let strokeW = border === 3 ? 0 : outlineW;
+    if (c.stroke) {
+        if (c.stroke.color) strokeColor = c.stroke.color;
+        if (c.stroke.width !== undefined) strokeW = c.stroke.width * k;
+        if (border !== 3) {
+            outlineHex = strokeColor;
+            outlineW = strokeW;
+        }
+    }
     outlineW = round2(outlineW);
-    const shadow = round2(c.shadow !== undefined ? c.shadow * k : st.shadow);
+    // A shadow object replaces the style's (and a v1 number): it is drawn as
+    // a copy under the text.
+    const shadowFx = !!c.shadow && typeof c.shadow === 'object';
+    const shadow = round2(shadowFx ? 0 : (typeof c.shadow === 'number' ? c.shadow * k : st.shadow));
+    // The box the style (or a v1 colour) gives: the drawn shape's default colour.
+    const ownBox = boxColour ?? (c.box === 'none' ? null : (st.border === 3 ? st.outline : null));
 
     const boxed = border === 3;
     // A see-through box is drawn on its own (see ass.rs `soft_box`).
@@ -303,6 +337,13 @@ export function resolveCaptions(styleId, canvas, look, flat = {}) {
         const n = c.max_words;
         if (n > st.words) maxChars = Math.ceil((st.chars * n) / st.words);
         maxWords = n;
+    }
+    // A Look's max_chars is a hard limit that replaces the style's budget;
+    // the word cap is then its own max_words, or the contract's top (8).
+    const hardChars = c.max_chars !== undefined;
+    if (hardChars) {
+        maxWords = c.max_words ?? 8;
+        maxChars = c.max_chars;
     }
 
     const lineH = fontPx;
@@ -333,7 +374,13 @@ export function resolveCaptions(styleId, canvas, look, flat = {}) {
         maxWords,
         maxChars,
         wordCap: c.max_words ?? null,
+        hardChars,
         anim: c.anim ?? animName(flat.anim) ?? st.anim,
+        // The word-level model: any v2 field switches to it (as in the engine).
+        clean: c,
+        wordLevel: isWordLevel(c),
+        // What the style and the v1 fields hand the word-level dressing.
+        base: { stroke: { color: strokeColor, w: strokeW }, boxCol: ownBox, boxOpacity: c.box_opacity ?? 1 },
         anchor,
         wrapW,
         placed,
@@ -400,14 +447,15 @@ function attachPunctuation(words) {
     return out;
 }
 
-function group(words, maxWords, maxChars, maxGap, maxDur) {
+function group(words, maxWords, maxChars, maxGap, maxDur, byChars = false) {
+    const len = byChars ? charLen : byteLen;
     const lines = [];
     let cur = [];
     for (const w of words) {
         let flush = false;
         if (cur.length) {
             const last = cur[cur.length - 1];
-            const textLen = cur.reduce((n, x) => n + byteLen(x.w) + 1, 0) + byteLen(w.w);
+            const textLen = cur.reduce((n, x) => n + len(x.w) + 1, 0) + len(w.w);
             flush = cur.length >= maxWords || textLen > maxChars || (w.s - last.e) > maxGap || (w.e - cur[0].s) > maxDur;
         }
         if (flush) {
@@ -441,12 +489,15 @@ export const MIN_LINE_S = 0.45;
 /** Gaps shorter than this between lines are bridged (s). */
 export const BRIDGE_S = 0.35;
 
-function mergeFlashes(lines, maxC, wordCap) {
+function mergeFlashes(lines, maxC, wordCap, hardChars = false) {
     const chars = (l) => l.reduce((n, w) => n + charLen(w.w) + 1, 0);
     const span = (l) => l[l.length - 1].e - l[0].s;
+    // Two blocks joined read as chars(a) + chars(b) - 1 characters; a Look's
+    // max_chars is never exceeded by a merge, the style's own is stretched.
+    const room = hardChars ? maxC + 1 : maxC + 8;
     const fits = (a, b) => !endsSentence(a[a.length - 1].w)
         && b[0].s - a[a.length - 1].e < 0.6
-        && chars(a) + chars(b) <= maxC + 8
+        && chars(a) + chars(b) <= room
         && (wordCap == null || a.length + b.length <= wordCap);
     const out = [];
     const q = lines.slice();
@@ -480,9 +531,9 @@ function mergeFlashes(lines, maxC, wordCap) {
  * @param {{moving?: boolean, wordCap?: number|null}} [opts]
  */
 export function groupWords(words, maxWords, maxChars, opts = {}) {
-    const { moving = true, wordCap = null } = opts;
-    let lines = group(attachPunctuation(words ?? []), maxWords, maxChars, 0.6, 4.0);
-    if (moving) lines = mergeFlashes(splitSentences(lines), maxChars, wordCap);
+    const { moving = true, wordCap = null, hardChars = false } = opts;
+    let lines = group(attachPunctuation(words ?? []), maxWords, maxChars, 0.6, 4.0, hardChars);
+    if (moving) lines = mergeFlashes(splitSentences(lines), maxChars, wordCap, hardChars);
     return lines;
 }
 
@@ -503,9 +554,16 @@ export function holdLines(lines, end = Infinity) {
  *
  * @returns {{t0:number,t1:number,words:{text:string,raw:string,s:number,e:number,key:boolean}[]}[]}
  */
-export function captionLines(words, resolved) {
-    const moving = resolved.anim !== 'none';
-    const lines = groupWords(words, resolved.maxWords, resolved.maxChars, { moving, wordCap: resolved.wordCap });
+export function captionLines(words, resolved, fit = null) {
+    let moving = resolved.anim !== 'none';
+    if (resolved.wordLevel) {
+        // The word-level writer is "moving" when the line comes or goes with a motion.
+        const { enter, exit } = effectiveMotion(resolved.clean, resolved.anim);
+        moving = enter.kind !== 'none' || exit.kind !== 'none';
+    }
+    let lines = groupWords(words, resolved.maxWords, resolved.maxChars, { moving, wordCap: resolved.wordCap, hardChars: resolved.hardChars });
+    // `fit` (word-level only) cuts blocks that need more rows than `lines` allows.
+    if (fit) lines = fit(lines);
     const spans = moving ? holdLines(lines) : lines.map((l) => [l[0].s, l[l.length - 1].e]);
     let fresh = true; // the next word opens a sentence (tracked across lines)
     return lines.map((l, i) => {

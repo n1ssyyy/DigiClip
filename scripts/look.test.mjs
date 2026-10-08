@@ -17,6 +17,13 @@ import {
     CANVASES, CAPTION_STYLES, DEFAULT_POSITIONS, STYLES, assColor, captionLines, cleanCaptions, defaultPosition, fontBox,
     groupWords, holdLines, isKeyword, keywordBump, lineMotion, outlineRing, resolveCaptions, wordReveal,
 } from '../src/lib/captionStyles.js';
+import {
+    BACK_AT, BACK_PEAK, NO_FX, accel, backShape, blockExtent, breakRows, captionBlocks, cfgOf, easeFn, flatMeasure, frameAt, glowParams,
+    lineBox, lineFx, planFor, wordFrame, wordLooks,
+} from '../src/lib/captionMotion.js';
+import {
+    ALIGNS, BOX_PERS, EASES, ENTER_KINDS, ENTER_MS, EXIT_KINDS, EXIT_MS, FIELD_SPECS, FILLS, WORD_MODES, effectiveMotion, rangeOf,
+} from '../src/lib/captionFields.js';
 
 // ---------------------------------------------------------------------------
 // the panel state -> engine options contract
@@ -1090,4 +1097,906 @@ test('snapping pulls the centre to the middle lines and the 5% margins', () => {
     // Both axes; Alt (free) leaves the point alone.
     assert.deepEqual(snapCentre(0.51, 0.949, { x: 0.1, y: 0.05 }, { x: 0.02, y: 0.02 }), { x: 0.5, y: 0.95, guideX: 0.5, guideY: 0.95 });
     assert.deepEqual(snapCentre(0.51, 0.949, { x: 0.1, y: 0.05 }, { x: 0.02, y: 0.02 }, true), { x: 0.51, y: 0.949, guideX: null, guideY: null });
+});
+
+// ===========================================================================
+// the v2 ("full control") caption fields
+//
+// Expected numbers come from digiclip-rs: its tests in `captions/ass.rs` and
+// `captions/motion.rs`, and the ranges in `look.rs`. The sample words are the
+// engine tests' own: "so I made 3 million dollars last year. Never stop
+// building", 0.4 s apart, each 0.35 s long.
+// ===========================================================================
+
+const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) <= eps, `${a} != ${b}`);
+const nearAll = (a, b, eps = 1e-6) => a.forEach((x, i) => near(x, b[i], eps));
+const rnd6 = (v) => (typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : Array.isArray(v) ? v.map(rnd6) : v);
+const deepNear = (a, b) => assert.deepEqual(rnd6(a), rnd6(b));
+const RED = [255, 0, 0];
+const GREEN = [0, 255, 0];
+const WHITE = [255, 255, 255];
+const YELLOW = [255, 255, 0];
+
+/** A caption look on a style: the resolved style, its blocks and plans. */
+function rig(style, captions, { canvas = '9:16', words = SAMPLE, measure = flatMeasure(), flat = {} } = {}) {
+    const r = resolveCaptions(style, canvas, captions, flat);
+    const cfg = cfgOf(r);
+    const blocks = captionBlocks(words, r, measure);
+    const plan = (i = 0) => planFor(cfg, r, blocks[i], measure);
+    return { r, cfg, blocks, plan, measure };
+}
+/** The static minimal rig the engine's word tests use: line 1 is "so I made 3", 0 to 1.55 s. */
+const st = (words) => rig('minimal', { anim: 'none', words });
+const word = (plan, text) => plan.words.find((w) => w.text === text);
+const at = (plan, text, t) => wordFrame(word(plan, text).fx, t);
+
+// ---- the store: set, read, clear, prune, undo --------------------------------------------
+
+test('nested v2 fields are set, read and cleared through the store, and emptied objects vanish', () => {
+    const s = createLookStore({ storage: memoryStorage() });
+    s.seed(null);
+    const caps = () => s.get().options.look.captions;
+    s.setCaptions({ glow: { size: 20, color: '#00E5FF' }, spacing: 0.08, align: 'left' });
+    assert.deepEqual(caps(), { glow: { size: 20, color: '#00E5FF' }, spacing: 0.08, align: 'left' });
+    // A nested patch merges field by field...
+    s.setCaptions({ glow: { strength: 0.5 } });
+    assert.deepEqual(caps().glow, { size: 20, color: '#00E5FF', strength: 0.5 });
+    // ...and a field set to nothing goes.
+    s.setCaptions({ glow: { color: undefined, strength: '' } });
+    assert.deepEqual(caps().glow, { size: 20 });
+    s.setCaptions({ glow: { size: null } });
+    assert.equal('glow' in caps(), false, 'an object left empty disappears');
+    // Deep: words.active.box.radius
+    s.setCaptions({ words: { active: { box: { radius: 1 }, scale: 1.2 }, mode: 'build' } });
+    assert.deepEqual(caps().words, { active: { box: { radius: 1 }, scale: 1.2 }, mode: 'build' });
+    s.setCaptions({ words: { active: { box: { radius: undefined } } } });
+    assert.deepEqual(caps().words, { active: { scale: 1.2 }, mode: 'build' });
+    s.setCaptions({ words: { active: { scale: undefined }, mode: undefined } });
+    assert.equal('words' in caps(), false);
+    // A field cleared whole, and the cleared fields leave the engine's options.
+    s.setCaptions({ enter: { kind: 'bounce', ms: 300 }, exit: { kind: 'blur' } });
+    assert.deepEqual(toEngine(s.get().options).look.captions, { spacing: 0.08, align: 'left', enter: { kind: 'bounce', ms: 300 }, exit: { kind: 'blur' } });
+    s.setCaptions({ enter: undefined, exit: undefined, spacing: undefined, align: undefined });
+    assert.deepEqual(caps(), {});
+    assert.equal('look' in toEngine(s.get().options), false);
+    // A patch that changes nothing is no step and no notice.
+    s.setCaptions({ rotate: -6 });
+    const before = s.get();
+    s.setCaptions({ rotate: -6, glow: { size: undefined } });
+    assert.equal(s.get(), before);
+});
+
+test('box and shadow take both forms, and switching forms is one undo step', () => {
+    const c = clocked();
+    const s = createLookStore({ storage: memoryStorage(), now: c.now });
+    s.seed(null);
+    const caps = () => s.get().options.look.captions;
+    s.setCaptions({ box: '#101010', shadow: 3 });
+    assert.deepEqual(caps(), { box: '#101010', shadow: 3 });
+    c.tick(5000);
+    // v1 -> object: the object replaces the colour (it does not merge into a string).
+    s.setCaptions({ box: { radius: 1, per: 'word' }, shadow: { x: 3, blur: 6 } });
+    assert.deepEqual(caps(), { box: { radius: 1, per: 'word' }, shadow: { x: 3, blur: 6 } });
+    s.undo();
+    assert.deepEqual(caps(), { box: '#101010', shadow: 3 }, 'one step back to both v1 forms');
+    s.redo();
+    c.tick(5000);
+    // object -> v1.
+    s.setCaptions({ box: 'none', shadow: 2 });
+    assert.deepEqual(caps(), { box: 'none', shadow: 2 });
+    s.undo();
+    assert.deepEqual(caps(), { box: { radius: 1, per: 'word' }, shadow: { x: 3, blur: 6 } });
+    // What the engine gets: either form, nothing else.
+    assert.deepEqual(toEngine(s.get().options).look.captions, { box: { radius: 1, per: 'word' }, shadow: { x: 3, blur: 6 } });
+    s.setCaptions({ box: undefined, shadow: undefined });
+    assert.deepEqual(caps(), {});
+});
+
+test('a slider over a nested field is one undo step; another field is another step', () => {
+    const c = clocked();
+    const s = createLookStore({ storage: memoryStorage(), now: c.now });
+    s.seed(null);
+    for (let i = 0; i < 10; i++) {
+        s.setCaptions({ glow: { size: 10 + i } });
+        c.tick(30);
+    }
+    s.setCaptions({ glow: { strength: 0.4 } });
+    s.setCaptions({ glow: { strength: 0.5 } });
+    assert.deepEqual(s.get().options.look.captions.glow, { size: 19, strength: 0.5 });
+    s.undo();
+    assert.deepEqual(s.get().options.look.captions.glow, { size: 19 }, 'the strength drag is one step');
+    s.undo();
+    assert.equal('glow' in s.get().options.look.captions, false, 'the size drag is one step');
+    assert.equal(s.get().canUndo, false);
+    // A gesture over a nested field is one step too.
+    s.beginGesture();
+    for (let i = 0; i < 5; i++) s.setCaptions({ words: { active: { lift: i / 50 } } });
+    s.endGesture();
+    s.undo();
+    assert.equal('words' in s.get().options.look.captions, false);
+    // And edit() with nested sections is one step.
+    s.edit({ style: 'neon' }, { captions: { stroke: { width: 6 } } });
+    assert.deepEqual([s.get().options.style, s.get().options.look.captions.stroke], ['neon', { width: 6 }]);
+    s.undo();
+    assert.deepEqual([s.get().options.style, 'stroke' in s.get().options.look.captions], ['karaoke', false]);
+});
+
+test('the engine gets only real values, nested; sanitizeLook keeps and cleans the v2 fields', () => {
+    const look = {
+        captions: {
+            glow: { color: '#00e5ff', size: 20, strength: undefined },
+            stroke: {},
+            shadow: { x: 3, y: NaN, blur: '' },
+            box: { color: '', opacity: 0.5 },
+            words: { active: { stroke: { width: 4 }, glow: {} }, keyword: {} },
+            enter: { kind: 'bounce' },
+        },
+    };
+    assert.deepEqual(lookToEngine(look), {
+        v: 1,
+        captions: { glow: { color: '#00e5ff', size: 20 }, shadow: { x: 3 }, box: { opacity: 0.5 }, words: { active: { stroke: { width: 4 } } }, enter: { kind: 'bounce' } },
+    });
+    // Read back from a preset: ranges clamped, colours upper-case, bad things absent.
+    const back = sanitizeLook({
+        captions: {
+            spacing: 5, line_gap: 0.1, lines: 7, max_chars: 2, align: 'Centre', rotate: -99,
+            stroke: { color: '#abcdef', width: 99 }, shadow: { x: 99, y: -99, blur: 99, opacity: 9 }, glow: { size: 99, strength: 9, color: 'red' },
+            box: { pad_x: 900, per: 'Paragraph', radius: 9, opacity: -1 },
+            words: { mode: 'sideways', fill: 'sweep', upcoming: { lift: 0.2, opacity: 3 }, active: { lift: 5, rotate: 99, scale: 0.1, blur: 5 }, keyword: { scale: 9 }, hold_ms: -4, release_ease: 'wobble' },
+            enter: { kind: 'zoom', ms: 99999, ease: 'back' }, exit: { kind: 'spin', ms: 99999 },
+        },
+    }).captions;
+    assert.deepEqual(back, {
+        spacing: 0.3, line_gap: 0.8, lines: 2, max_chars: 6, align: 'center', rotate: -15,
+        stroke: { color: '#ABCDEF', width: 12 }, shadow: { x: 30, y: -30, blur: 20, opacity: 1 }, glow: { size: 40, strength: 1 },
+        box: { pad_x: 60, radius: 1, opacity: 0 },
+        words: { fill: 'sweep', upcoming: { opacity: 1 }, active: { lift: 0.3, rotate: 10, scale: 0.5 }, keyword: { scale: 1.5 }, hold_ms: 0 },
+        enter: { kind: 'zoom', ms: 800, ease: 'back' }, exit: { ms: 600 },
+    });
+    // Both forms survive the round trip through the engine's options.
+    for (const caps of [{ box: '#101010', shadow: 4 }, { box: 'none' }, { box: { radius: 0.5, per: 'word' }, shadow: { y: 6 } }]) {
+        const o = { ...defaults(null), look: { captions: caps } };
+        assert.deepEqual(fromEngine(toEngine(o)).look.captions, caps);
+    }
+});
+
+test('every field has its range and values in one place, and the cleaner agrees with it', () => {
+    // The engine's ranges (look.rs).
+    const engine = {
+        spacing: [-0.05, 0.3], line_gap: [0.8, 1.6], lines: [1, 2], max_chars: [6, 40], rotate: [-15, 15],
+        'stroke.width': [0, 12], 'shadow.x': [-30, 30], 'shadow.y': [-30, 30], 'shadow.blur': [0, 20], 'shadow.opacity': [0, 1],
+        'glow.size': [0, 40], 'glow.strength': [0, 1], 'box.opacity': [0, 1], 'box.pad_x': [0, 60], 'box.pad_y': [0, 60], 'box.radius': [0, 1],
+        'words.attack_ms': [0, 400], 'words.hold_ms': [0, 600], 'words.release_ms': [0, 2000],
+        'words.upcoming.opacity': [0, 1], 'words.upcoming.scale': [0.5, 1.5], 'words.upcoming.blur': [0, 10],
+        'words.active.opacity': [0, 1], 'words.active.scale': [0.5, 1.5], 'words.active.lift': [-0.3, 0.3], 'words.active.rotate': [-10, 10],
+        'words.active.stroke.width': [0, 12], 'words.active.glow.size': [0, 40], 'words.active.glow.strength': [0, 1],
+        'words.active.box.opacity': [0, 1], 'words.active.box.radius': [0, 1],
+        'words.spoken.opacity': [0, 1], 'words.spoken.scale': [0.5, 1.5], 'words.spoken.blur': [0, 10],
+        'words.keyword.scale': [0.5, 1.5], 'words.keyword.glow.size': [0, 40], 'words.keyword.glow.strength': [0, 1],
+        'enter.ms': [0, 800], 'exit.ms': [0, 600],
+    };
+    const nest = (path, v) => path.split('.').reduceRight((acc, k) => ({ [k]: acc }), v);
+    const read = (o, path) => path.split('.').reduce((a, k) => a?.[k], o);
+    for (const [path, [lo, hi]] of Object.entries(engine)) {
+        assert.deepEqual(rangeOf(path), [lo, hi], path);
+        assert.equal(FIELD_SPECS[path].type, 'number', path);
+        near(read(cleanCaptions(nest(path, lo - 1000)), path), lo, 1e-9);
+        near(read(cleanCaptions(nest(path, hi + 1000)), path), hi, 1e-9);
+    }
+    // Enums.
+    assert.deepEqual(ENTER_KINDS, ['none', 'pop', 'fade', 'slide_up', 'slide_down', 'slide_left', 'slide_right', 'zoom', 'bounce', 'blur', 'drop']);
+    assert.deepEqual(EXIT_KINDS, ['none', 'fade', 'slide_up', 'slide_down', 'zoom', 'blur']);
+    assert.deepEqual([EASES, ALIGNS, WORD_MODES, FILLS, BOX_PERS], [['linear', 'out', 'in', 'back'], ['left', 'center', 'right'], ['all', 'build', 'single'], ['snap', 'sweep'], ['line', 'word']]);
+    for (const [path, spec] of Object.entries(FIELD_SPECS)) {
+        if (spec.type !== 'enum') continue;
+        for (const v of spec.values) assert.deepEqual(read(cleanCaptions(nest(path, v)), path), v, path);
+        assert.equal(read(cleanCaptions(nest(path, 'wobble')), path), undefined, path);
+    }
+    // Every spec path is a field of the section: its cleaned value is not dropped.
+    for (const [path, spec] of Object.entries(FIELD_SPECS)) {
+        const v = spec.type === 'number' ? spec.min : spec.type === 'enum' ? spec.values[0] : '#112233';
+        assert.notEqual(read(cleanCaptions(nest(path, v)), path), undefined, path);
+    }
+    // Defaults the engine fills in.
+    assert.deepEqual([FIELD_SPECS['glow.size'].def, FIELD_SPECS['glow.strength'].def], [12, 0.8]);
+    assert.deepEqual(['shadow.y', 'shadow.blur', 'shadow.opacity'].map((p) => FIELD_SPECS[p].def), [4, 4, 0.6]);
+    assert.deepEqual(['box.pad_x', 'box.pad_y'].map((p) => FIELD_SPECS[p].def), [16, 8]);
+});
+
+test('any v2 field switches to the word model; the v1 forms and junk do not', () => {
+    const wl = (c) => resolveCaptions('karaoke', '9:16', c).wordLevel;
+    for (const c of [
+        { spacing: 0.1 }, { line_gap: 1.2 }, { lines: 2 }, { max_chars: 20 }, { align: 'left' }, { rotate: 3 }, { stroke: { width: 4 } },
+        { shadow: { x: 3 } }, { glow: { size: 10 } }, { box: { radius: 1 } }, { words: { active: { glow: { size: 9 } } } }, { words: { keyword: { glow: { size: 9 } } } },
+        { words: { mode: 'single' } }, { enter: { kind: 'fade' } }, { exit: { kind: 'fade' } },
+    ]) assert.equal(wl(c), true, JSON.stringify(c));
+    for (const c of [
+        {}, { box: '#101010' }, { box: 'none' }, { shadow: 4 }, { outline: '#FF0000', outline_w: 5 }, { max_words: 2 }, { anim: 'bounce' },
+        { glow: { size: 'big' } }, { glow: {} }, { box: { radius: 'round' } }, { stroke: 5 }, { align: 'middle' }, { spacing: 'wide' },
+        { words: {} }, { enter: {}, exit: {} }, { words: { mode: 'sideways', fill: 'wipe', upcoming: { color: 'red' } } },
+    ]) assert.equal(wl(c), false, JSON.stringify(c));
+});
+
+// ---- resolving the dressing -------------------------------------------------------------------
+
+test('stroke object wins over the v1 outline; a box object steps the style\'s box aside; a shadow object replaces its shadow', () => {
+    const rs = (style, c, canvas = '9:16') => resolveCaptions(style, canvas, c);
+    // Both given: the object's colour and width, and it is the text's stroke too.
+    let r = rs('karaoke', { outline: '#FF0000', outline_w: 5, stroke: { color: '#00FF00', width: 9 } });
+    assert.deepEqual([r.outline, r.base.stroke], [{ color: '#00FF00', width: 9 }, { color: '#00FF00', w: 9 }]);
+    // Half given: the other half comes from v1, then the style.
+    r = rs('karaoke', { outline: '#FF0000', stroke: { width: 7 } });
+    assert.deepEqual(r.base.stroke, { color: '#FF0000', w: 7 });
+    r = rs('karaoke', { stroke: { color: '#336699' } });
+    assert.deepEqual(r.base.stroke, { color: '#336699', w: 3 });
+    assert.equal(rs('karaoke', { stroke: { width: 99 } }).base.stroke.w, 12);
+    // Scaled with the canvas (0.9 on a square one).
+    near(rs('karaoke', { stroke: { width: 10 } }, '1:1').base.stroke.w, 9, 1e-9);
+    // The style's box is its outline slot: no stroke under it.
+    r = rs('hormozi', {});
+    assert.deepEqual([!!r.box, r.base.stroke.w], [true, 0]);
+    // A box object replaces it: the shape takes the style's colour, no stroke is invented.
+    r = rs('hormozi', { box: { radius: 0.3 } });
+    assert.deepEqual([r.box, r.base.stroke.w, r.base.boxCol], [null, 0, '#000000']);
+    assert.equal(rs('highlight', { box: { radius: 0.3 } }).base.boxCol, '#A3E635');
+    // A v1 colour is still a libass box, "none" still removes it.
+    assert.equal(rs('karaoke', { box: '#101010' }).box.color, '#101010');
+    assert.equal(rs('hormozi', { box: 'none' }).box, null);
+    // A colour from the v1 field is the shape's default; opacity from v1 too.
+    r = rs('karaoke', { box: { radius: 1 } });
+    assert.equal(r.base.boxCol, null);
+    assert.equal(cfgOf(rs('karaoke', { box: { radius: 1 }, box_opacity: 0.5 })).boxfx.opacity, 0.5);
+    assert.deepEqual(cfgOf(rs('karaoke', { box: { color: '#00FF00' }, box_opacity: 0.5 })).boxfx.col, GREEN);
+    // The shadow object takes the style's own shadow off; the v1 number keeps it.
+    assert.equal(rs('minimal', { shadow: { blur: 2 } }).shadow, 0);
+    assert.equal(rs('minimal', { shadow: 4 }).shadow, 4);
+    assert.equal(rs('minimal', {}).shadow, 1);
+});
+
+test('shadow, glow, box and stroke objects map onto what the engine draws', () => {
+    // Shadow: defaults black, x 0, y 4, blur 4, opacity 0.6; px scale with the canvas.
+    let c = cfgOf(resolveCaptions('karaoke', '9:16', { shadow: { x: 1 } }));
+    assert.deepEqual(c.shadow, { col: [0, 0, 0], x: 1, y: 4, blur: 4, opacity: 0.6 });
+    c = cfgOf(resolveCaptions('karaoke', '1:1', { shadow: { color: '#102030', x: 6, y: 8, blur: 8, opacity: 0.6 } }));
+    near(c.k, 0.9);
+    assert.deepEqual(c.shadow.col, [16, 32, 48]);
+    nearAll([c.shadow.x, c.shadow.y, c.shadow.blur, c.shadow.opacity], [5.4, 7.2, 7.2, 0.6]);
+    // Glow: a copy grown by 0.55 x size and blurred by 0.6 x size (engine: size 20 on a 3 px stroke is a 14 px border, blur 12; size 40 blurs by 24).
+    assert.deepEqual(glowParams(20, 3), { border: 14, blur: 12 });
+    near(glowParams(40).blur, 24);
+    // Glow defaults: size 12, strength 0.8, the letters' own colour...
+    const look = (cap, kw) => wordLooks(cfgOf(resolveCaptions('neon', '9:16', cap)), kw);
+    let [up, act, spk] = look({ glow: {} , spacing: 0 });
+    assert.deepEqual([up.glow.size, up.glow.strength], [0, 0], 'no glow object, no glow');
+    [up, act, spk] = look({ glow: { size: 10 } });
+    assert.deepEqual([act.glow.size, act.glow.strength], [10, 0.8]);
+    assert.deepEqual([up.glow.col, act.glow.col], [WHITE, [0, 255, 255]]);
+    // ...or white when they are dark (highlight sings in black).
+    [up, act] = wordLooks(cfgOf(resolveCaptions('highlight', '9:16', { glow: { size: 10 } })), false);
+    assert.deepEqual([up.glow.col, act.glow.col], [WHITE, WHITE]);
+    // Layers stack: the caption's glow, the spoken word's on it, the keywords' on both; a keyword keeps its glow once spoken.
+    const stack = { glow: { color: '#FFFFFF', size: 10, strength: 0.5 }, words: { active: { glow: { color: '#00E5FF', size: 20 } }, keyword: { glow: { color: '#FF00FF', strength: 1 } } } };
+    [up, act, spk] = look(stack, false);
+    assert.deepEqual([up.glow, act.glow, spk.glow], [
+        { col: WHITE, size: 10, strength: 0.5 }, { col: [0, 229, 255], size: 20, strength: 0.5 }, { col: WHITE, size: 10, strength: 0.5 },
+    ]);
+    [up, act, spk] = look(stack, true);
+    assert.deepEqual([act.glow, spk.glow], [{ col: [255, 0, 255], size: 20, strength: 1 }, { col: [255, 0, 255], size: 10, strength: 1 }]);
+    // Box: pads default 16 x 8, radius 0, perWord from "per"; the spoken word's box inherits the shape's radius and pads.
+    c = cfgOf(resolveCaptions('karaoke', '9:16', { box: { per: 'word' }, words: { active: { box: {} } } }));
+    assert.deepEqual([c.boxfx.padX, c.boxfx.padY, c.boxfx.radius, c.boxfx.perWord], [16, 8, 0, true]);
+    c = cfgOf(resolveCaptions('karaoke', '9:16', { box: { pad_x: 20, pad_y: 10, radius: 0.5 }, words: { active: { box: { color: '#FFD400', opacity: 0.25 } } } }));
+    assert.deepEqual([c.abox.col, c.abox.radius, c.abox.padX, c.abox.padY, c.act.abox], [[255, 212, 0], 0.5, 20, 10, 0.25]);
+    // The spoken word's own stroke is the caption's with its fields on top.
+    c = cfgOf(resolveCaptions('karaoke', '9:16', { words: { active: { stroke: { color: '#FFFFFF', width: 8 } } } }));
+    assert.deepEqual([c.act.stroke, c.up.stroke, c.strokeMax], [{ col: WHITE, w: 8 }, { col: [0, 0, 0], w: 3 }, 8]);
+    // Spacing is a share of the type size: 0.1 em of an 84 px face is 8.4 px, -0.05 em is -4.2.
+    near(cfgOf(resolveCaptions('karaoke', '9:16', { spacing: 0.1 })).spacing, 8.4);
+    near(cfgOf(resolveCaptions('karaoke', '9:16', { spacing: -0.05 })).spacing, -4.2);
+});
+
+// ---- the word timeline ----------------------------------------------------------------------------
+
+test('easing: the engine\'s curves, and the two-step shape of ease back', () => {
+    for (const e of EASES) {
+        near(easeFn(e, 0), 0);
+        near(easeFn(e, 1), 1);
+    }
+    assert.ok(easeFn('out', 0.25) > 0.25 && easeFn('in', 0.25) < 0.25);
+    near(easeFn('out', 0.25), 0.5);
+    near(easeFn('in', 0.25), 0.0625);
+    near(easeFn('linear', 0.25), 0.25);
+    // Back peaks at 58% of the time, 10% past the target.
+    near(easeFn('back', BACK_AT), 1 + BACK_PEAK, 0.01);
+    near(backShape(BACK_AT), 1.1, 1e-9);
+    near(backShape(0), 0);
+    near(backShape(1), 1);
+    // ...the \t accelerations the engine writes: out 0.5, in 2, linear 1.
+    assert.deepEqual(['out', 'in', 'linear', 'back'].map(accel), [0.5, 2, 1, 1]);
+    near(backShape(0.29), 1.1 * 0.5 ** 0.4, 1e-9);
+});
+
+test('a word\'s timeline lands on the attack, hold and release the engine writes', () => {
+    // "I" is spoken 400..750 in a static line 0..1.55. Attack 200 from the start (400..600), hold 100 past the end (850), release 500 (850..1350).
+    const { plan } = st({ upcoming: { opacity: 0.5 }, spoken: { opacity: 0.25 }, attack_ms: 200, attack_ease: 'linear', hold_ms: 100, release_ms: 500, release_ease: 'linear' });
+    const p = plan();
+    const op = (t) => at(p, 'I', t).op;
+    // Before its start, mid-attack, active, in the hold, mid-release, spoken.
+    for (const [t, v] of [[0, 0.5], [399, 0.5], [400, 0.5], [500, 0.75], [600, 1], [700, 1], [800, 1], [849, 1], [850, 1], [1100, 0.625], [1349, 0.2515], [1350, 0.25], [1500, 0.25]]) near(op(t), v, 0.001);
+    // The line (and its words) ends at 1.55: "3" is the last word, its attack is cut off by the line, its release never starts.
+    deepNear(word(p, '3').win, [0, 1550]);
+    near(at(p, '3', 1300).op, 0.75, 0.001);
+    // Without hold the release starts at the word's end.
+    const q = st({ upcoming: { opacity: 0.5 }, spoken: { opacity: 0.25 }, release_ms: 500, release_ease: 'linear' }).plan();
+    deepNear(word(q, 'I').tails, [750, 1250]);
+    near(at(q, 'I', 1000).op, 0.625, 1e-9);
+    // An attack longer than the word holds the release back until it is done.
+    const l = st({ upcoming: { opacity: 0.5 }, spoken: { opacity: 0.25 }, attack_ms: 400, attack_ease: 'linear', release_ms: 100, release_ease: 'linear' }).plan();
+    deepNear(word(l, 'I').tails, [800, 900]);
+    near(at(l, 'I', 600).op, 0.75, 1e-9);
+    near(at(l, 'I', 850).op, 0.625, 1e-9);
+    // Defaults: attack 0 (80 in build), hold 0, release 0, eases out.
+    const d = st({}).cfg;
+    assert.deepEqual([d.attack, d.hold, d.release, d.attackEase, d.releaseEase], [0, 0, 0, 'out', 'out']);
+    assert.equal(st({ mode: 'build' }).cfg.attack, 80);
+    assert.equal(st({ mode: 'build', attack_ms: 0 }).cfg.attack, 0);
+});
+
+test('state fields switch at the word\'s start and back at its end', () => {
+    const g0 = st({
+        upcoming: { color: '#112233', scale: 0.8, blur: 3, opacity: 0.5 },
+        active: { color: '#FF0000', scale: 1.2, lift: 0.1, rotate: 5, stroke: { width: 6 }, glow: { size: 20, strength: 1 }, box: { opacity: 0.5 } },
+        spoken: { color: '#00FF00', scale: 1.5, blur: 2, opacity: 0.25 },
+    });
+    const p = g0.plan();
+    const b0 = g0.r.base.stroke.w;
+    const s = (t) => at(p, 'I', t);
+    let f = s(300);
+    assert.deepEqual(f.col, [17, 34, 51]);
+    nearAll([f.sc, f.blur, f.op, f.lift, f.rot, f.sw, f.gs, f.gk, f.bo], [0.8, 3, 0.5, 0, 0, b0, 0, 0, 0]);
+    f = s(500);
+    assert.deepEqual(f.col, RED);
+    nearAll([f.sc, f.blur, f.op, f.lift, f.rot, f.sw, f.gs, f.gk, f.bo], [1.2, 0, 1, 0.1, 5, 6, 20, 1, 0.5]);
+    f = s(800);
+    assert.deepEqual(f.col, GREEN);
+    nearAll([f.sc, f.blur, f.op, f.lift, f.rot, f.sw, f.gs, f.gk, f.bo], [1.5, 2, 0.25, 0, 0, b0, 0, 0, 0]);
+    // The step is at the start: the moment before it the word is still upcoming.
+    assert.deepEqual(s(399.9).col, [17, 34, 51]);
+    assert.deepEqual(s(400).col, RED);
+    // Lift and tilt belong to the active look only: the spoken word sits down.
+    assert.deepEqual([at(p, 'so', 200).lift, at(p, 'so', 600).lift], [0.1, 0]);
+});
+
+test('a release overlaps the next word\'s attack', () => {
+    // "so" ends at 350 and trails for 600 ms; "I" is lit from 400.
+    const p = st({ active: { color: '#FF0000' }, spoken: { color: '#00FF00' }, release_ms: 600, release_ease: 'linear' }).plan();
+    deepNear(word(p, 'so').tails, [350, 950]);
+    nearAll(at(p, 'so', 650).col, [127.5, 127.5, 0]);
+    assert.deepEqual(at(p, 'I', 650).col, RED);
+    assert.deepEqual(at(p, 'so', 950).col, GREEN);
+    // Both are on screen over the same moments: they share the line's span.
+    deepNear([word(p, 'so').win, word(p, 'I').win], [[0, 1550], [0, 1550]]);
+});
+
+test('every ease is a power curve, or the two-step back', () => {
+    const run = (ease) => st({ active: { color: '#FF0000', scale: 1.2 }, spoken: { color: '#00FF00', scale: 1 }, hold_ms: 100, release_ms: 500, release_ease: ease }).plan();
+    // The release of "I": 850..1350. A quarter of the way in.
+    const quarter = (ease) => at(run(ease), 'I', 975);
+    near(quarter('linear').sc, 1.2 - 0.2 * 0.25);
+    near(quarter('out').sc, 1.2 - 0.2 * 0.5);
+    near(quarter('in').sc, 1.2 - 0.2 * 0.0625);
+    nearAll(quarter('out').col, [255 * 0.5, 255 * 0.5, 0]);
+    // Back: colour just eases out; the scale runs 10% past its target (98 for 120 -> 100) 58% of the way (1140), and settles.
+    const back = run('back');
+    near(at(back, 'I', 1140).sc, 0.98, 1e-9);
+    nearAll(at(back, 'I', 975).col, [255 * 0.5, 255 * 0.5, 0]);
+    near(at(back, 'I', 1350).sc, 1);
+    near(at(back, 'I', 1245).sc, 0.98 + (1 - 0.98) * 0.5, 1e-9, 'the settle is a straight line');
+    // The same on the way in (opacity eases out under back).
+    const att = (ease) => at(st({ upcoming: { opacity: 0.5 }, attack_ms: 200, attack_ease: ease }).plan(), 'I', 450);
+    near(att('linear').op, 0.5 + 0.5 * 0.25);
+    near(att('out').op, 0.5 + 0.5 * 0.5);
+    near(att('in').op, 0.5 + 0.5 * 0.0625);
+    near(att('back').op, att('out').op);
+    near(att('wobble').op, att('out').op, 1e-9, 'an unknown ease is the default, out');
+    // An overshoot on the way in: scale runs past the target and settles.
+    const sc = st({ active: { scale: 1.2 }, attack_ms: 200, attack_ease: 'back' }).plan();
+    near(at(sc, 'I', 400 + 200 * BACK_AT).sc, 1 + 0.2 * 1.1, 1e-9);
+    // A ramp that shares its time with others moving (a lift) is sampled from the smooth curve instead.
+    const lift = st({ active: { scale: 1.2, lift: 0.1 }, attack_ms: 200, attack_ease: 'back' }).plan();
+    near(at(lift, 'I', 400 + 200 * BACK_AT).sc, 1 + 0.2 * easeFn('back', BACK_AT), 1e-9);
+});
+
+test('snap turns active at once; a sweep runs left to right over the word\'s own time', () => {
+    const { plan } = st({ fill: 'sweep', active: { color: '#FF0000' }, attack_ms: 200 });
+    const p = plan();
+    const frame = (t, w = 'I') => frameAt(p, t).groups[0].words.find((x) => x.i === word(p, w).i);
+    // "I" is spoken 400..750: unswept, half swept, done.
+    let f = frame(399);
+    assert.deepEqual([f.col, f.sweep], [WHITE, null]);
+    f = frame(575);
+    assert.deepEqual([f.under, f.col], [WHITE, RED]);
+    near(f.sweep, 0.5);
+    f = frame(750);
+    assert.deepEqual([f.col, f.sweep], [RED, null]);
+    // The attack is ignored by a sweep: the colour is not tweened (halfway through a 200 ms attack the sweep is at 0.29).
+    near(frame(500).sweep, 100 / 350);
+    // The first word of a line starts its sweep at once.
+    near(frame(175, 'so').sweep, 0.5);
+    // Snap: no sweep, the colour is the track's.
+    const snap = st({ active: { color: '#FF0000' } }).plan();
+    const g = frameAt(snap, 575).groups[0].words.find((x) => x.i === word(snap, 'I').i);
+    assert.deepEqual([g.col, g.sweep], [RED, null]);
+    // Nothing to sweep when the colour does not change.
+    const same = st({ fill: 'sweep', active: { color: '#FFFFFF' } }).plan();
+    const h = frameAt(same, 575).groups[0].words.find((x) => x.i === word(same, 'I').i);
+    assert.deepEqual([h.col, h.sweep], [WHITE, null]);
+    // Reduced motion snaps it.
+    const hard = frameAt(p, 575, { reduced: true }).groups[0].words.find((x) => x.i === word(p, 'I').i);
+    assert.deepEqual([hard.col, hard.sweep], [RED, null]);
+});
+
+test('modes: all, build and single', () => {
+    const vis = (plan, t) => frameAt(plan, t).groups.flatMap((g) => g.words.map((w) => plan.words[w.i].text));
+    const a = st({ mode: 'all', upcoming: { opacity: 0.5 } }).plan();
+    assert.deepEqual(vis(a, 100), ['so', 'I', 'made', '3']);
+    near(at(a, 'I', 100).op, 0.5);
+    // Build: a word is not there before it is spoken, and comes in at its own start (80 ms from nothing).
+    const b = st({ mode: 'build' }).plan();
+    assert.deepEqual(vis(b, 100), ['so']);
+    assert.deepEqual(vis(b, 450), ['so', 'I']);
+    assert.deepEqual(vis(b, 1000), ['so', 'I', 'made']);
+    deepNear(word(b, 'I').win, [400, 1550]);
+    deepNear(word(b, 'made').win, [800, 1550]);
+    near(at(b, 'I', 400).op, 0);
+    near(at(b, 'I', 440).op, Math.sqrt(0.5), 1e-9);
+    near(at(b, 'I', 480).op, 1);
+    // ...and the slots are the whole line's from the start: "so" does not move when later words arrive.
+    assert.deepEqual(word(b, 'so').pos, st({ mode: 'all' }).plan().words[0].pos);
+    // Single: one word at a time, each up until the next one starts, all at the same spot.
+    const s = st({ mode: 'single' }).plan();
+    deepNear(['so', 'I', 'made', '3'].map((w) => word(s, w).win), [[0, 400], [400, 800], [800, 1200], [1200, 1550]]);
+    assert.deepEqual(vis(s, 100), ['so']);
+    assert.deepEqual(vis(s, 500), ['I']);
+    assert.deepEqual(vis(s, 1400), ['3']);
+    assert.deepEqual(vis(s, 1600), []);
+    assert.deepEqual(word(s, 'so').pos, word(s, 'I').pos);
+    // A spoken look that is invisible clears the word when its release ends.
+    const c1 = st({ mode: 'single', spoken: { opacity: 0 }, release_ms: 100, release_ease: 'linear' }).plan();
+    deepNear(word(c1, 'so').win, [0, 400]);
+    const c2 = st({ mode: 'single', spoken: { opacity: 0 }, release_ms: 20, release_ease: 'linear' }).plan();
+    deepNear(word(c2, 'so').win, [0, 370]);
+    // Only one word is ever on screen, however the windows fall.
+    for (let t = 0; t < 1600; t += 7) assert.ok(vis(s, t).length <= 1, String(t));
+    // Single mode puts every word through the line's entrance on its own.
+    const e = rig('minimal', { anim: 'none', words: { mode: 'single' }, enter: { kind: 'fade', ms: 100, ease: 'linear' } }).plan();
+    assert.equal(frameAt(e, 450).groups[0].fx.alpha, 0.5);
+    assert.equal(frameAt(e, 50).groups[0].fx.alpha, 0.5);
+});
+
+test('keywords light in their colour and scale by the keyword scale', () => {
+    // "million" opens line 2 (spoken 1.60 to 1.95) and is a keyword; "dollars" is not. Static minimal: line 2 is "million dollars last year.".
+    const k = (words, cap = {}) => {
+        const g = rig('minimal', { anim: 'none', ...cap, words });
+        const p = g.plan(1);
+        return { p, f: (w, t) => wordFrame(word(p, w).fx, t) };
+    };
+    // The style's accent (yellow for minimal) replaces the active colour, and is what stays once spoken.
+    let { f } = k({ active: { color: '#FF0000' } });
+    assert.deepEqual([f('million', 1700).col, f('million', 2100).col], [YELLOW, YELLOW]);
+    assert.deepEqual([f('dollars', 2100).col, f('dollars', 2500).col], [RED, RED]);
+    // The v1 accent is the default keyword colour; the v2 colour beats it.
+    ({ f } = k({ active: { color: '#FF0000' } }, { accent: '#00FF00' }));
+    assert.deepEqual(f('million', 1700).col, GREEN);
+    ({ f } = k({ keyword: { color: '#FF00FF' }, active: { color: '#FF0000' } }, { accent: '#00FF00' }));
+    assert.deepEqual(f('million', 1700).col, [255, 0, 255]);
+    // An explicit spoken colour wins over the keyword colour once spoken.
+    ({ f } = k({ spoken: { color: '#888888' } }));
+    assert.deepEqual([f('million', 1700).col, f('million', 2000).col], [YELLOW, [136, 136, 136]]);
+    // Keyword scale multiplies the active and the spoken scale.
+    ({ f } = k({ keyword: { scale: 1.3 } }));
+    near(f('million', 1700).sc, 1.3);
+    ({ f } = k({ keyword: { scale: 1.5 }, active: { scale: 1.2 }, spoken: { scale: 0.8 } }));
+    nearAll([f('million', 1700).sc, f('million', 2100).sc, f('dollars', 2100).sc], [1.8, 1.2, 1.2]);
+    // Today's bump stays with the pop entrance: 14% up in 90 ms, back in 150 more, when the word starts after the entrance settled (and not with a keyword scale).
+    const bump = (cap) => {
+        const g = rig('minimal', cap);
+        const p = g.plan(0);
+        return (t) => wordFrame(word(p, '3').fx, t).sc;
+    };
+    const b = bump({ words: { upcoming: { opacity: 0.9 } } });
+    nearAll([b(1200), b(1245), b(1290), b(1365), b(1440), b(1500)], [1, 1.07, 1.14, 1.07, 1, 1]);
+    const noBump = (cap) => bump(cap)(1290);
+    near(noBump({ words: { keyword: { scale: 1.1 } } }), 1.1);
+    near(noBump({ anim: 'fade', words: { upcoming: { opacity: 0.9 } } }), 1);
+    near(noBump({ enter: { kind: 'bounce' }, words: { upcoming: { opacity: 0.9 } } }), 1.14);
+    near(noBump({ enter: { kind: 'slide_up' }, words: { upcoming: { opacity: 0.9 } } }), 1);
+});
+
+test('per-style defaults: upcoming is the unsung colour, active the sung, spoken keeps the active', () => {
+    for (const id of CAPTION_STYLES) {
+        const cfg = cfgOf(resolveCaptions(id, '9:16', { words: { mode: 'all' } }));
+        const hex = (c) => '#' + c.map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+        assert.equal(hex(cfg.up.color), STYLES[id].color, id);
+        assert.equal(hex(cfg.act.color), STYLES[id].active, id);
+        assert.equal(hex(cfg.spk.color), STYLES[id].active, id);
+        assert.equal(hex(cfg.kwColor), STYLES[id].accent, id);
+        assert.deepEqual([cfg.up, cfg.act, cfg.spk].map((l) => [l.opacity, l.scale, l.blur, l.lift, l.rotate]), [[1, 1, 0, 0, 0], [1, 1, 0, 0, 0], [1, 1, 0, 0, 0]], id);
+        assert.deepEqual(cfg.up.stroke.w, STYLES[id].border === 3 ? 0 : STYLES[id].outlineW, id);
+    }
+    // The Look's colours are the sung / unsung ones: `active` over `color`.
+    const c = cfgOf(resolveCaptions('beast', '9:16', { color: '#102030', active: '#FF0000', words: { mode: 'all' } }));
+    assert.deepEqual([c.up.color, c.act.color, c.spk.color], [[16, 32, 48], RED, RED]);
+    assert.deepEqual(cfgOf(resolveCaptions('beast', '9:16', { color: '#102030', words: { mode: 'all' } })).act.color, [16, 32, 48]);
+    // Blur is px on a 1080-wide canvas: a square one scales it.
+    near(cfgOf(resolveCaptions('beast', '1:1', { words: { upcoming: { blur: 10 } } })).up.blur, 9);
+});
+
+test('v1 anim maps onto mode and motion, and the v2 fields win', () => {
+    const m = (anim, cap = {}) => effectiveMotion(cap, anim);
+    assert.deepEqual(m('pop'), { enter: { kind: 'pop', ms: 200, ease: null }, exit: { kind: 'fade', ms: 60 } });
+    assert.deepEqual(m('bounce'), { enter: { kind: 'bounce', ms: 340, ease: null }, exit: { kind: 'fade', ms: 60 } });
+    assert.deepEqual(m('slide'), { enter: { kind: 'slide_up', ms: 260, ease: 'linear' }, exit: { kind: 'fade', ms: 60 } });
+    assert.deepEqual(m('fade'), { enter: { kind: 'fade', ms: 200, ease: 'linear' }, exit: { kind: 'fade', ms: 140 } });
+    assert.deepEqual(m('words'), m('pop'));
+    assert.deepEqual(m('none').enter.kind, 'none');
+    assert.deepEqual(m('none').exit.kind, 'none');
+    // words -> build mode with the pop; an explicit mode beats it; the entrance stays.
+    const mode = (anim, w = {}) => cfgOf(resolveCaptions('minimal', '9:16', { anim, words: { upcoming: { opacity: 0.9 }, ...w } })).mode;
+    assert.deepEqual([mode('words'), mode('words', { mode: 'all' }), mode('pop'), mode('none'), mode('slide')], ['build', 'all', 'all', 'all', 'all']);
+    // The flat option means the same; the Look's own words beat it.
+    const flatMode = (flat, w) => cfgOf(resolveCaptions('minimal', '9:16', { words: w }, { anim: flat })).mode;
+    assert.deepEqual([flatMode('words', { upcoming: { opacity: 0.9 } }), flatMode('words', { mode: 'all' })], ['build', 'all']);
+    // v2 enter beats the shorthand's, kind by kind: a new kind brings its own time, ease and shape.
+    assert.deepEqual(m('slide', { enter: { kind: 'fade' } }).enter, { kind: 'fade', ms: 200, ease: null });
+    assert.deepEqual(m('slide', { enter: { kind: 'zoom' } }).enter, { kind: 'zoom', ms: 240, ease: null });
+    // A time alone keeps the shorthand's kind (and ease).
+    assert.deepEqual(m('slide', { enter: { ms: 400 }, exit: { ms: 300 } }), { enter: { kind: 'slide_up', ms: 400, ease: 'linear' }, exit: { kind: 'fade', ms: 300 } });
+    // Each kind's own time and the exit's.
+    assert.deepEqual(ENTER_KINDS.map((k) => ENTER_MS[k]), [0, 200, 200, 260, 260, 260, 260, 240, 340, 240, 320]);
+    assert.deepEqual(EXIT_KINDS.map((k) => EXIT_MS[k]), [0, 140, 200, 200, 200, 200]);
+    // A kind with no time is none.
+    assert.deepEqual(m('pop', { enter: { kind: 'zoom', ms: 0 }, exit: { kind: 'fade', ms: 0 } }), m('none', { enter: { kind: 'none' }, exit: { kind: 'none' } }).enter.kind === 'none' ? { enter: { kind: 'none', ms: 0, ease: null }, exit: { kind: 'none', ms: 0 } } : null);
+    // A static shorthand with word looks keeps the static grouping: the lines run exactly the words' span.
+    const g = rig('minimal', { anim: 'none', words: { upcoming: { opacity: 0.9 } } });
+    deepNear([g.blocks[0].t0, g.blocks[0].t1], [0, 1.55]);
+    // ...and the motion that moves holds and merges lines as the line writer does.
+    assert.ok(rig('minimal', { words: { upcoming: { opacity: 0.9 } } }).blocks[0].t1 > 1.55 - 1e-9);
+});
+
+// ---- the line's entrance and exit -------------------------------------------------------------------------
+
+/** The line motion of the first block of the minimal rig at `t` ms, with `enter` / `exit` given. */
+function motionAt(cap, t, canvas = '9:16') {
+    const g = rig('minimal', { anim: 'none', ...cap }, { canvas });
+    const p = g.plan();
+    return { fx: lineFx(p.lwin, t), g, p };
+}
+
+test('every entrance kind starts where it should and ends at rest', () => {
+    const en = (kind) => ({ enter: { kind, ms: 300, ease: 'linear' } });
+    const first = (kind, t = 0) => motionAt(en(kind), t).fx;
+    const none = first('none');
+    assert.deepEqual(none, NO_FX);
+    // pop 0.84, zoom 0.6, bounce 0.7: the line starts smaller.
+    near(first('pop').sc, 0.84);
+    near(first('zoom').sc, 0.6);
+    near(first('bounce').sc, 0.7);
+    // fade and blur start clear; blur starts soft (8 px at 1080 wide).
+    assert.equal(first('fade').alpha, 0);
+    assert.deepEqual([first('blur').blur, first('blur').alpha], [8, 0]);
+    // Slides start 2.2% of the frame height lower / higher, 4% of its width right / left (1920 x 0.022 = 42.24, 1080 x 0.04 = 43.2).
+    near(first('slide_up').dy, 42.24);
+    near(first('slide_down').dy, -42.24);
+    near(first('slide_left').dx, 43.2);
+    near(first('slide_right').dx, -43.2);
+    // Drop starts 6% of the height above.
+    near(first('drop').dy, -115.2);
+    // Middle of the way, linear: slides halfway, zoom at 0.8, pop at 0.92.
+    near(first('slide_up', 150).dy, 21.12);
+    near(first('zoom', 150).sc, 0.8);
+    near(first('pop', 150).sc, 0.92);
+    // The entrance is over in the time given.
+    for (const k of ENTER_KINDS) assert.deepEqual(first(k, 300), NO_FX, k);
+    for (const k of ENTER_KINDS) assert.deepEqual(first(k, 1000), NO_FX, k);
+    // A square canvas: the same shares of its own size, the blur scaled with the type (k = 0.9).
+    near(motionAt(en('slide_up'), 0, '1:1').fx.dy, 1080 * 0.022);
+    near(motionAt(en('blur'), 0, '1:1').fx.blur, 7.2);
+    // Each kind's own fade: pop and bounce 80 ms, slides 160, zoom 150, drop 100, fade / blur the whole time.
+    const alpha = (kind, ms, t) => motionAt({ enter: { kind, ms } }, t).fx.alpha;
+    near(alpha('pop', 200, 40), 0.5);
+    near(alpha('bounce', 340, 80), 1);
+    near(alpha('slide_up', 260, 80), 0.5);
+    near(alpha('zoom', 240, 75), 0.5);
+    near(alpha('drop', 320, 50), 0.5);
+    near(alpha('slide_up', 100, 50), 0.5, 1e-9, 'a fade is never longer than the entrance');
+    // The built-in shapes: pop's keyframes (0.84, 1.05 at 55%, 1) and bounce's.
+    const sc = (kind, u, ms = 200) => motionAt({ enter: { kind, ms } }, u * ms).fx.sc;
+    nearAll([sc('pop', 0), sc('pop', 0.55), sc('pop', 1 - 1e-9), sc('pop', 0.275)], [0.84, 1.05, 1, 0.945], 1e-6);
+    nearAll([sc('bounce', 0, 340), sc('bounce', 0.353, 340), sc('bounce', 0.618, 340), sc('bounce', 0.824, 340), sc('bounce', 0.5, 340)], [0.7, 1.22, 0.94, 1.04, 1.22 + (0.94 - 1.22) * ((0.5 - 0.353) / (0.618 - 0.353))], 1e-6);
+    // Bounce ignores the ease; pop with an ease is a plain ramp from 84%.
+    near(motionAt({ enter: { kind: 'bounce', ms: 200, ease: 'in' } }, 0.353 * 200).fx.sc, 1.22);
+    near(motionAt({ enter: { kind: 'pop', ms: 200, ease: 'linear' } }, 100).fx.sc, 0.92);
+    near(motionAt({ enter: { kind: 'pop', ms: 200, ease: 'out' } }, 50).fx.sc, 0.84 + 0.16 * 0.5);
+});
+
+test('the entrance ease shapes the travel', () => {
+    // How far a slide has come a quarter of the way in.
+    const travelled = (ease) => 1 - motionAt({ enter: { kind: 'slide_up', ms: 400, ease } }, 100).fx.dy / (1920 * 0.022);
+    const [lin, out, inn] = ['linear', 'out', 'in'].map(travelled);
+    near(lin, 0.25);
+    near(out, 0.5);
+    near(inn, 0.0625);
+    // The default ease of a slide is out; of a fade, linear.
+    near(1 - motionAt({ enter: { kind: 'slide_up', ms: 400 } }, 100).fx.dy / (1920 * 0.022), 0.5);
+    near(motionAt({ enter: { kind: 'fade', ms: 400 } }, 100).fx.alpha, 0.25);
+    near(motionAt({ enter: { kind: 'fade', ms: 400, ease: 'out' } }, 100).fx.alpha, 0.5);
+    // Back runs past the end and settles: a rising slide goes above its rest place.
+    const dys = [];
+    for (let t = 0; t <= 400; t += 10) dys.push(motionAt({ enter: { kind: 'slide_up', ms: 400, ease: 'back' } }, t).fx.dy);
+    assert.ok(dys.some((y) => y < -0.5), 'overshoots');
+    near(Math.min(...dys), (1920 * 0.022) * (1 - 1.1), 0.2);
+    assert.ok(dys.every((y, i) => i === 0 || y <= dys[0] + 1e-9));
+    // Drop: the default ease is back, so it overshoots (falls past, then settles).
+    const drop = [];
+    for (let t = 0; t <= 320; t += 10) drop.push(motionAt({ enter: { kind: 'drop' } }, t).fx.dy);
+    assert.ok(drop.some((y) => y > 1), 'a drop falls past its rest place');
+    near(drop[0], -115.2);
+    // Zoom and blur use out by default.
+    near(motionAt({ enter: { kind: 'zoom', ms: 400 } }, 100).fx.sc, 0.6 + 0.4 * 0.5);
+    near(motionAt({ enter: { kind: 'blur', ms: 400 } }, 100).fx.blur, 8 * 0.5);
+});
+
+test('every exit kind ends where it should', () => {
+    // The fx a block has `before` ms ahead of its end (a moving line's end is where its exit finishes).
+    const ex = (kind, ms, before) => {
+        const p = rig('minimal', { anim: 'none', exit: { kind, ms } }).plan();
+        return lineFx(p.lwin, p.l1 - before);
+    };
+    deepNear([ex('none', 200, 1).alpha], [1]);
+    assert.deepEqual(ex('fade', 100, 150), NO_FX, 'nothing before the exit starts');
+    // fade: ending clear exactly at the line's end.
+    nearAll([ex('fade', 100, 100).alpha, ex('fade', 100, 50).alpha, ex('fade', 100, 0).alpha], [1, 0.5, 0], 1e-9);
+    // zoom shrinks to 60%, blur to 8 px, slides 2.2% of the height (squared: slow, then quick).
+    const z = ex('zoom', 200, 0);
+    nearAll([z.sc, z.alpha], [0.6, 0], 1e-9);
+    near(ex('zoom', 200, 100).sc, 1 - 0.4 * 0.25);
+    const bl = ex('blur', 200, 0);
+    nearAll([bl.blur, bl.alpha], [8, 0], 1e-9);
+    near(ex('blur', 200, 100).blur, 4);
+    near(ex('slide_up', 200, 0).dy, -42.24);
+    near(ex('slide_down', 200, 0).dy, 42.24);
+    near(ex('slide_up', 200, 100).dy, -42.24 * 0.25);
+    // A longer exit starts earlier.
+    assert.ok(ex('fade', 400, 300).alpha < 1 && ex('fade', 100, 300).alpha === 1);
+    // Entrance and exit compose on a long line: the exit has not begun at the entrance's middle.
+    const both = motionAt({ enter: { kind: 'zoom', ms: 200, ease: 'linear' }, exit: { kind: 'zoom', ms: 200 } }, 100);
+    near(both.fx.sc, 0.8);
+    // The v1 pop's fade out is 60 ms.
+    near(effectiveMotion({}, 'pop').exit.ms, 60);
+});
+
+// ---- grouping, rows, slots --------------------------------------------------------------------------------------
+
+const LONG = 'so I made 3 million dollars last year. Never stop building the best thing ever'.split(' ').map((w, i) => ({ w, s: i * 0.4, e: i * 0.4 + 0.35 }));
+const text = (b) => b.words.map((w) => w.text).join(' ');
+
+test('max_chars is a hard limit per block, and max_words still caps the word count', () => {
+    for (const n of [6, 12, 20, 40]) {
+        for (const anim of ['pop', 'none']) {
+            const { blocks } = rig('karaoke', { max_chars: n, anim }, { words: LONG });
+            assert.ok(blocks.length > 0);
+            for (const b of blocks) assert.ok([...text(b)].length <= n || b.words.length === 1, `${n} ${anim} ${text(b)}`);
+        }
+    }
+    // Fewer characters, more blocks; the style's own budget (karaoke: 3 words) is out of the way when max_chars is set.
+    const count = (n) => rig('karaoke', { max_chars: n }, { words: LONG }).blocks.length;
+    assert.ok(count(8) > count(40));
+    assert.ok(rig('karaoke', { max_chars: 40 }, { words: LONG, }).blocks.some((b) => b.words.length > 3));
+    assert.equal(rig('karaoke', { max_chars: 40 }, { words: LONG }).r.maxWords, 8);
+    assert.equal(rig('karaoke', { max_chars: 40, max_words: 2 }, { words: LONG }).r.maxWords, 2);
+    for (let n = 1; n <= 8; n++) {
+        const { blocks } = rig('minimal', { max_words: n, enter: { kind: 'fade' } }, { words: LONG });
+        assert.ok(blocks.every((b) => b.words.length <= n), String(n));
+    }
+    // A single word longer than the budget is its own block.
+    const wide = rig('karaoke', { max_chars: 6 }, { words: [{ w: 'extraordinary', s: 0, e: 1 }, { w: 'ok', s: 1, e: 1.5 }] }).blocks;
+    assert.deepEqual(wide.map(text), ['EXTRAORDINARY', 'OK']);
+});
+
+test('lines: 1 never wraps and lines: 2 stays in two rows', () => {
+    const cap = { max_chars: 40, max_words: 8, size: 1.6, anim: 'none' };
+    const one = rig('karaoke', { ...cap, lines: 1 }, { words: LONG });
+    const two = rig('karaoke', { ...cap, lines: 2 }, { words: LONG });
+    for (let i = 0; i < one.blocks.length; i++) assert.equal(one.plan(i).rows.length, 1, text(one.blocks[i]));
+    for (let i = 0; i < two.blocks.length; i++) assert.ok(two.plan(i).rows.length <= 2, text(two.blocks[i]));
+    // The same text with room for two rows needs fewer blocks, and some of them use both rows.
+    assert.ok(two.blocks.length < one.blocks.length, `${two.blocks.length} ${one.blocks.length}`);
+    assert.ok(two.blocks.some((b, i) => two.plan(i).rows.length === 2));
+    // Without `lines` a long block just wraps as it needs to.
+    const free = rig('karaoke', { ...cap }, { words: LONG });
+    assert.ok(free.blocks.some((b, i) => free.plan(i).rows.length > 2) || free.blocks.length <= two.blocks.length);
+    // One row stays one row however wide it is.
+    const w = rig('karaoke', { lines: 1, size: 2, max_chars: 40, max_words: 8 }, { words: LONG });
+    for (let i = 0; i < w.blocks.length; i++) assert.equal(w.plan(i).rows.length, 1);
+    // Out of range clamps.
+    assert.equal(resolveCaptions('karaoke', '9:16', { lines: 9 }).clean.lines, 2);
+    assert.equal(resolveCaptions('karaoke', '9:16', { lines: 0 }).clean.lines, 1);
+    // Single mode is never cut.
+    const s = rig('karaoke', { words: { mode: 'single' }, lines: 1, max_chars: 40 }, { words: LONG });
+    assert.deepEqual(s.blocks.map((b) => b.words.length), rig('karaoke', { words: { mode: 'single' }, max_chars: 40 }, { words: LONG }).blocks.map((b) => b.words.length));
+});
+
+test('rows break as evenly as the fewest rows allow', () => {
+    // From motion.rs: four 300 px words in 700 px, a gap of 20.
+    assert.deepEqual(breakRows([300, 300, 300, 300], 20, 700), [[0, 2], [2, 4]]);
+    assert.deepEqual(breakRows([100, 100], 20, 700), [[0, 2]]);
+    // A word wider than the room still gets a row of its own.
+    assert.deepEqual(breakRows([900, 100], 20, 700), [[0, 1], [1, 2]]);
+    assert.deepEqual(breakRows([], 20, 700), [[0, 0]]);
+    assert.deepEqual(breakRows([50], 20, 700), [[0, 1]]);
+    // Three rows are as even as they can be.
+    const rows = breakRows([200, 100, 400, 100, 200, 300], 10, 700);
+    assert.ok(rows.length >= 2);
+    for (const [a, b] of rows) assert.ok([200, 100, 400, 100, 200, 300].slice(a, b).reduce((s, x) => s + x, 0) + 10 * (b - a - 1) <= 700.5);
+});
+
+test('every word keeps a slot for the biggest look it ever takes, so a neighbour never moves', () => {
+    const cap = { anim: 'none', words: { active: { scale: 1.4, rotate: 3, lift: 0.1 }, spoken: { scale: 1.2 }, attack_ms: 200, release_ms: 300 } };
+    const g = rig('minimal', cap);
+    const p = g.plan();
+    const m = g.measure;
+    const widths = p.words.map((w) => m(w.text, g.r.font, g.r.fontPx).w);
+    // The slot is the width times the biggest scale (1.4, or 1.4 x the keyword's 1 for "3": a keyword has no scale of its own).
+    p.words.forEach((w, i) => near(w.slot, widths[i] * 1.4, 1e-9));
+    // Neighbours sit slot-centre to slot-centre with a space (at the biggest size) between: nothing depends on what a word does.
+    for (let i = 0; i + 1 < p.words.length; i++) near(p.words[i + 1].pos[0] - p.words[i].pos[0], (p.words[i].slot + p.words[i + 1].slot) / 2 + p.sp, 1e-9);
+    // One row, centred on the anchor.
+    near((p.rows[0].x0 + p.rows[0].width / 2), g.r.anchor.x, 1e-9);
+    // Wherever the playhead is, only the look changes: the slots the frames use are the plan's.
+    const xs = p.words.map((w) => w.pos.slice());
+    for (let t = 0; t < 1600; t += 25) frameAt(p, t);
+    assert.deepEqual(p.words.map((w) => w.pos), xs);
+    // The room is the same for every word however the others look: the same text laid out with no scales sits tighter.
+    const tight = rig('minimal', { anim: 'none', words: { mode: 'all' } }).plan();
+    assert.ok(p.blockW > tight.blockW);
+    // A bigger keyword scale reserves room for the keyword only.
+    const kw = rig('minimal', { anim: 'none', words: { keyword: { scale: 1.5 } } }).plan();
+    near(word(kw, '3').slot, widths[3] * 1.5, 1e-9);
+    near(word(kw, 'made').slot, widths[2], 1e-9);
+    // Row breaks are decided on the slots: a line that wraps wraps the same way for its whole life.
+    const wrap = rig('minimal', { anim: 'none', size: 2, words: { active: { scale: 1.5 }, spoken: { scale: 1.25 }, release_ms: 200 } }, { words: LONG });
+    const q = wrap.plan();
+    assert.ok(q.rows.length >= 2, 'a 128 px line of four words wraps');
+    assert.deepEqual(new Set(q.rows.map((r) => r.cy)).size, q.rows.length);
+});
+
+test('a wrapped block is centred on its anchor; rows sit against the edge the align says', () => {
+    // Bottom-anchored: the block's last row sits on the anchor, the block grows upward.
+    const one = rig('minimal', { anim: 'none', words: { mode: 'all' } }).plan();
+    const two = rig('minimal', { anim: 'none', size: 2, words: { mode: 'all' } }, { words: LONG });
+    const p2 = two.plan(1);
+    assert.ok(p2.rows.length >= 2);
+    near(one.top + one.blockH, two.r.anchor.y, 1e-9);
+    near(p2.top + p2.blockH, two.r.anchor.y, 1e-9);
+    // Centred anchor (a placed caption): the block's middle is the point.
+    const pg = rig('minimal', { anim: 'none', x: 0.5, y: 0.3, size: 2, words: { mode: 'all' } }, { words: LONG });
+    assert.equal(pg.r.anchor.mode, 'middle');
+    near(pg.plan(1).centre[1], pg.r.anchor.y, 1e-9);
+    // Rows: left, right, centre.
+    const rows = (align) => rig('karaoke', { max_words: 6, max_chars: 40, size: 1.25, anim: 'none', align }, { words: LONG }).plan();
+    const [l, c, r] = ['left', 'center', 'right'].map(rows);
+    assert.ok(l.rows.length >= 2, String(l.rows.length));
+    near(l.rows[0].x0, l.rows[1].x0, 1e-9);
+    near(r.rows[0].x0 + r.rows[0].width, r.rows[1].x0 + r.rows[1].width, 1e-9);
+    assert.ok(Math.abs(c.rows[0].x0 - c.rows[1].x0) > 5 && Math.abs(c.rows[0].x0 + c.rows[0].width - c.rows[1].x0 - c.rows[1].width) > 5);
+    // The block keeps its place: the widest row spans the same extent however its rows sit.
+    const span = (p) => [Math.min(...p.rows.map((x) => x.x0)), Math.max(...p.rows.map((x) => x.x0 + x.width))];
+    nearAll(span(l), span(r), 1e-9);
+    nearAll(span(l), span(c), 1e-9);
+    // Unset align centres the rows too; "centre" is "center".
+    assert.deepEqual(rows(undefined).rows, c.rows);
+    assert.equal(resolveCaptions('karaoke', '9:16', { align: 'centre' }).clean.align, 'center');
+    // A one-row block ignores align.
+    const alone = (align) => rig('karaoke', { anim: 'none', align }, { words: [{ w: 'hi', s: 0, e: 1 }] }).plan().rows;
+    deepNear(alone('left').map((x) => [x.x0, x.width, x.cy]), alone('right').map((x) => [x.x0, x.width, x.cy]));
+});
+
+test('letter spacing widens the line, line gap sets the row pitch, tilt turns the block about its middle', () => {
+    const base = rig('karaoke', { anim: 'none', max_words: 8, max_chars: 40, size: 2 }, { words: LONG });
+    const sp = (cap) => rig('karaoke', { anim: 'none', max_words: 8, max_chars: 40, size: 2, ...cap }, { words: LONG });
+    // Spacing is after every character: a word is wider by its characters x spacing; it widens the block.
+    const a = sp({ spacing: 0.1 });
+    near(a.cfg.spacing, 0.1 * a.r.fontPx);
+    const wa = a.plan().words[0];
+    near(wa.width, a.measure(wa.text, a.r.font, a.r.fontPx).w + [...wa.text].length * a.cfg.spacing, 1e-9);
+    // A three-word block fits on one row, so its width shows the spacing.
+    const few = (cap) => rig('karaoke', { anim: 'none', max_words: 3, ...cap }, { words: LONG }).plan();
+    assert.equal(few({}).rows.length, 1);
+    assert.ok(few({ spacing: 0.1 }).blockW > few({}).blockW);
+    assert.ok(few({ spacing: -0.05 }).blockW < few({}).blockW);
+    // Row pitch: size x line gap (1 by default); a 1.4 gap is 1.4 times the pitch.
+    const pitch = (g) => g.plan().rows[1].cy - g.plan().rows[0].cy;
+    assert.ok(base.plan().rows.length >= 2);
+    near(pitch(base), base.r.fontPx, 1e-9);
+    near(pitch(sp({ line_gap: 1.4 })) / pitch(base), 1.4, 1e-9);
+    assert.equal(resolveCaptions('karaoke', '9:16', { line_gap: 9 }).clean.line_gap, 1.6);
+    assert.equal(resolveCaptions('karaoke', '9:16', { line_gap: 0 }).clean.line_gap, 0.8);
+    // The block grows with the pitch: height = (rows - 1) x pitch + size.
+    near(sp({ line_gap: 1.4 }).plan().blockH, (sp({ line_gap: 1.4 }).plan().rows.length - 1) * 1.4 * base.r.fontPx + base.r.fontPx, 1e-9);
+    // Tilt: the block's bounding box turns with it; it stays about the middle (the group turns about plan.centre).
+    const t0 = blockExtent(base.plan(), base.r);
+    const tilted = sp({ rotate: 6 });
+    const t6 = blockExtent(tilted.plan(), tilted.r);
+    const th = (6 * Math.PI) / 180;
+    near(t6.w, t0.w * Math.cos(th) + t0.h * Math.sin(th), 1e-6);
+    near(t6.h, t0.w * Math.sin(th) + t0.h * Math.cos(th), 1e-6);
+    near(t6.bh, t0.bh, 1e-9);
+    assert.equal(tilted.plan().tilt, 6);
+    assert.equal(resolveCaptions('karaoke', '9:16', { rotate: 90 }).clean.rotate, 15);
+});
+
+test('boxes hug the ink: the line\'s box, each word\'s, the spoken word\'s; radius is a share of half the shorter side', () => {
+    // A measure with known numbers: 10 px per character, ink 70 above and 20 below the baseline, bearings 2 and 3.
+    const m = (t) => ({ w: [...t].length * 10, top: 70, bottom: -20, lsb: 2, rsb: 3 });
+    const g = rig('karaoke', { anim: 'none', stroke: { width: 0 }, box: { color: '#102030', opacity: 0.5, pad_x: 20, pad_y: 10, radius: 0 } }, { measure: m });
+    const p = g.plan();
+    const row = p.rows[0];
+    // One box per row: ink of the row (without the outer bearings) + 2 pad_x; ink band + 2 pad_y.
+    assert.equal(p.boxes.line.length, p.rows.length);
+    const b = p.boxes.line[0];
+    near(b.w, row.width - 2 - 3 + 40, 1e-9);
+    near(b.h, 90 + 20, 1e-9);
+    assert.equal(b.radius, 0);
+    // The shape is centred on the ink: on the row in x (bearings differ by 1 px), and off the line box's middle in y by where the ink sits.
+    const { asc, desc } = lineBox(g.r.font, g.r.fontPx);
+    near(b.cy, row.cy + (asc - desc) / 2 - (70 - 20) / 2, 1e-9);
+    near(b.cx, row.x0 + row.width / 2 + (2 - 3) / 2, 1e-9);
+    assert.deepEqual([g.cfg.boxfx.opacity, g.cfg.boxfx.col], [0.5, [16, 32, 48]]);
+    // Radius: a share of half the shorter side. 1 is a pill (half the height), 0.5 a quarter of it.
+    const r1 = rig('karaoke', { anim: 'none', box: { radius: 1 } }, { measure: m }).plan().boxes.line[0];
+    near(r1.radius, Math.min(r1.w, r1.h) / 2, 1e-9);
+    near(r1.radius, r1.h / 2, 1e-9);
+    const r5 = rig('karaoke', { anim: 'none', box: { radius: 0.5 } }, { measure: m }).plan().boxes.line[0];
+    near(r5.radius, r5.h / 4, 1e-9);
+    // Per word: one box each, as wide as the word plus padding and the widest stroke (karaoke strokes 3 px).
+    const pw = rig('karaoke', { anim: 'none', box: { per: 'word', pad_x: 10, pad_y: 6 } }, { measure: m }).plan();
+    assert.equal(pw.boxes.word.length, pw.words.length);
+    assert.equal(pw.boxes.line.length, 0);
+    const w0 = pw.words[0];
+    near(pw.boxes.word[0].w, w0.width - 2 - 3 + 20 + 2 * 3, 1e-9);
+    near(pw.boxes.word[0].h, 90 + 12 + 6, 1e-9);
+    near(pw.boxes.word[0].ax, (2 - 3) / 2, 1e-9);
+    // The spoken word's box: pads and radius from the shape, else the defaults (16 x 8, square).
+    const ab = rig('karaoke', { anim: 'none', words: { active: { box: { radius: 1 } } } }, { measure: m }).plan();
+    assert.equal(ab.boxes.active.length, ab.words.length);
+    near(ab.boxes.active[0].w, ab.words[0].width - 2 - 3 + 32 + 2 * 3, 1e-9);
+    near(ab.boxes.active[0].radius, Math.min(ab.boxes.active[0].w, ab.boxes.active[0].h) / 2, 1e-9);
+    // Its opacity is a word look: the box is there while the word is spoken, gone before and after.
+    const f = (t) => wordFrame(ab.words[0].fx, t).bo;
+    assert.deepEqual([f(100), f(0), f(400)], [1, 1, 0]);
+    // Single mode: a box per word.
+    assert.equal(rig('karaoke', { anim: 'none', box: {}, words: { mode: 'single' } }, { measure: m }).plan().boxes.line.length, 0);
+    // The style's own box (hormozi's) is the row's, over the row's whole width; a v1 colour likewise.
+    const h = rig('hormozi', { anim: 'none', words: { mode: 'all' } }, { measure: m });
+    assert.equal(h.plan().boxes.libass.length, h.plan().rows.length);
+    near(h.plan().boxes.libass[0].w, h.plan().rows[0].width, 1e-9);
+    assert.equal(rig('hormozi', { box: { radius: 1 } }, { measure: m }).plan().boxes.libass.length, 0);
+});
+
+test('a block\'s size for the selection box covers rows, boxes and stroke', () => {
+    const m = (t) => ({ w: [...t].length * 10, top: 70, bottom: -20, lsb: 2, rsb: 3 });
+    const plain = rig('karaoke', { anim: 'none', words: { mode: 'all' } }, { measure: m });
+    const e0 = blockExtent(plain.plan(), plain.r);
+    near(e0.w, plain.plan().blockW + 2 * 3, 1e-9);
+    near(e0.h, plain.plan().blockH + 2 * 3, 1e-9);
+    const boxed = rig('karaoke', { anim: 'none', box: { pad_x: 30, pad_y: 12 } }, { measure: m });
+    const e1 = blockExtent(boxed.plan(), boxed.r);
+    near(e1.w, boxed.plan().blockW + 2 * 33, 1e-9);
+    near(e1.h, boxed.plan().blockH + 2 * 15, 1e-9);
+    // The v1 box (hormozi): its padding.
+    const h = rig('hormozi', { anim: 'none', words: { mode: 'all' } }, { measure: m });
+    near(blockExtent(h.plan(), h.r).w, h.plan().blockW + 2 * h.r.box.pad, 1e-9);
+    // The row height alone is what sits against the anchor.
+    near(e1.bh, boxed.plan().blockH, 1e-9);
 });

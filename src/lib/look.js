@@ -113,18 +113,30 @@ function durRange(o) {
  *  are live; the rest wait for the engine. */
 export const LOOK_SECTIONS = ['captions', 'headline', 'bar', 'logo', 'camera', 'effects', 'layout'];
 
-const real = (v) => v !== undefined && v !== null && v !== '' && !(typeof v === 'number' && !Number.isFinite(v));
+const isPlain = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+/** A plain value a Look can hold: text, a flag or a finite number. */
+const leaf = (v) => (typeof v === 'string' ? v !== '' : typeof v === 'boolean' ? true : typeof v === 'number' && Number.isFinite(v));
+
+/** A value without undefined/null/empty fields, and without anything that
+ *  is not a plain value; nested objects are pruned the same way and
+ *  disappear when nothing is left in them. `undefined` when nothing is. */
+function pruneValue(v) {
+    if (isPlain(v)) {
+        const out = {};
+        for (const [k, x] of Object.entries(v)) {
+            const p = pruneValue(x);
+            if (p !== undefined) out[k] = p;
+        }
+        return Object.keys(out).length ? out : undefined;
+    }
+    return leaf(v) ? v : undefined;
+}
 
 /** A section without undefined/null/empty fields (and without anything
  *  that is not a plain value). */
 function pruneSection(s) {
-    const out = {};
-    if (!s || typeof s !== 'object' || Array.isArray(s)) return out;
-    for (const [k, v] of Object.entries(s)) {
-        if (!real(v)) continue;
-        if (typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number') out[k] = v;
-    }
-    return out;
+    return isPlain(s) ? (pruneValue(s) ?? {}) : {};
 }
 
 /** The Look as the engine takes it: `{v: 1, ...sections}` with empty
@@ -236,15 +248,40 @@ export function applyPatch(prev, patch) {
     return next;
 }
 
+/** `cur` with `v` on top. A plain object merges field by field (an
+ *  undefined/null/'' leaf removes it, an object left empty disappears); a
+ *  plain value, or an object over a plain value, replaces what was there,
+ *  which is how `box` and `shadow` change form. `undefined` = removed. */
+function mergeValue(cur, v) {
+    if (isPlain(v)) {
+        const base = isPlain(cur) ? { ...cur } : {};
+        for (const [k, x] of Object.entries(v)) {
+            const m = mergeValue(base[k], x);
+            if (m === undefined) delete base[k];
+            else base[k] = m;
+        }
+        return Object.keys(base).length ? base : undefined;
+    }
+    return leaf(v) ? v : undefined;
+}
+
+/** The dotted paths a patch touches, for coalescing: `{glow: {size: 3}}`
+ *  is `glow.size`, a flat patch is its own keys. */
+function leafPaths(patch, prefix = '') {
+    return Object.entries(patch).flatMap(([k, v]) => (isPlain(v) && Object.keys(v).length ? leafPaths(v, `${prefix}${k}.`) : [`${prefix}${k}`]));
+}
+
 /** `prev` with one section of the Look patched; undefined/null/'' removes
- *  a field. A section left empty is dropped (captions keep their empty
- *  object, the store's shape). */
+ *  a field. Nested objects (the v2 caption fields) merge field by field and
+ *  vanish when emptied. A section left empty is dropped (captions keep
+ *  their empty object, the store's shape). */
 export function applySection(prev, section, patch) {
     const cur = prev.look?.[section] ?? {};
     const next = { ...cur };
     for (const [k, v] of Object.entries(patch)) {
-        if (real(v)) next[k] = v;
-        else delete next[k];
+        const m = mergeValue(cur[k], v);
+        if (m === undefined) delete next[k];
+        else next[k] = m;
     }
     if (JSON.stringify(next) === JSON.stringify(cur)) return prev;
     const look = { ...(prev.look ?? {}) };
@@ -374,24 +411,24 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
         },
         setCaptions(patch) {
             if (!state) seed(null);
-            commit(applySection(state, 'captions', patch), `c:${Object.keys(patch).sort().join(',')}`);
+            commit(applySection(state, 'captions', patch), `c:${leafPaths(patch).sort().join(',')}`);
         },
         setHeadline(patch) {
             if (!state) seed(null);
-            commit(applySection(state, 'headline', patch), `h:${Object.keys(patch).sort().join(',')}`);
+            commit(applySection(state, 'headline', patch), `h:${leafPaths(patch).sort().join(',')}`);
         },
         setBar(patch) {
             if (!state) seed(null);
-            commit(applySection(state, 'bar', patch), `b:${Object.keys(patch).sort().join(',')}`);
+            commit(applySection(state, 'bar', patch), `b:${leafPaths(patch).sort().join(',')}`);
         },
         setLogo(patch) {
             if (!state) seed(null);
-            commit(applySection(state, 'logo', patch), `l:${Object.keys(patch).sort().join(',')}`);
+            commit(applySection(state, 'logo', patch), `l:${leafPaths(patch).sort().join(',')}`);
         },
         /** Flat options and sections together, as one history step. */
         edit(flat, sections) {
             if (!state) seed(null);
-            const keys = [...Object.keys(flat ?? {}), ...Object.entries(sections ?? {}).flatMap(([s, p]) => Object.keys(p).map((k) => `${s}.${k}`))];
+            const keys = [...Object.keys(flat ?? {}), ...Object.entries(sections ?? {}).flatMap(([s, p]) => leafPaths(p, `${s}.`))];
             commit(applyEdit(state, flat, sections), `e:${keys.sort().join(',')}`);
         },
         /** Start a drag: until `endGesture` every change is one undo step.

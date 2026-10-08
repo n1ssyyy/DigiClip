@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from 'react';
 import { fontBox, keywordBump, lineMotion, outlineRing, rgba, wordReveal } from '../../lib/captionStyles';
 import { useClock } from './usePlayer';
+import WordCaption from './WordCaption';
 
 const STILL = { opacity: 1, scale: 1, dy: 0 };
 
@@ -23,8 +24,17 @@ export function prefersReducedMotion() {
  *
  * `lines` are `captionLines()` output; `reduced` cuts the motion to none
  * (the words still switch colour in time).
+ *
+ * A Look with none of the v2 caption fields is drawn here, one line at a
+ * time, as it always was. Any v2 field hands the caption to `WordCaption`,
+ * which lays it out and moves it word by word like the engine's word-level
+ * writer.
  */
-export default function CaptionLayer({ r, lines, clock, reduced }) {
+export default function CaptionLayer(props) {
+    return props.r.wordLevel ? <WordCaption {...props} /> : <LineCaption {...props} />;
+}
+
+function LineCaption({ r, lines, clock, reduced }) {
     const time = useClock(clock);
     const fb = useMemo(() => fontBox(r.font, r.fontPx), [r.font, r.fontPx]);
     const style = useMemo(() => {

@@ -42,7 +42,7 @@ function SafeAreas({ unit }) {
     );
 }
 
-const sameSize = (p, n) => p && p.w === n.w && p.h === n.h;
+const sameSize = (p, n) => p && p.w === n.w && p.h === n.h && p.bh === n.bh;
 
 /**
  * The stage: a sunk well holding the frame in the chosen canvas. The frame
@@ -53,7 +53,7 @@ const sameSize = (p, n) => p && p.w === n.w && p.h === n.h;
  * `layers` holds the resolved headline, bar and logo (each `null` while it
  * is off); `edit` the actions the pointer layer takes.
  */
-export default function Stage({ canvas, resolved, lines, layers, selected, edit, sizes, logoFile, clock, reduced, sample, videoRef, videoFailed, onVideoError, onLoadedMetadata, safe, notice }) {
+export default function Stage({ canvas, resolved, lines, measure, layers, selected, edit, sizes, logoFile, clock, reduced, sample, videoRef, videoFailed, onVideoError, onLoadedMetadata, safe, notice }) {
     const t = useT();
     const wellRef = useRef(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
@@ -85,7 +85,10 @@ export default function Stage({ canvas, resolved, lines, layers, selected, edit,
             const a = resolved.anchor;
             const w = Math.max(capSize?.w ?? resolved.wrapW * 0.5, 24);
             const h = Math.max(capSize?.h ?? resolved.lineH, resolved.lineH);
-            rects.captions = { x: a.x - w / 2, y: a.mode === 'bottom' ? a.y - h : a.y - h / 2, w, h };
+            // A bottom-anchored block sits on its anchor by its rows (bh); the
+            // box around it may be taller (padding, tilt).
+            const bh = Math.max(capSize?.bh ?? h, resolved.lineH);
+            rects.captions = { x: a.x - w / 2, y: a.mode === 'bottom' ? a.y - (bh + h) / 2 : a.y - h / 2, w, h };
             centres.captions = resolved.center;
         }
         if (headline) {
@@ -140,8 +143,8 @@ export default function Stage({ canvas, resolved, lines, layers, selected, edit,
                                 )}
                                 {bar && <BarLayer r={bar} clock={clock} len={sample.len} />}
                                 {logo && <LogoLayer r={logo} file={logoFile} />}
-                                <CaptionLayer r={resolved} lines={lines} clock={clock} reduced={reduced} />
-                                {resolved.show && <CaptionProbe r={resolved} lines={lines} onSize={onCapSize} />}
+                                <CaptionLayer r={resolved} lines={lines} clock={clock} reduced={reduced} measure={measure} />
+                                {resolved.show && <CaptionProbe r={resolved} lines={lines} measure={measure} onSize={onCapSize} />}
                                 {headline && <HeadlineLayer r={headline} clock={clock} len={sample.len} reduced={reduced} onSize={onHeadSize} />}
                                 {safe && tall && <SafeAreas unit={1 / s} />}
                             </div>

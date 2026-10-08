@@ -1,6 +1,7 @@
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { fontBox, outlineRing } from '../../lib/captionStyles';
+import { blockExtent, cfgOf, planFor } from '../../lib/captionMotion';
 import { headlineMotion } from '../../lib/layers';
 import { baseName } from '../digiclip/JobOptions';
 import { useClock } from './usePlayer';
@@ -139,7 +140,35 @@ export function LogoLayer({ r, file }) {
  * real one, so the stage knows how big the caption block is even between
  * lines (for its selection box).
  */
-export function CaptionProbe({ r, lines, onSize }) {
+export function CaptionProbe(props) {
+    return props.r.wordLevel ? <WordProbe {...props} /> : <LineProbe {...props} />;
+}
+
+/** The word-level caption's size comes from its layout, not the DOM: the
+ *  biggest block of the sample (rows, boxes, stroke, tilt) and its row height. */
+function WordProbe({ r, lines, measure, onSize }) {
+    const ext = useMemo(() => {
+        const cfg = cfgOf(r);
+        let blocks = lines;
+        if (!blocks.length) {
+            const w = (text, s, e) => ({ text, raw: text, s, e, key: false });
+            const up = (x) => (r.caps ? x.toUpperCase() : x);
+            blocks = [{ t0: 0, t1: 1, words: [w(up('Stop'), 0, 0.4), w(up('scrolling'), 0.4, 0.9)] }];
+        }
+        let out = { w: 0, h: 0, bh: 0 };
+        for (const b of blocks) {
+            const e = blockExtent(planFor(cfg, r, b, measure), r);
+            out = { w: Math.max(out.w, e.w), h: Math.max(out.h, e.h), bh: Math.max(out.bh, e.bh) };
+        }
+        return out;
+    }, [r, lines, measure]);
+    useLayoutEffect(() => {
+        onSize?.(ext);
+    }, [ext, onSize]);
+    return null;
+}
+
+function LineProbe({ r, lines, onSize }) {
     const fb = useMemo(() => fontBox(r.font, r.fontPx), [r.font, r.fontPx]);
     const text = useMemo(() => {
         let best = '';
