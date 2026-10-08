@@ -4,28 +4,10 @@ import { useT } from '../../../lib/i18n';
 import { CapNotice } from '../Notice';
 import { Choice, Tabs, ToggleRow } from './choices';
 import { useCap } from './context';
+import CurveRow from './CurvePicker';
 import { Colour, Num, Row, SubHead } from './inputs';
+import StickyStrip from './StickyStrip';
 import WordPreview from './WordPreview';
-
-/** The four ease curves, in plain words. */
-export function easeOptions(t) {
-    return [
-        { id: 'linear', label: t('Even') },
-        { id: 'out', label: t('Soft end') },
-        { id: 'in', label: t('Soft start') },
-        { id: 'back', label: t('Overshoot') },
-    ];
-}
-
-function EaseRow({ path, label, disabled = false, hint }) {
-    const t = useT();
-    const { view, set, clear } = useCap();
-    return (
-        <Row label={label} set={view.isSet(path)} onReset={() => clear(path)} hint={hint}>
-            <Choice label={label} cols={2} wrap value={view.val(path)} set={view.isSet(path)} disabled={disabled} onChange={(v) => set(path, v)} options={easeOptions(t)} />
-        </Row>
-    );
-}
 
 /** Controls that sit under a switch, indented under a hairline. */
 const Nest = ({ children }) => <div className="space-y-3 border-l border-white/[0.07] pl-3">{children}</div>;
@@ -144,6 +126,7 @@ export default function WordsSection() {
             <Row label={t('Reveal')} set={view.isSet('words.mode')} onReset={() => clear('words.mode')}>
                 <Choice
                     label={t('Reveal')}
+                    wrap
                     value={view.val('words.mode')}
                     set={view.isSet('words.mode')}
                     onChange={(v) => set('words.mode', v)}
@@ -160,27 +143,32 @@ export default function WordsSection() {
                 <State />
             </div>
 
-            <SubHead>{t('Transition')}</SubHead>
-            <Row
-                label={t('Fill')}
-                set={view.isSet('words.fill')}
-                onReset={() => clear('words.fill')}
-                hint={t('Sweep paints a word as it is said. It needs a Speaking colour that differs from Upcoming.')}
-            >
-                <Choice
+            {/* One block: the strip sticks inside it and leaves with its end. */}
+            <div className="space-y-3">
+                <SubHead>{t('Transition')}</SubHead>
+                <StickyStrip>
+                    <WordPreview />
+                </StickyStrip>
+                <Row
                     label={t('Fill')}
-                    value={view.val('words.fill')}
                     set={view.isSet('words.fill')}
-                    onChange={(v) => set('words.fill', v)}
-                    options={[{ id: 'snap', label: t('Instant') }, { id: 'sweep', label: t('Sweep') }]}
-                />
-            </Row>
-            <Num path="words.attack_ms" label={t('Light up')} hint={sweep ? t('Sweep ignores this.') : undefined} />
-            <EaseRow path="words.attack_ease" label={t('Light up curve')} />
-            <Num path="words.hold_ms" label={t('Hold')} />
-            <Num path="words.release_ms" label={t('Fade back')} hint={t('How long a word takes to settle after it is said')} />
-            <EaseRow path="words.release_ease" label={t('Fade back curve')} />
-            <WordPreview />
+                    onReset={() => clear('words.fill')}
+                    hint={t('Sweep paints a word as it is said. It needs a Speaking colour that differs from Upcoming.')}
+                >
+                    <Choice
+                        label={t('Fill')}
+                        value={view.val('words.fill')}
+                        set={view.isSet('words.fill')}
+                        onChange={(v) => set('words.fill', v)}
+                        options={[{ id: 'snap', label: t('Instant') }, { id: 'sweep', label: t('Sweep') }]}
+                    />
+                </Row>
+                <Num path="words.attack_ms" label={t('Light up')} hint={sweep ? t('Sweep ignores this.') : undefined} />
+                <CurveRow path="words.attack_ease" label={t('Light up curve')} />
+                <Num path="words.hold_ms" label={t('Hold')} />
+                <Num path="words.release_ms" label={t('Fade back')} hint={t('How long a word takes to settle after it is said')} />
+                <CurveRow path="words.release_ease" label={t('Fade back curve')} />
+            </div>
         </>
     );
 }

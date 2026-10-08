@@ -3,8 +3,8 @@ import { useT } from '../../../lib/i18n';
 import { CapNotice } from '../Notice';
 import { Choice } from './choices';
 import { useCap } from './context';
+import CurveRow from './CurvePicker';
 import { Num, Row } from './inputs';
-import { easeOptions } from './WordsSection';
 
 /** How a line comes in and goes out. */
 export default function MotionSection() {
@@ -34,23 +34,12 @@ export default function MotionSection() {
                 />
             </Row>
             <Num path="enter.ms" label={t('In time')} disabled={none} />
-            <Row
+            <CurveRow
+                path="enter.ease"
                 label={t('In curve')}
-                set={view.isSet('enter.ease')}
-                onReset={() => clear('enter.ease')}
+                disabled={none || enterKind === 'bounce'}
                 hint={enterKind === 'bounce' ? t('Bounce keeps its own curve.') : undefined}
-            >
-                <Choice
-                    label={t('In curve')}
-                    cols={2}
-                    wrap
-                    value={view.val('enter.ease')}
-                    set={view.isSet('enter.ease')}
-                    disabled={none || enterKind === 'bounce'}
-                    onChange={(v) => set('enter.ease', v)}
-                    options={easeOptions(t)}
-                />
-            </Row>
+            />
 
             <Row label={t('Line out')} set={view.isSet('exit.kind')} onReset={() => clear('exit.kind')}>
                 <Choice

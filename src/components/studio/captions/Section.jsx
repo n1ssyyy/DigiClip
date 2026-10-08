@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight, RotateCcw } from 'lucide-react';
 import Tip from '../../digiclip/Tooltip';
 import { useT } from '../../../lib/i18n';
@@ -41,11 +41,26 @@ export default function Section({ id, title, changed, onReset, firstOpen = false
     const seen = useRef(open);
     if (open) seen.current = true;
 
+    // The body clips (overflow hidden) only while its height animates and
+    // while closed; settled open it is overflow visible, so a sticky child
+    // can stick to the inspector's scroller instead of to this clip box.
+    const [moving, setMoving] = useState(false);
+    const settle = useRef(0);
+    useEffect(() => () => clearTimeout(settle.current), []);
+    const stop = () => {
+        clearTimeout(settle.current);
+        setMoving(false);
+    };
+
     function toggle() {
-        setOpen((o) => {
-            writeOpen(id, !o);
-            return !o;
-        });
+        const next = !open;
+        writeOpen(id, next);
+        setOpen(next);
+        // No transition under reduced motion, so nothing to wait for.
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+        setMoving(true);
+        clearTimeout(settle.current);
+        settle.current = setTimeout(stop, 260);
     }
 
     return (
@@ -95,8 +110,9 @@ export default function Section({ id, title, changed, onReset, firstOpen = false
                     'grid transition-[grid-template-rows] duration-[160ms] ease-[var(--ease-out)] motion-reduce:transition-none',
                     open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                 )}
+                onTransitionEnd={(e) => { if (e.target === e.currentTarget) stop(); }}
             >
-                <div className="min-h-0 overflow-hidden">
+                <div className={cn('min-h-0', (moving || !open) && 'overflow-hidden')}>
                     <OpenContext.Provider value={open}>
                         {seen.current && <div className="space-y-3 px-1 pt-1 pb-4">{children}</div>}
                     </OpenContext.Provider>

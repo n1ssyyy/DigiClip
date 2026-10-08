@@ -25,11 +25,14 @@ export function SubHead({ children }) {
  * normal once the Look sets it), a small reset when it does, the control and
  * at most a one-line hint.
  */
-export function Row({ label, htmlFor, set = false, onReset, hint, hintId, children }) {
+export function Row({ label, detail, htmlFor, set = false, onReset, hint, hintId, children }) {
     return (
         <div className="space-y-1">
             <div className="flex h-5 items-center justify-between gap-2">
-                <label htmlFor={htmlFor} className={cn('min-w-0 truncate text-[11px]', set ? 'text-foreground' : 'text-muted-foreground')}>{label}</label>
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                    <label htmlFor={htmlFor} className={cn('min-w-0 truncate text-[11px]', set ? 'text-foreground' : 'text-muted-foreground')}>{label}</label>
+                    {detail && <span className={cn('shrink-0 text-[11px]', set ? 'text-foreground' : 'text-muted-foreground')}>{detail}</span>}
+                </div>
                 {set && onReset && <ResetBtn label={label} onClick={onReset} className="-mr-1" />}
             </div>
             {children}
@@ -147,15 +150,17 @@ export function Num({ path, label, hint, disabled = false }) {
 }
 
 /** A colour field of the Look: its name, then the colour well (the effective
- *  colour shows quietly until the Look sets one). */
+ *  colour shows quietly until the Look sets one). The name is never cut: it
+ *  keeps a 96px column beside the well, and when a longer name leaves the
+ *  well under 132px the well drops to a line of its own below the name. */
 export function Colour({ path, label, disabled = false }) {
     const t = useT();
     const { view, set, clear } = useCap();
     const isSet = view.isSet(path);
     const value = view.val(path);
     return (
-        <div className="grid grid-cols-[84px_minmax(0,1fr)] items-center gap-2">
-            <span className={cn('truncate text-[11px]', isSet ? 'text-foreground' : 'text-muted-foreground')}>{label}</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={cn('max-w-full min-w-[96px] text-[11px] leading-snug break-words', isSet ? 'text-foreground' : 'text-muted-foreground')}>{label}</span>
             <Swatch
                 label={label}
                 resetLabel={t('Reset {name}', { name: label })}
@@ -164,6 +169,7 @@ export function Colour({ path, label, disabled = false }) {
                 disabled={disabled}
                 onChange={(v) => set(path, v)}
                 onReset={() => clear(path)}
+                className="min-w-0 grow basis-[132px]"
             />
         </div>
     );

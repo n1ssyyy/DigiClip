@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { GpuToggle } from '../../digiclip/controls';
+import Tip from '../../digiclip/Tooltip';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
 
@@ -41,8 +42,8 @@ const TONE = {
 /**
  * A radio group of options: one tab stop, arrows move the pick (and make it),
  * the pick is drawn firm once the Look sets it and quiet while it is the
- * style's own. `options`: `{ id, label, aria?, style? }` (labels already
- * translated; a label may be an icon).
+ * style's own. `options`: `{ id, label, aria?, tip?, style? }` (labels already
+ * translated; a label may be an icon, and `tip` shows as the app's tooltip).
  */
 export function Choice({ label, value, options, set = true, onChange, cols, disabled = false, size = 'md', wrap = false, className }) {
     const found = options.findIndex((o) => o.id === value);
@@ -57,7 +58,7 @@ export function Choice({ label, value, options, set = true, onChange, cols, disa
         >
             {options.map((o, i) => {
                 const on = i === found;
-                return (
+                const btn = (
                     <button
                         key={o.id}
                         ref={rove.ref(i)}
@@ -72,14 +73,20 @@ export function Choice({ label, value, options, set = true, onChange, cols, disa
                         style={o.style}
                         className={cn(
                             'flex min-w-0 items-center justify-center rounded-md border px-1.5 transition-[background-color,border-color,color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+                            o.tip && 'w-full',
                             wrap ? 'text-center leading-[1.1] break-words' : 'truncate',
-                            size === 'lg' ? 'h-9 text-[14px]' : wrap ? 'h-8 text-[10.5px]' : 'h-8 text-[11px]',
+                            size === 'lg' ? 'h-9 text-[14px]' : size === 'sm' ? 'h-7 text-[11px]' : wrap ? 'h-8 text-[10.5px]' : 'h-8 text-[11px]',
                             on ? (set ? TONE.on : TONE.soft) : TONE.off,
                         )}
                     >
                         {o.label}
                     </button>
                 );
+                return o.tip ? (
+                    <Tip key={o.id} label={o.tip} className="w-full">
+                        {btn}
+                    </Tip>
+                ) : btn;
             })}
         </div>
     );
