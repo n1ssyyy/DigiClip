@@ -11,6 +11,12 @@
     src: url('./fonts/Anton-Regular.ttf') format('truetype');
     font-display: swap;
 }
+/* The engine's name for Inter: Studio draws captions in it. */
+@font-face {
+    font-family: 'Inter Medium';
+    src: url('./fonts/Inter-Medium.ttf') format('truetype');
+    font-display: swap;
+}
 /* House face: JetBrains Mono everywhere, weights from one variable file. */
 @font-face {
     font-family: 'JetBrains Mono';
@@ -638,4 +644,16 @@ video::-webkit-media-controls-time-remaining-display {
     overflow: hidden;
     border-radius: 0;
     background-color: transparent;
+}
+
+/* Studio: under reduced motion nothing in the page eases or animates (the
+   caption motion on the stage is drawn per frame and is cut to none in
+   code). */
+@media (prefers-reduced-motion: reduce) {
+    .studio-root *,
+    .studio-root *::before,
+    .studio-root *::after {
+        transition: none !important;
+        animation: none !important;
+    }
 }

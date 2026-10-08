@@ -5,11 +5,9 @@ import { cn } from '../../lib/utils';
 import { usePanelBeat } from './usePanelBeat';
 import { useFloatingPanel } from './useFloatingPanel';
 import { useT } from '../../lib/i18n';
+import { assColor as ass, CAPTION_STYLES } from '../../lib/captionStyles';
 
-export const CAPTION_STYLES = ['tiktok', 'karaoke', 'hormozi', 'minimal', 'beast', 'neon', 'highlight', 'ghost'];
-
-// ASS &HAABBGGRR → CSS hex (alpha dropped; boxes use the solid tone).
-const ass = (c) => `#${c.slice(8, 10)}${c.slice(6, 8)}${c.slice(4, 6)}`;
+export { CAPTION_STYLES };
 
 // Approximate each burned-in preset for the dropdown preview: face,
 // case, upcoming base (ASS secondary) + sung sweep (ASS primary),

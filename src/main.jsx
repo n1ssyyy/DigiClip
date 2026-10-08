@@ -8,6 +8,7 @@ import AppLayout from './layouts/AppLayout';
 import BrandMark from './components/digiclip/BrandMark';
 import { ChromeBar } from './components/digiclip/Titlebar';
 import Home from './pages/Home';
+import Studio from './pages/Studio';
 import Health from './pages/Health';
 import Settings from './pages/Settings';
 import Mcp from './pages/Mcp';
@@ -143,7 +144,7 @@ function Shell() {
     return (
         <AppLayout>
             {isTauri() && <TrayBridge />}
-            {page === 'health' ? <Health /> : page === 'settings' ? <Settings /> : page === 'mcp' ? <Mcp /> : <Home />}
+            {page === 'health' ? <Health /> : page === 'settings' ? <Settings /> : page === 'mcp' ? <Mcp /> : page === 'studio' ? <Studio /> : <Home />}
         </AppLayout>
     );
 }

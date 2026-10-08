@@ -23,7 +23,8 @@ const S = {
     flash: null,
     mcp: null, // MCP server: port, token, clients, activity, tools, installed apps
     focus: null, // { job, seq }: an AI app asked to show this project
-    page: 'home', // home | health | mcp | settings
+    caps: [], // engine abilities from `hello` (absent on older engines), e.g. 'look'
+    page: 'home', // home | studio | health | mcp | settings
     busy: 0, // PageLine counter: full actions only, never background events
 };
 
@@ -143,6 +144,7 @@ function openSocket() {
             S.models = data.models ?? {};
             S.health = data.health ?? null;
             S.mcp = data.mcp ?? null;
+            S.caps = Array.isArray(data.caps) ? data.caps.filter((c) => typeof c === 'string') : [];
             markSynced();
             emit();
         }).catch(() => {});

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Activity, Bot, House as HouseIcon, Settings as SettingsIcon } from 'lucide-react';
+import { Activity, Bot, Clapperboard, House as HouseIcon, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { navigate, useStore } from '../../lib/socket';
 import { useT } from '../../lib/i18n';
@@ -110,6 +110,9 @@ export default function Sidebar() {
             <nav aria-label={t('Primary')} className="flex flex-col gap-1">
                 <SideLink page="home" label={t('Home')} active={page === 'home'}>
                     <HouseIcon className="size-4" aria-hidden />
+                </SideLink>
+                <SideLink page="studio" label={t('Studio')} active={page === 'studio'}>
+                    <Clapperboard className="size-4" aria-hidden />
                 </SideLink>
                 <SideLink page="mcp" label={t('AI apps')} active={page === 'mcp'} dot={aiBusy}>
                     <Bot className="size-4" aria-hidden />

@@ -16,9 +16,9 @@ import { isTauri, openExternal } from '../lib/native';
 const noDrag = { WebkitAppRegion: 'no-drag' };
 
 // Sidebar order top to bottom: travel direction follows it, so going
-// Home -> AI apps -> Health -> Settings the new page rises from below, and
-// going back up it drops from above.
-const PAGE_ORDER = { home: 0, mcp: 1, health: 2, settings: 3 };
+// Home -> Studio -> AI apps -> Health -> Settings the new page rises from
+// below, and going back up it drops from above.
+const PAGE_ORDER = { home: 0, studio: 1, mcp: 2, health: 3, settings: 4 };
 function orderOf(page) {
     return PAGE_ORDER[page] ?? 99;
 }

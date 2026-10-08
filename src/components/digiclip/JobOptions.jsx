@@ -10,176 +10,19 @@ import { useFloatingPanel } from './useFloatingPanel';
 import { pickAudio, pickImage } from '../../lib/native';
 import { flashMessage, saveSettings, useStore } from '../../lib/socket';
 import { useT } from '../../lib/i18n';
+import { aspectList, fromEngine, SUBS_LANGS, toEngine } from '../../lib/look';
 
-const STORE_KEY = 'digiclip.jobOptions';
+// The state model lives in lib/look.js (shared with Studio); the names
+// other files import from here keep working.
+export { ASPECTS, CAPTION_ANIMS, LAYOUTS, SUBS_LANGS, aspectList, fromEngine, lookOptions, toEngine, useJobOptions } from '../../lib/look';
 
-function defaults(settings) {
-    return {
-        kind: 'smart',
-        count: settings?.clips_count ?? 3,
-        dur_mode: 'auto',
-        dur_exact: 30,
-        dur_min: 15,
-        dur_max: 60,
-        style: settings?.caption_default ?? 'karaoke',
-        tighten: settings?.tighten ?? 'light',
-        punch: settings?.punch ?? true,
-        merge_flash: false,
-        // Look: output shape and brand overlays.
-        aspect: '9:16',
-        caption_anim: 'pop',
-        headline: false,
-        headline_text: '',
-        progress_bar: false,
-        bar_color: '#FFD400',
-        logo: '',
-        logo_pos: 'tr',
-        music: '',
-        music_db: -16,
-        focus: '',
-        layout: 'single',
-        subs_lang: 'off',
-    };
-}
-
-export const ASPECTS = ['9:16', '4:5', '1:1', '16:9'];
-export const CAPTION_ANIMS = ['pop', 'words', 'none'];
-export const LAYOUTS = ['single', 'split', 'auto'];
-
-/** Caption languages offered for translated subtitles (ISO codes). */
-export const SUBS_LANGS = [
-    ['off', 'Spoken language'], ['en', 'English'], ['sq', 'Albanian'], ['de', 'German'],
-    ['fr', 'French'], ['es', 'Spanish'], ['it', 'Italian'], ['tr', 'Turkish'],
-    ['pt', 'Portuguese'], ['nl', 'Dutch'], ['pl', 'Polish'], ['sr', 'Serbian'],
-    ['hr', 'Croatian'], ['mk', 'Macedonian'], ['el', 'Greek'], ['ru', 'Russian'],
-    ['uk', 'Ukrainian'], ['ar', 'Arabic'], ['hi', 'Hindi'], ['ja', 'Japanese'],
-    ['ko', 'Korean'], ['zh', 'Chinese'],
-];
-
-/** The picked shapes, main first: `"9:16,1:1"` -> ['9:16', '1:1']. */
-export function aspectList(v) {
-    const out = [];
-    for (const a of String(v ?? '').split(',').map((x) => x.trim())) {
-        if (ASPECTS.includes(a) && !out.includes(a)) out.push(a);
-    }
-    return out.length ? out : ['9:16'];
-}
-
-/** The engine options for the Look knobs: only what's switched on is
- *  sent, so an untouched panel renders exactly as before. */
-export function lookOptions(o) {
-    const out = {};
-    // First shape is the main render, the rest are extra variants.
-    const aspects = aspectList(o.aspect);
-    if (aspects.join(',') !== '9:16') out.aspect = aspects.join(',');
-    // Split needs smart framing, which every app job uses.
-    if (LAYOUTS.includes(o.layout) && o.layout !== 'single') out.layout = o.layout;
-    if (o.subs_lang && o.subs_lang !== 'off') out.subs_lang = o.subs_lang;
-    // Pop is the engine default.
-    if (CAPTION_ANIMS.includes(o.caption_anim) && o.caption_anim !== 'pop') out.caption_anim = o.caption_anim;
-    // Empty headline = the clip's own title.
-    if (o.headline) out.headline = (o.headline_text ?? '').trim();
-    if (o.progress_bar) out.progress_bar = /^#[0-9a-f]{6}$/i.test(o.bar_color ?? '') ? o.bar_color : '';
-    if (o.logo) {
-        out.logo = o.logo;
-        out.logo_pos = o.logo_pos || 'tr';
-    }
-    if (o.music) {
-        out.music = o.music;
-        out.music_db = Number.isFinite(+o.music_db) ? +o.music_db : -16;
-    }
-    const focus = (o.focus ?? '').trim();
-    if (focus) out.focus = focus;
-    return out;
-}
-
-function durRange(o) {
-    if (o.dur_mode === 'exact') {
-        const L = Math.min(300, Math.max(5, +o.dur_exact || 30));
-        return { min_len: L, max_len: L };
-    }
-    if (o.dur_mode === 'minmax') {
-        const lo = Math.min(300, Math.max(5, +o.dur_min || 15));
-        const hi = Math.max(lo, Math.min(600, +o.dur_max || 60));
-        return { min_len: lo, max_len: hi };
-    }
-    return {};
-}
-
-/** Panel state -> engine job options. Machine settings (model, GPU) are
- *  left to the caller, so presets and the watch folder stay portable. */
-export function toEngine(o) {
-    return {
-        mode: 'clips',
-        kind: o.kind,
-        count: o.count,
-        ...durRange(o),
-        style: o.style,
-        tighten: o.tighten,
-        punch: o.punch,
-        merge_flash: o.merge_flash,
-        kit: true,
-        framing: 'smart',
-        ...lookOptions(o),
-    };
-}
-
-/** Engine job options (a preset) -> panel state. Unset fields fall back
- *  to the panel defaults, so an old preset never keeps stale knobs. */
-export function fromEngine(e, settings) {
-    const v = (k) => (e?.[k] ?? null);
-    const p = defaults(settings);
-    for (const k of ['kind', 'count', 'style', 'tighten', 'punch', 'merge_flash', 'caption_anim', 'logo_pos', 'music_db', 'layout', 'subs_lang']) {
-        if (v(k) != null) p[k] = v(k);
-    }
-    const lo = v('min_len');
-    const hi = v('max_len');
-    if (lo != null && hi != null) {
-        if (lo === hi) Object.assign(p, { dur_mode: 'exact', dur_exact: lo });
-        else Object.assign(p, { dur_mode: 'minmax', dur_min: lo, dur_max: hi });
-    }
-    p.aspect = aspectList(v('aspect')).join(',');
-    p.headline = v('headline') != null;
-    p.headline_text = v('headline') ?? '';
-    p.progress_bar = v('progress_bar') != null;
-    if (v('progress_bar')) p.bar_color = v('progress_bar');
-    p.logo = v('logo') ?? '';
-    p.music = v('music') ?? '';
-    p.focus = v('focus') ?? '';
-    return p;
-}
-
-/** Per-job knobs for the next upload. Persisted locally; seeded from
- *  saved settings on first sight (count, style, tighten, punch). */
-export function useJobOptions(settings) {
-    const [options, setOptions] = useState(() => {
-        try {
-            const raw = localStorage.getItem(STORE_KEY);
-            if (raw) return { ...defaults(settings), ...JSON.parse(raw) };
-        } catch {
-        }
-        return defaults(settings);
-    });
-    function update(patch) {
-        setOptions((prev) => {
-            const next = { ...prev, ...patch };
-            try {
-                localStorage.setItem(STORE_KEY, JSON.stringify(next));
-            } catch {
-            }
-            return next;
-        });
-    }
-    return [options, update];
-}
-
-function Kicker({ children }) {
+export function Kicker({ children }) {
     return (
         <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">{children}</p>
     );
 }
 
-function KindSeg({ value, onChange }) {
+export function KindSeg({ value, onChange }) {
     const t = useT();
     return (
         <Segmented
@@ -199,7 +42,7 @@ function KindSeg({ value, onChange }) {
 
 /** Duration mode picker: same segmented language as picking —
  *  one choice, three verbs, no dropdown. */
-function DurSeg({ value, onChange }) {
+export function DurSeg({ value, onChange }) {
     const t = useT();
     return (
         <Segmented
@@ -216,42 +59,42 @@ function DurSeg({ value, onChange }) {
     );
 }
 /** Generic segmented control in the same language as the two above. */
-function Seg({ label, value, options, onChange }) {
+export function Seg({ label, value, options, onChange }) {
     return <Segmented label={label} size="sm" value={value} options={options} onChange={onChange} />;
 }
 
-const ANIM_OPTS = [
+export const ANIM_OPTS = [
     { id: 'pop', label: 'Pop', tip: 'Lines pop in, keywords bump as they are spoken.' },
     { id: 'words', label: 'Word by word', tip: 'Pop, and each word appears as it is spoken.' },
     { id: 'none', label: 'Static', tip: 'No motion: lines cut in and out.' },
 ];
 
-const ASPECT_OPTS = [
+export const ASPECT_OPTS = [
     { id: '9:16', label: '9:16', tip: 'Vertical: TikTok, Reels, Shorts.' },
     { id: '4:5', label: '4:5', tip: 'Portrait: Instagram and LinkedIn feeds.' },
     { id: '1:1', label: '1:1', tip: 'Square: any feed.' },
     { id: '16:9', label: '16:9', tip: 'Landscape: YouTube and X.' },
 ];
 
-const CORNER_OPTS = [
+export const CORNER_OPTS = [
     { id: 'tl', label: <ArrowUpLeft className="size-3.5" />, tip: 'Top-left corner.' },
     { id: 'tr', label: <ArrowUpRight className="size-3.5" />, tip: 'Top-right corner.' },
     { id: 'bl', label: <ArrowDownLeft className="size-3.5" />, tip: 'Bottom-left corner.' },
     { id: 'br', label: <ArrowDownRight className="size-3.5" />, tip: 'Bottom-right corner.' },
 ];
 
-const LEVEL_OPTS = [
+export const LEVEL_OPTS = [
     { id: -22, label: 'Soft', tip: 'Barely there under the voice.' },
     { id: -16, label: 'Medium', tip: 'A clear bed that ducks under speech.' },
     { id: -10, label: 'Loud', tip: 'Up front; still ducks when someone talks.' },
 ];
 
-const inputCls = 'flex h-8 w-full min-w-0 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-2.5 text-[12px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring';
+export const inputCls = 'flex h-8 w-full min-w-0 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-2.5 text-[12px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring';
 
-const baseName = (p) => (p ? p.split(/[\\/]/).pop() : '');
+export const baseName = (p) => (p ? p.split(/[\\/]/).pop() : '');
 
 /** One on/off row: switch, title, one-line hint. */
-function SwitchRow({ checked, onChange, title, hint }) {
+export function SwitchRow({ checked, onChange, title, hint }) {
     return (
         <div className="flex items-center gap-2">
             <GpuToggle checked={!!checked} disabled={false} onChange={onChange} label={title} />
@@ -264,7 +107,7 @@ function SwitchRow({ checked, onChange, title, hint }) {
 }
 
 /** A file slot: pick button showing the chosen name, plus clear. */
-function FileSlot({ icon: Icon, value, empty, pick, onChange }) {
+export function FileSlot({ icon: Icon, value, empty, pick, onChange }) {
     const t = useT();
     function browse() {
         pick().then((p) => { if (p) onChange(p); }).catch(() => {});
@@ -294,6 +137,18 @@ function FileSlot({ icon: Icon, value, empty, pick, onChange }) {
             )}
         </div>
     );
+}
+
+/** The logo and music slots, for the Studio inspector (the popover below
+ *  wires the same pickers inline). */
+export function LogoSlot({ value, onChange }) {
+    const t = useT();
+    return <FileSlot icon={ImagePlus} value={value} empty={t('Add a PNG or JPG…')} pick={pickImage} onChange={onChange} />;
+}
+
+export function MusicSlot({ value, onChange }) {
+    const t = useT();
+    return <FileSlot icon={Music} value={value} empty={t('Add a music bed…')} pick={pickAudio} onChange={onChange} />;
 }
 
 /** Shapes to render: toggle any; the first picked is the main clip and
@@ -331,7 +186,7 @@ function AspectPicker({ value, onChange }) {
 }
 
 /** Native select in the panel's input look. */
-function Select({ label, value, options, onChange }) {
+export function Select({ label, value, options, onChange }) {
     const t = useT();
     return (
         <div className="relative">
@@ -447,7 +302,7 @@ function PresetRow({ options, onApply }) {
     );
 }
 
-const LAYOUT_OPTS = [
+export const LAYOUT_OPTS = [
     { id: 'single', label: 'Single', tip: 'Follow one speaker.' },
     { id: 'split', label: 'Split', tip: 'Two people stacked, captions on the seam.' },
     { id: 'auto', label: 'Auto', tip: 'Split when two people share the frame.' },
@@ -580,7 +435,7 @@ export default function OptionsButton({ options, onChange }) {
                         </div>
                         <div className="space-y-1">
                             <Kicker>{t('Caption motion')}</Kicker>
-                            <Seg label={t('Caption motion')} value={options.caption_anim ?? 'pop'} options={ANIM_OPTS} onChange={set('caption_anim')} />
+                            <Seg label={t('Caption motion')} value={options.look?.captions?.anim ?? options.caption_anim ?? 'pop'} options={ANIM_OPTS} onChange={set('caption_anim')} />
                         </div>
                         <div className="space-y-1.5">
                             <SwitchRow checked={options.headline} onChange={set('headline')} title={t('Headline')} hint={t('Title card pinned at the top.')} />
