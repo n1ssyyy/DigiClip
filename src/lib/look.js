@@ -6,6 +6,7 @@
 // storage and clock for the same reason. The React hooks sit at the bottom.
 import { useSyncExternalStore } from 'react';
 import { cleanCaptions } from './captionStyles.js';
+import { cleanBar, cleanHeadline, cleanLogo } from './layers.js';
 
 export const STORE_KEY = 'digiclip.jobOptions';
 
@@ -108,7 +109,8 @@ function durRange(o) {
 // the Look object
 // ---------------------------------------------------------------------------
 
-/** Sections of `options.look` (look.rs). Only `captions` is live today. */
+/** Sections of `options.look` (look.rs). Captions, headline, bar and logo
+ *  are live; the rest wait for the engine. */
 export const LOOK_SECTIONS = ['captions', 'headline', 'bar', 'logo', 'camera', 'effects', 'layout'];
 
 const real = (v) => v !== undefined && v !== null && v !== '' && !(typeof v === 'number' && !Number.isFinite(v));
@@ -137,6 +139,8 @@ export function lookToEngine(look) {
     return Object.keys(out).length ? { v: 1, ...out } : null;
 }
 
+const CLEANERS = { captions: cleanCaptions, headline: cleanHeadline, bar: cleanBar, logo: cleanLogo };
+
 /** A Look read back from anywhere (a preset, local storage): deep copy,
  *  junk dropped, captions cleaned the way the engine reads them. */
 export function sanitizeLook(raw) {
@@ -145,7 +149,7 @@ export function sanitizeLook(raw) {
     for (const sec of LOOK_SECTIONS) {
         const s = raw[sec];
         if (!s || typeof s !== 'object' || Array.isArray(s)) continue;
-        look[sec] = sec === 'captions' ? cleanCaptions(s) : pruneSection(s);
+        look[sec] = (CLEANERS[sec] ?? pruneSection)(s);
     }
     return look;
 }
@@ -232,17 +236,32 @@ export function applyPatch(prev, patch) {
     return next;
 }
 
-/** `prev` with the captions section patched; undefined/null/'' removes a
- *  field. */
-export function applyCaptions(prev, patch) {
-    const cur = prev.look?.captions ?? {};
-    const caps = { ...cur };
+/** `prev` with one section of the Look patched; undefined/null/'' removes
+ *  a field. A section left empty is dropped (captions keep their empty
+ *  object, the store's shape). */
+export function applySection(prev, section, patch) {
+    const cur = prev.look?.[section] ?? {};
+    const next = { ...cur };
     for (const [k, v] of Object.entries(patch)) {
-        if (real(v)) caps[k] = v;
-        else delete caps[k];
+        if (real(v)) next[k] = v;
+        else delete next[k];
     }
-    if (JSON.stringify(caps) === JSON.stringify(cur)) return prev;
-    return { ...prev, look: { ...(prev.look ?? {}), captions: caps } };
+    if (JSON.stringify(next) === JSON.stringify(cur)) return prev;
+    const look = { ...(prev.look ?? {}) };
+    if (section !== 'captions' && !Object.keys(next).length) delete look[section];
+    else look[section] = next;
+    return { ...prev, look };
+}
+
+export const applyCaptions = (prev, patch) => applySection(prev, 'captions', patch);
+
+/** One edit across the flat options and any sections of the Look: what a
+ *  single control (a corner pick that also drops a free position) needs to
+ *  be one history step. */
+export function applyEdit(prev, flat, sections) {
+    let next = flat ? applyPatch(prev, flat) : prev;
+    for (const [sec, patch] of Object.entries(sections ?? {})) next = applySection(next, sec, patch);
+    return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +291,8 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
     let lastKey = null;
     let lastAt = 0;
     let snap = null;
+    // A drag in progress: every change inside it is one history step.
+    let gesture = null;
     const subs = new Set();
 
     function build() {
@@ -296,6 +317,20 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
     function commit(next, key) {
         if (next === state) return;
         const t = now();
+        if (gesture) {
+            // The first change of the gesture opens its step, the rest fold in.
+            if (!gesture.pushed) {
+                past.push(state);
+                if (past.length > HISTORY_CAP) past.shift();
+                gesture.pushed = true;
+            }
+            future = [];
+            lastKey = null;
+            lastAt = t;
+            state = next;
+            emit();
+            return;
+        }
         const fold = key && key === lastKey && t - lastAt < COLLAPSE_MS && past.length > 0;
         if (!fold) {
             past.push(state);
@@ -339,7 +374,43 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
         },
         setCaptions(patch) {
             if (!state) seed(null);
-            commit(applyCaptions(state, patch), `c:${Object.keys(patch).sort().join(',')}`);
+            commit(applySection(state, 'captions', patch), `c:${Object.keys(patch).sort().join(',')}`);
+        },
+        setHeadline(patch) {
+            if (!state) seed(null);
+            commit(applySection(state, 'headline', patch), `h:${Object.keys(patch).sort().join(',')}`);
+        },
+        setBar(patch) {
+            if (!state) seed(null);
+            commit(applySection(state, 'bar', patch), `b:${Object.keys(patch).sort().join(',')}`);
+        },
+        setLogo(patch) {
+            if (!state) seed(null);
+            commit(applySection(state, 'logo', patch), `l:${Object.keys(patch).sort().join(',')}`);
+        },
+        /** Flat options and sections together, as one history step. */
+        edit(flat, sections) {
+            if (!state) seed(null);
+            const keys = [...Object.keys(flat ?? {}), ...Object.entries(sections ?? {}).flatMap(([s, p]) => Object.keys(p).map((k) => `${s}.${k}`))];
+            commit(applyEdit(state, flat, sections), `e:${keys.sort().join(',')}`);
+        },
+        /** Start a drag: until `endGesture` every change is one undo step.
+         *  Nothing changed means no step. */
+        beginGesture() {
+            if (!state) seed(null);
+            if (gesture) return;
+            gesture = { pushed: false, base: JSON.stringify(state) };
+        },
+        endGesture() {
+            if (!gesture) return;
+            const g = gesture;
+            gesture = null;
+            lastKey = null;
+            // Dragged back to where it began: no step to undo.
+            if (g.pushed && JSON.stringify(state) === g.base) {
+                past.pop();
+                emit();
+            }
         },
         /** Clear one section of the Look (or all of it). */
         reset(section) {
@@ -355,14 +426,14 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
             commit({ ...state, look }, null);
         },
         undo() {
-            if (!past.length) return;
+            if (gesture || !past.length) return;
             future.push(state);
             state = past.pop();
             lastKey = null;
             emit();
         },
         redo() {
-            if (!future.length) return;
+            if (gesture || !future.length) return;
             past.push(state);
             state = future.pop();
             lastKey = null;
@@ -396,6 +467,12 @@ export function useLook(settings) {
         options: snap.options,
         update: lookStore.update,
         setCaptions: lookStore.setCaptions,
+        setHeadline: lookStore.setHeadline,
+        setBar: lookStore.setBar,
+        setLogo: lookStore.setLogo,
+        edit: lookStore.edit,
+        beginGesture: lookStore.beginGesture,
+        endGesture: lookStore.endGesture,
         undo: lookStore.undo,
         redo: lookStore.redo,
         canUndo: snap.canUndo,

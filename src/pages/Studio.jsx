@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { aspectList, useLook } from '../lib/look';
-import { CANVASES, captionLines, resolveCaptions } from '../lib/captionStyles';
+import { CANVASES, captionLines, clamp, resolveCaptions } from '../lib/captionStyles';
+import { logoClear, resolveBar, resolveHeadline, resolveLogo, stageHeadline } from '../lib/layers';
 import { useStore } from '../lib/socket';
 import { useT } from '../lib/i18n';
 import TopBar from '../components/studio/TopBar';
@@ -14,6 +15,8 @@ import { usePlayer } from '../components/studio/usePlayer';
 
 // Below this page width the Layers pane shrinks to icons.
 const NARROW = 1000;
+/** The layers that live on the stage and can be picked there. */
+const STAGE_LAYERS = ['captions', 'headline', 'bar', 'logo'];
 
 /** Typing somewhere: the page's own keys stay out of the way. */
 function inTextField(el) {
@@ -29,18 +32,27 @@ function spaceIsFree(el) {
     return !el.closest('button, a, summary, [role="radio"], [role="switch"], [role="option"], [role="checkbox"], [role="tab"], [role="menuitem"]');
 }
 
+/** Controls that own the arrow keys and Delete themselves. */
+function ownsArrows(el) {
+    if (!el || !el.closest) return false;
+    return !!el.closest('[role="slider"], [role="listbox"], [role="menu"], select');
+}
+
+const r3 = (v) => Math.round(v * 1000) / 1000;
+
 /**
  * Studio: an interactive stage for designing how clips look. It edits the
- * Look, the same state the options popover on Home edits. This is the
- * shell: layers, the captions inspector, a stage that draws captions the
- * way the engine burns them, and a transport. Direct manipulation on the
- * stage and saved looks come later.
+ * Look, the same state the options popover on Home edits. Layers are drawn
+ * the way the engine burns them and can be picked, moved and resized on the
+ * stage itself; the inspector holds the same numbers as sliders. Saved
+ * looks come later.
  */
 export default function Studio() {
     const t = useT();
     const settings = useStore((s) => s.settings);
     const jobs = useStore((s) => s.jobs);
-    const { options, update, setCaptions, undo, redo, canUndo, canRedo, reset } = useLook(settings);
+    const look = useLook(settings);
+    const { options, update, setCaptions, setHeadline, setBar, setLogo, undo, redo, canUndo, canRedo, reset, beginGesture, endGesture } = look;
 
     const [selected, setSelected] = useState('captions');
     const [loop, setLoop] = useState(true);
@@ -73,9 +85,11 @@ export default function Studio() {
 
     const shape = aspectList(options.aspect)[0];
     const canvas = CANVASES[shape] ?? CANVASES['9:16'];
+    const L = options.look ?? {};
     const resolved = useMemo(
-        () => resolveCaptions(options.style, shape, options.look?.captions, { anim: options.caption_anim }),
-        [options.style, shape, options.look, options.caption_anim],
+        () => resolveCaptions(options.style, shape, L.captions, { anim: options.caption_anim }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [options.style, shape, L.captions, options.caption_anim],
     );
     // Grouping depends on words, the words-per-line budget and whether the
     // motion is a moving one, not on colours or position.
@@ -84,6 +98,77 @@ export default function Studio() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [sample.words, resolved.maxWords, resolved.maxChars, resolved.wordCap, resolved.caps, resolved.anim === 'none'],
     );
+
+    // The other layers, as the engine would draw them. The headline is the
+    // typed text, or a sample title while that is empty (clips use their own).
+    const logo = useMemo(
+        () => (options.logo ? resolveLogo(shape, options.logo_pos, L.logo, null) : null),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [options.logo, options.logo_pos, shape, L.logo],
+    );
+    const headline = useMemo(
+        () => (options.headline ? resolveHeadline(stageHeadline(options.headline_text), shape, L.headline, { clear: logoClear(logo) }) : null),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [options.headline, options.headline_text, shape, L.headline, logo],
+    );
+    const bar = useMemo(
+        () => (options.progress_bar ? resolveBar(shape, options.bar_color, L.bar) : null),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [options.progress_bar, options.bar_color, shape, L.bar],
+    );
+    const sizes = useMemo(
+        () => ({ captions: L.captions?.size ?? 1, headline: L.headline?.size ?? 1, logo: L.logo?.size ?? 1 }),
+        [L.captions?.size, L.headline?.size, L.logo?.size],
+    );
+
+    // What the pointer and the keys do to the stage's layers.
+    const edit = useMemo(() => {
+        const place = (id, x, y) => {
+            if (id === 'captions') setCaptions({ x, y });
+            else if (id === 'headline') setHeadline({ x, y });
+            else if (id === 'logo') setLogo({ x, y });
+        };
+        return {
+            select: setSelected,
+            move: place,
+            resize(id, size) {
+                // Back at 100% is the default, not an override.
+                const v = Math.abs(size - 1) < 0.005 ? undefined : size;
+                if (id === 'captions') setCaptions({ size: v });
+                else if (id === 'headline') setHeadline({ size: v });
+                else if (id === 'logo') setLogo({ size: v });
+            },
+            flipBar: (pos) => setBar({ pos: pos === 'top' ? 'top' : undefined }),
+            reset(id) {
+                const none = { x: undefined, y: undefined };
+                if (id === 'captions') setCaptions(none);
+                else if (id === 'headline') setHeadline(none);
+                else if (id === 'logo') setLogo(none);
+                else if (id === 'bar') setBar({ pos: undefined });
+            },
+            // Same as the layer's eye; the logo has none, so its file goes.
+            off(id) {
+                if (id === 'captions') setCaptions({ show: false });
+                else if (id === 'headline') update({ headline: false });
+                else if (id === 'bar') update({ progress_bar: false });
+                else if (id === 'logo') update({ logo: '' });
+            },
+            place,
+            begin: beginGesture,
+            end: endGesture,
+        };
+    }, [setCaptions, setHeadline, setBar, setLogo, update, beginGesture, endGesture]);
+
+    const onStage = STAGE_LAYERS.includes(selected) ? selected : null;
+    const centres = {
+        captions: resolved.show ? resolved.center : null,
+        headline: headline?.center ?? null,
+        logo: logo?.center ?? null,
+        bar: bar?.center ?? null,
+    };
+    // The key handler reads the latest of these without re-binding.
+    const liveRef = useRef({});
+    liveRef.current = { onStage, centres, edit };
 
     const notice = sample.status === 'loading' ? t('Loading the transcript…')
         : sample.status === 'failed' ? t("Couldn't load this transcript; showing stand-in words.")
@@ -100,7 +185,33 @@ export default function Studio() {
             else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
             return;
         }
-        if (e.key === ' ' && !e.ctrlKey && !e.metaKey && !inTextField(el) && spaceIsFree(el)) {
+        if (e.ctrlKey || e.metaKey) return;
+        // Keys for the layer picked on the stage.
+        const { onStage: id, centres: c, edit: act } = liveRef.current;
+        if (id && !inTextField(el) && !ownsArrows(el)) {
+            const step = e.shiftKey ? 0.05 : 0.01;
+            const arrow = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+            if (arrow) {
+                e.preventDefault();
+                if (id === 'bar') {
+                    if (arrow[1]) act.flipBar(arrow[1] < 0 ? 'top' : 'bottom');
+                } else if (c[id]) {
+                    act.place(id, r3(clamp(c[id].x + arrow[0], 0, 1)), r3(clamp(c[id].y + arrow[1], 0, 1)));
+                }
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setSelected(null);
+                return;
+            }
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                act.off(id);
+                return;
+            }
+        }
+        if (e.key === ' ' && !inTextField(el) && spaceIsFree(el)) {
             e.preventDefault();
             toggle();
         }
@@ -119,6 +230,11 @@ export default function Studio() {
                     canvas={canvas}
                     resolved={resolved}
                     lines={lines}
+                    layers={{ headline, bar, logo }}
+                    selected={onStage}
+                    edit={edit}
+                    sizes={sizes}
+                    logoFile={options.logo}
                     clock={player.clock}
                     reduced={reduced}
                     sample={sample}
@@ -129,7 +245,7 @@ export default function Studio() {
                     safe={safe}
                     notice={notice}
                 />
-                <Inspector selected={selected} options={options} update={update} setCaptions={setCaptions} reset={reset} />
+                <Inspector selected={selected} look={look} />
             </div>
             <Transport player={player} len={sample.len} words={sample.words} loop={loop} onLoop={setLoop} safe={safe} onSafe={setSafe} />
         </div>

@@ -32,3 +32,17 @@ export default function Field({ label, set = false, onReset, hint, children }) {
         </div>
     );
 }
+
+/** The full-width "reset this layer" button at the foot of a panel. */
+export function ResetButton({ disabled, onClick, children }) {
+    return (
+        <button
+            type="button"
+            disabled={disabled}
+            onClick={onClick}
+            className="h-8 w-full rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] text-[12px] transition-[background-color,opacity] hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[color-mix(in_srgb,var(--card)_78%,black)]"
+        >
+            {children}
+        </button>
+    );
+}

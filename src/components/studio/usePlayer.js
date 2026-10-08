@@ -48,15 +48,32 @@ export function usePlayer({ len, start, videoRef, hasVideo, loop, resetKey }) {
         }
     }, [setTime, videoRef]);
 
-    // A new sample starts from its first frame, paused.
+    // A new sample starts from its first frame, paused. Only a different
+    // sample does this: its details (clip start, length) arrive a moment
+    // after the page opens and must not throw away a click on the scrubber
+    // made in between.
     useEffect(() => {
         setPlaying(false);
         seek(0);
-    }, [resetKey, start, seek]);
+    }, [resetKey, seek]);
+
+    // The window moved or changed length: keep the playhead where the
+    // person put it (inside the new length) and land the video on it.
+    useEffect(() => {
+        if (timeRef.current > len) setTime(len);
+        const v = videoRef.current;
+        if (v && live.current.hasVideo) {
+            try {
+                v.currentTime = start + timeRef.current;
+            } catch {
+            }
+        }
+    }, [start, len, setTime, videoRef]);
 
     // The video element mounts after the sample changes: land it on the
     // playhead once it knows its length.
     const onLoadedMetadata = useCallback(() => {
+        // Seeks made before the video knew its length wait here.
         const v = videoRef.current;
         if (!v) return;
         try {

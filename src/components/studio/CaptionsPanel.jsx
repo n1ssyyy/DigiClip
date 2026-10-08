@@ -5,10 +5,11 @@ import { Select, SwitchRow } from '../digiclip/JobOptions';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 import Field from './Field';
+import PlaceField from './PlaceField';
+import { CapNotice } from './Notice';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const px1 = (v) => `${Math.round(v * 10) / 10}px`;
-const r3 = (v) => Math.round(v * 1000) / 1000;
 
 const FONT_LABEL = { 'Anton': 'Anton', 'Archivo Black': 'Archivo Black', 'Inter Medium': 'Inter', 'JetBrains Mono': 'JetBrains Mono' };
 
@@ -25,10 +26,6 @@ const CASE_OPTS = [
     { id: 'upper', label: 'ABC', tip: 'All capitals.' },
     { id: 'asis', label: 'Abc', tip: 'The words as they were spoken.' },
 ];
-
-// Quick-place points: left/middle/right by top/middle/bottom thirds.
-const GRID_X = [0.28, 0.5, 0.72];
-const GRID_Y = [0.14, 0.5, 0.82];
 
 /** One style drawn in its own look: a small caption sample. */
 function StyleTile({ id, on, onPick }) {
@@ -106,17 +103,9 @@ export default function CaptionsPanel({ options, update, setCaptions, reset }) {
         }
     }
 
-    // Moving one axis pins both, so the other stays where it is shown.
-    const places = [
-        [t('Top left'), t('Top centre'), t('Top right')],
-        [t('Middle left'), t('Centre'), t('Middle right')],
-        [t('Bottom left'), t('Bottom centre'), t('Bottom right')],
-    ];
-    const moveTo = (x, y) => setCaptions({ x: r3(x), y: r3(y) });
-    const near = (a, b) => Math.abs(a - b) < 0.02;
-
     return (
         <div className="space-y-4">
+            <CapNotice cap="look.captions" text={t('This engine is older than Studio. Position, size, colour and the new motions apply after the next engine update.')} />
             <SwitchRow
                 checked={r.show}
                 onChange={(v) => setCaptions({ show: v ? undefined : false })}
@@ -303,60 +292,12 @@ export default function CaptionsPanel({ options, update, setCaptions, reset }) {
                 </div>
             </Field>
 
-            <Field label={t('Position')} set={has('x') || has('y')} onReset={clear('x', 'y')}>
-                <div className="flex items-start gap-2">
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 shrink-0 font-mono text-[10px] text-muted-foreground" aria-hidden>X</span>
-                            <Slider
-                                label={t('Horizontal position')}
-                                value={Math.round(r.center.x * 100)}
-                                min={0}
-                                max={100}
-                                step={1}
-                                bigStep={10}
-                                format={(v) => `${Math.round(v)}%`}
-                                dim={!r.placed}
-                                onReset={clear('x', 'y')}
-                                onChange={(v) => moveTo(v / 100, r.center.y)}
-                            />
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-2.5 shrink-0 font-mono text-[10px] text-muted-foreground" aria-hidden>Y</span>
-                            <Slider
-                                label={t('Vertical position')}
-                                value={Math.round(r.center.y * 100)}
-                                min={0}
-                                max={100}
-                                step={1}
-                                bigStep={10}
-                                format={(v) => `${Math.round(v)}%`}
-                                dim={!r.placed}
-                                onReset={clear('x', 'y')}
-                                onChange={(v) => moveTo(r.center.x, v / 100)}
-                            />
-                        </div>
-                    </div>
-                    <div role="group" aria-label={t('Quick place')} className="grid size-[72px] shrink-0 grid-cols-3 grid-rows-3 gap-px overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-white/[0.06]">
-                        {GRID_Y.flatMap((gy) => GRID_X.map((gx) => {
-                            const on = r.placed && near(r.center.x, gx) && near(r.center.y, gy);
-                            const name = places[GRID_Y.indexOf(gy)][GRID_X.indexOf(gx)];
-                            return (
-                                <button
-                                    key={`${gx}-${gy}`}
-                                    type="button"
-                                    aria-label={name}
-                                    aria-pressed={on}
-                                    onClick={() => moveTo(gx, gy)}
-                                    className="group/q flex items-center justify-center bg-[color-mix(in_srgb,var(--card)_78%,black)] outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-                                >
-                                    <span className={cn('size-1.5 rounded-full transition-[background-color,scale] duration-150', on ? 'scale-125 bg-foreground' : 'bg-muted-foreground/60 group-hover/q:bg-foreground')} />
-                                </button>
-                            );
-                        }))}
-                    </div>
-                </div>
-            </Field>
+            <PlaceField
+                center={r.center}
+                placed={r.placed}
+                onPlace={(x, y) => setCaptions({ x, y })}
+                onReset={clear('x', 'y')}
+            />
 
             <Field
                 label={t('Words per line')}

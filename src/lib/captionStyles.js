@@ -140,10 +140,10 @@ export function canvasSize(canvas) {
 // the Look's captions section, cleaned the way look.rs reads it
 // ---------------------------------------------------------------------------
 
-const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
-const num = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, lo, hi) : undefined);
+export const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+export const num = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, lo, hi) : undefined);
 const HEX = /^#?[0-9a-f]{6}$/i;
-const hex = (v) => (typeof v === 'string' && HEX.test(v.trim()) ? `#${v.trim().replace('#', '').toUpperCase()}` : undefined);
+export const hex = (v) => (typeof v === 'string' && HEX.test(v.trim()) ? `#${v.trim().replace('#', '').toUpperCase()}` : undefined);
 
 /** Engine motion name -> canonical id (`off`/`static` are `none`). */
 export function animName(v) {

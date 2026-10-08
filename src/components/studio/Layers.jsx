@@ -46,9 +46,21 @@ function summary(id, o, t) {
             if (o.look?.captions?.show === false) return t('Hidden');
             return `${o.style} · ${Math.round((o.look?.captions?.size ?? 1) * 100)}%`;
         }
-        case 'headline': return o.headline ? ((o.headline_text ?? '').trim() || t("The clip's own title")) : t('Off');
-        case 'bar': return o.progress_bar ? (o.bar_color || '').toUpperCase() : t('Off');
-        case 'logo': return o.logo ? baseName(o.logo) : t('No file');
+        case 'headline': {
+            if (!o.headline) return t('Off');
+            const size = o.look?.headline?.size;
+            return `${(o.headline_text ?? '').trim() || t("The clip's own title")}${size !== undefined ? ` · ${Math.round(size * 100)}%` : ''}`;
+        }
+        case 'bar': {
+            if (!o.progress_bar) return t('Off');
+            const b = o.look?.bar;
+            return `${t(b?.pos === 'top' ? 'Top' : 'Bottom')} · ${Math.round((b?.height ?? 1) * 100)}%`;
+        }
+        case 'logo': {
+            if (!o.logo) return t('No file');
+            const size = o.look?.logo?.size;
+            return `${baseName(o.logo)}${size !== undefined ? ` · ${Math.round(size * 100)}%` : ''}`;
+        }
         case 'music': return o.music ? baseName(o.music) : t('No file');
         case 'layout': return t(LAYOUT_LABEL[o.layout] ?? 'Single');
         case 'clips': return `${o.count > 0 ? t('{n} clips', { n: o.count }) : t('Auto')} · ${t(KIND_LABEL[o.kind] ?? 'Smart')}`;

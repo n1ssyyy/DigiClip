@@ -6,9 +6,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-    HISTORY_CAP, STORE_KEY, aspectList, applyCaptions, applyPatch, createLookStore, defaults, fromEngine, lookOptions,
+    HISTORY_CAP, STORE_KEY, aspectList, applyCaptions, applyEdit, applyPatch, applySection, createLookStore, defaults, fromEngine, lookOptions,
     lookToEngine, sanitizeLook, toEngine,
 } from '../src/lib/look.js';
+import {
+    HEADLINE_SAMPLE, barThickness, cleanBar, cleanHeadline, cleanLogo, headlineMarkup, headlineMotion, headlineText, logoClear,
+    resolveBar, resolveHeadline, resolveLogo, snapAxis, snapCentre, stageHeadline,
+} from '../src/lib/layers.js';
 import {
     CANVASES, CAPTION_STYLES, DEFAULT_POSITIONS, STYLES, assColor, captionLines, cleanCaptions, defaultPosition, fontBox,
     groupWords, holdLines, isKeyword, keywordBump, lineMotion, outlineRing, resolveCaptions, wordReveal,
@@ -685,4 +689,405 @@ test('the outline ring is a circle of shadows', () => {
 test('the style table has all eight styles', () => {
     assert.deepEqual(Object.keys(STYLES), CAPTION_STYLES);
     assert.equal(CAPTION_STYLES.length, 8);
+});
+
+// ---------------------------------------------------------------------------
+// the headline, progress bar and logo sections: store, contract, geometry
+// ---------------------------------------------------------------------------
+
+test('headline, bar and logo are pruned like captions: empty sections are not sent', () => {
+    const base = defaults(null);
+    const s = createLookStore({ storage: memoryStorage() });
+    s.seed(null);
+    s.setHeadline({ x: 0.5, y: 0.2, card: 'none', ink: '', size: undefined });
+    s.setBar({ pos: 'top', height: 1.5 });
+    s.setLogo({ opacity: 0, size: 2 });
+    const o = s.get().options;
+    assert.deepEqual(o.look.headline, { x: 0.5, y: 0.2, card: 'none' });
+    assert.deepEqual(toEngine(o).look, {
+        v: 1,
+        headline: { x: 0.5, y: 0.2, card: 'none' },
+        bar: { pos: 'top', height: 1.5 },
+        logo: { opacity: 0, size: 2 },
+    });
+    // Emptied again: the section leaves the Look and nothing is sent.
+    s.setHeadline({ x: undefined, y: undefined, card: undefined });
+    s.setBar({ pos: undefined, height: undefined });
+    s.setLogo({ opacity: undefined, size: undefined });
+    assert.deepEqual(s.get().options.look, { captions: {} });
+    assert.deepEqual(toEngine(s.get().options), legacyToEngine(base));
+    // An untouched state is exactly what it was.
+    assert.deepEqual(toEngine(defaults(null)), legacyToEngine(defaults(null)));
+});
+
+test('the three sections round-trip through toEngine and fromEngine', () => {
+    const look = {
+        captions: {},
+        headline: { x: 0.4, y: 0.75, size: 1.5, ink: '#FFFFFF', card: '#111111', accent: '#FFD400', anim: 'fade', seconds: 3 },
+        bar: { pos: 'top', height: 2.5 },
+        logo: { x: 0.9, y: 0.1, size: 0.6, opacity: 0.5 },
+    };
+    const o = { ...defaults(null), headline: true, headline_text: 'Big news', progress_bar: true, logo: 'C:\\a.png', look };
+    const e = JSON.parse(JSON.stringify(toEngine(o)));
+    assert.deepEqual(e.look, { v: 1, headline: look.headline, bar: look.bar, logo: look.logo });
+    const back = fromEngine(e, null);
+    assert.deepEqual(back.look, look);
+    assert.deepEqual(toEngine(back), toEngine(o));
+    // No card is a value too, and bad values are read the way look.rs reads them.
+    const p = fromEngine({ look: { headline: { card: null, size: 9, anim: 'spin', ink: 'red', seconds: -2 }, bar: { pos: 'left', height: 0 }, logo: { size: 0, opacity: 4, x: -1 } } }, null);
+    assert.deepEqual(p.look.headline, { card: 'none', size: 2, seconds: 0 });
+    assert.deepEqual(p.look.bar, { height: 0.5 });
+    assert.deepEqual(p.look.logo, { size: 0.4, opacity: 1, x: 0 });
+    assert.deepEqual(cleanHeadline({ card: 'NONE', anim: 'Fade ' }), { card: 'none', anim: 'fade' });
+    assert.deepEqual(cleanBar(null), {});
+    assert.deepEqual(cleanLogo('x'), {});
+});
+
+test('applySection and applyEdit change several things in one result', () => {
+    const d = defaults(null);
+    assert.equal(applySection(d, 'logo', { x: undefined }), d);
+    const n = applyEdit({ ...d, logo: 'a.png', logo_pos: 'tr', look: { captions: {}, logo: { x: 0.2, y: 0.3, size: 2 } } }, { logo_pos: 'bl' }, { logo: { x: undefined, y: undefined } });
+    assert.equal(n.logo_pos, 'bl');
+    assert.deepEqual(n.look.logo, { size: 2 });
+    assert.equal(applyEdit(d, null, null), d);
+});
+
+test('one drag is one undo step, however long it pauses', () => {
+    const c = clocked();
+    const s = createLookStore({ storage: memoryStorage(), now: c.now });
+    s.seed(null);
+    s.setCaptions({ x: 0.3, y: 0.6 });
+    c.tick(1000);
+    s.beginGesture();
+    for (let i = 1; i <= 40; i++) {
+        s.setCaptions({ x: 0.3 + i / 100, y: 0.6 - i / 200 });
+        // Pauses longer than the folding window in the middle of the drag.
+        c.tick(i % 10 === 0 ? 900 : 16);
+    }
+    s.endGesture();
+    const end = s.get().options.look.captions;
+    close(end.x, 0.7);
+    close(end.y, 0.4);
+    // Ctrl+Z puts it back where it was before the drag.
+    s.undo();
+    assert.deepEqual(s.get().options.look.captions, { x: 0.3, y: 0.6 });
+    s.undo();
+    assert.deepEqual(s.get().options.look.captions, {});
+    assert.equal(s.get().canUndo, false);
+    s.redo();
+    s.redo();
+    close(s.get().options.look.captions.x, 0.7);
+});
+
+test('a gesture covers every layer; undo waits for it; a drag that goes nowhere leaves no step', () => {
+    const c = clocked();
+    const s = createLookStore({ storage: memoryStorage(), now: c.now });
+    s.seed(null);
+    s.beginGesture();
+    s.setHeadline({ x: 0.2, y: 0.2 });
+    s.setHeadline({ x: 0.4, y: 0.4 });
+    s.setHeadline({ size: 1.2 });
+    s.undo(); // ignored while the pointer is down
+    s.redo();
+    assert.deepEqual(s.get().options.look.headline, { x: 0.4, y: 0.4, size: 1.2 });
+    s.endGesture();
+    s.endGesture(); // harmless
+    s.undo();
+    assert.equal('headline' in s.get().options.look, false);
+    assert.equal(s.get().canUndo, false);
+
+    // A click that never moves, and a drag dropped where it began.
+    s.redo();
+    s.beginGesture();
+    s.endGesture();
+    s.beginGesture();
+    s.setHeadline({ x: 0.9 });
+    s.setHeadline({ x: 0.4 });
+    s.endGesture();
+    // Only the first drag is a step: undo takes the headline away again.
+    assert.deepEqual(s.get().options.look.headline, { x: 0.4, y: 0.4, size: 1.2 });
+    s.undo();
+    assert.equal('headline' in s.get().options.look, false);
+    assert.equal(s.get().canUndo, false);
+    s.redo();
+    s.setLogo({ x: 0.5 });
+    c.tick(1000);
+    s.setLogo({ x: 0.6 });
+    s.undo();
+    assert.equal(s.get().options.look.logo.x, 0.5);
+});
+
+test('edit changes flat options and sections as one step', () => {
+    const c = clocked();
+    const s = createLookStore({ storage: memoryStorage(), now: c.now });
+    s.seed(null);
+    s.update({ logo: 'a.png', logo_pos: 'tr' });
+    c.tick(1000);
+    s.setLogo({ x: 0.3, y: 0.3 });
+    c.tick(1000);
+    s.edit({ logo_pos: 'bl' }, { logo: { x: undefined, y: undefined } });
+    assert.equal(s.get().options.logo_pos, 'bl');
+    assert.equal('logo' in s.get().options.look, false);
+    s.undo();
+    assert.equal(s.get().options.logo_pos, 'tr');
+    assert.deepEqual(s.get().options.look.logo, { x: 0.3, y: 0.3 });
+});
+
+// ---- headline geometry (ass.rs) --------------------------------------------
+
+const HEAD = 'Why most founders quit too early';
+
+test('headline text is sentence-cased and cut at a word, like headline_text', () => {
+    assert.equal(headlineText('  the  {big}\\ *one*. ', 64), 'The big one');
+    assert.equal(headlineText('the secret to growing fast is doing less of it', 30), 'The secret to growing fast');
+    assert.equal(headlineText('nobody talks about this, but it changes everything', 40), 'Nobody talks about this');
+    assert.equal(headlineText('Why is nobody doing this?', 44), 'Why is nobody doing this?');
+    assert.equal(headlineText('{}', 48), '');
+    assert.equal(stageHeadline(''), HEADLINE_SAMPLE);
+    assert.equal(stageHeadline(' {} '), HEADLINE_SAMPLE);
+    assert.equal(stageHeadline('Big news'), 'Big news');
+    assert.equal(HEADLINE_SAMPLE, HEAD);
+});
+
+test('headline markup: two balanced lines and one accent word', () => {
+    const words = (m) => m.map((l) => l.map((w) => w.text).join(' '));
+    const accent = (m) => m.flat().filter((w) => w.accent).map((w) => w.text);
+    let m = headlineMarkup('The secret to growing fast');
+    assert.deepEqual(words(m), ['The secret to', 'growing fast']);
+    assert.deepEqual(accent(m), ['secret']);
+    m = headlineMarkup('I made $1 million');
+    assert.deepEqual(words(m), ['I made $1 million']);
+    assert.deepEqual(accent(m), ['$1']);
+    m = headlineMarkup("Feel like I'm in a coffin");
+    assert.deepEqual(accent(m), ['coffin']);
+    // The sample: no keyword, so the longest content word.
+    m = headlineMarkup(HEAD);
+    assert.deepEqual(words(m), ['Why most founders', 'quit too early']);
+    assert.deepEqual(accent(m), ['founders']);
+});
+
+test('headline today: a white card at the top of a 1080x1920 frame', () => {
+    const r = resolveHeadline(HEAD, '9:16', {});
+    assert.equal(r.font, 'Archivo Black');
+    assert.equal(r.fontPx, 64);
+    assert.deepEqual(r.card, { color: '#FFFFFF', pad: 24 });
+    assert.equal(r.outline, null);
+    assert.equal(r.ink, '#111111');
+    assert.equal(r.accent, '#FF3C1E');
+    assert.equal(r.block, 128);
+    // MarginV 163 (8.5% of 1920) is the top of the type; the card's middle follows.
+    assert.equal(r.wrapW, 900);
+    assert.equal(r.placed, false);
+    assert.equal(r.cx, 540);
+    assert.equal(r.cy, 227);
+    assert.deepEqual(r.center, { x: 0.5, y: 227 / 1920 });
+    assert.equal(r.anim, 'pop');
+    assert.equal(r.seconds, 0);
+    assert.equal(resolveHeadline('{}', '9:16', {}), null);
+});
+
+test('headline size scales the type and the card padding together', () => {
+    let r = resolveHeadline(HEAD, '9:16', { size: 1.5 });
+    assert.deepEqual([r.fontPx, r.card.pad], [96, 36]);
+    r = resolveHeadline(HEAD, '9:16', { size: 0.5 });
+    assert.deepEqual([r.fontPx, r.card.pad], [32, 12]);
+    r = resolveHeadline(HEAD, '9:16', { size: 9 }); // clamped to 2
+    assert.equal(r.fontPx, 128);
+});
+
+test('headline colours, no card and the outline rule', () => {
+    let r = resolveHeadline(HEAD, '9:16', { ink: '#ffffff', card: '#111111', accent: '#FFD400' });
+    assert.deepEqual([r.ink, r.card.color, r.accent], ['#FFFFFF', '#111111', '#FFD400']);
+    r = resolveHeadline(HEAD, '9:16', { card: 'none' });
+    assert.equal(r.card, null);
+    assert.equal(r.ink, '#FFFFFF');
+    assert.deepEqual(r.outline, { color: '#000000', width: 5 });
+    assert.equal(r.accent, '#FF3C1E');
+    r = resolveHeadline(HEAD, '9:16', { card: 'none', size: 2 });
+    assert.deepEqual([r.fontPx, r.outline.width], [128, 10]);
+    r = resolveHeadline(HEAD, '9:16', { card: 'none', ink: '#FFD400' });
+    assert.deepEqual([r.ink, r.outline.color], ['#FFD400', '#000000']);
+    // A dark ink gets a light edge.
+    r = resolveHeadline(HEAD, '9:16', { card: 'none', ink: '#101010' });
+    assert.deepEqual([r.ink, r.outline.color], ['#101010', '#FFFFFF']);
+});
+
+test('a placed headline is anchored by its centre and kept inside the frame', () => {
+    const at = (look) => {
+        const r = resolveHeadline(HEAD, '9:16', look);
+        return [r.cx, r.cy, r.margin];
+    };
+    assert.deepEqual(at({ x: 0.5, y: 0.7 }), [540, 1344, 90]);
+    assert.deepEqual(at({ x: 0.35, y: 0.2 }), [378, 384, 252]);
+    // Hard against an edge the centre is nudged in so words still fit.
+    assert.deepEqual(at({ x: 0.02, y: 0.5 }), [306, 960, 324]);
+    assert.deepEqual(at({ x: 1, y: 0.5 }), [774, 960, 324]);
+    // One coordinate: the other is the middle (x) or where it sits today (y).
+    assert.deepEqual(at({ y: 0.25 }), [540, 480, 90]);
+    assert.deepEqual(at({ x: 0.5 }), [540, 227, 90]);
+    assert.equal(resolveHeadline(HEAD, '9:16', { x: 0.5 }).placed, true);
+    // The whole card stays on the frame, top and bottom.
+    assert.deepEqual(at({ x: 0.5, y: 0 }), [540, 88, 90]);
+    assert.deepEqual(at({ x: 0.5, y: 1 }), [540, 1832, 90]);
+    // The wrapped text never leaves the frame, wherever x is.
+    for (let i = 0; i <= 20; i++) {
+        const r = resolveHeadline(HEAD, '9:16', { x: i / 20, y: 0.5 });
+        const half = 540 - r.margin;
+        assert.ok(r.cx - half >= 89 && r.cx + half <= 991, `x ${i / 20}`);
+    }
+    // A square frame scales the type by 0.9 (size 1.3: 75 px type, 28 px padding).
+    const r = resolveHeadline(HEAD, '1:1', { x: 0.5, y: 0.7, size: 1.3, card: '#111111' });
+    assert.deepEqual([r.fontPx, r.card.pad, r.cx, r.cy], [75, 28, 540, 756]);
+});
+
+test('a corner logo widens the default headline margin only', () => {
+    const clear = { top: true, left: false, px: 260 };
+    let r = resolveHeadline(HEAD, '9:16', {}, { clear });
+    // MarginL 90, MarginR 260: the text is centred in what is left.
+    assert.deepEqual([r.wrapW, r.cx], [1080 - 90 - 260, 90 + (1080 - 350) / 2]);
+    r = resolveHeadline(HEAD, '9:16', { size: 1.2 }, { clear });
+    assert.equal(r.wrapW, 730);
+    r = resolveHeadline(HEAD, '9:16', { x: 0.5, y: 0.12 }, { clear });
+    // Placed: the usual side margins, the logo is not made room for.
+    assert.equal(r.margin, 90);
+    assert.equal(r.cx, 540);
+    r = resolveHeadline(HEAD, '9:16', {}, { clear: { top: false, left: false, px: 260 } });
+    assert.equal(r.wrapW, 900);
+    // The clearance of a real corner logo (pipeline.rs): its width, inset and a gap.
+    assert.deepEqual(logoClear(resolveLogo('9:16', 'tl', {}, null)), { top: true, left: true, px: 152 + 43 + 27 });
+    assert.equal(logoClear(resolveLogo('9:16', 'tl', { x: 0.2 }, null)), null);
+    assert.equal(logoClear(null), null);
+});
+
+test('headline motion: pop, fade, none and a limited time on screen', () => {
+    const r = (look) => resolveHeadline(HEAD, '9:16', look);
+    const pop = r({});
+    close(headlineMotion(pop, 0, 9000).opacity, 0);
+    close(headlineMotion(pop, 0, 9000).scale, 0.72);
+    close(headlineMotion(pop, 80, 9000).opacity, 0.5);
+    close(headlineMotion(pop, 200, 9000).scale, 1.06);
+    close(headlineMotion(pop, 270, 9000).scale, 1.03);
+    assert.deepEqual(headlineMotion(pop, 1000, 9000), { opacity: 1, scale: 1 });
+    const fade = r({ anim: 'fade' });
+    assert.deepEqual(headlineMotion(fade, 100, 9000), { opacity: 0.5, scale: 1 });
+    assert.deepEqual(headlineMotion(r({ anim: 'none' }), 0, 9000), { opacity: 1, scale: 1 });
+    // Three seconds of a nine second clip, then a 200 ms fade out inside them.
+    const timed = r({ anim: 'none', seconds: 3 });
+    assert.deepEqual(headlineMotion(timed, 2800, 9000), { opacity: 1, scale: 1 });
+    close(headlineMotion(timed, 2900, 9000).opacity, 0.5);
+    assert.equal(headlineMotion(timed, 3000, 9000), null);
+    // Never past the clip, and no fade when it lasts the whole clip.
+    assert.equal(headlineMotion(r({ seconds: 20 }), 8999, 9000).opacity, 1);
+    assert.equal(headlineMotion(r({ seconds: 20 }), 9000, 9000), null);
+    assert.equal(headlineMotion(r({ seconds: 0 }), 5000, 9000).opacity, 1);
+});
+
+// ---- progress bar (compose.rs) ---------------------------------------------
+
+test('bar thickness follows the engine on every canvas', () => {
+    assert.equal(barThickness('9:16', 1), 12);
+    assert.equal(barThickness('1:1', 1), 8);
+    assert.equal(barThickness('16:9', 1), 8);
+    assert.equal(barThickness('4:5', 1), 8); // 1350 * 0.0065 = 8.8 -> 8
+    assert.equal(barThickness('9:16', 2), 24);
+    assert.equal(barThickness('9:16', 0.5), 6);
+    assert.equal(barThickness('1:1', 0.5), 4);
+    assert.equal(barThickness('1:1', 3), 24);
+    // Always even.
+    for (const c of Object.keys(CANVASES)) for (const h of [0.5, 0.75, 1, 1.3, 2, 3]) assert.equal(barThickness(c, h) % 2, 0);
+});
+
+test('the bar sits on the bottom or the top edge and fills in even pixels', () => {
+    let b = resolveBar('9:16', '#00ff88', {});
+    assert.deepEqual([b.top, b.y, b.thickness, b.color], [false, 1908, 12, '#00FF88']);
+    b = resolveBar('9:16', '', { pos: 'top', height: 2 });
+    assert.deepEqual([b.top, b.y, b.thickness, b.color], [true, 0, 24, '#FFD400']);
+    b = resolveBar('1:1', '#FFD400', { pos: 'bottom', height: 3 });
+    assert.deepEqual([b.y, b.thickness], [1080 - 24, 24]);
+    b = resolveBar('16:9', '#FFD400', {});
+    assert.deepEqual([b.w, b.y], [1920, 1072]);
+    assert.deepEqual([0, 0.5, 1, 2, -1, NaN].map((p) => b.fill(p)), [0, 960, 1920, 1920, 0, 0]);
+    assert.equal(resolveBar('9:16', '#FFD400', {}).fill(1 / 3), 360);
+    close(resolveBar('9:16', '#FFD400', {}).center.y, 1914 / 1920);
+    close(resolveBar('9:16', '#FFD400', { pos: 'top' }).center.y, 6 / 1920);
+});
+
+// ---- logo (render.rs) ------------------------------------------------------
+
+test('logo box: 14% of the short side tall, 26% wide, whatever the shape', () => {
+    assert.deepEqual(resolveLogo('9:16', 'tr', {}, null).box, { w: 152, h: 152 });
+    assert.deepEqual(resolveLogo('9:16', 'tr', {}, { w: 800, h: 200 }).box, { w: 280, h: 70 });
+    assert.deepEqual(resolveLogo('9:16', 'tr', {}, { w: 100, h: 200 }).box, { w: 76, h: 152 });
+    assert.deepEqual(resolveLogo('9:16', 'tr', { size: 2.5 }, { w: 4, h: 1 }).box, { w: 702, h: 176 });
+    assert.deepEqual(resolveLogo('9:16', 'tr', { size: 0.4 }, null).box, { w: 60, h: 60 });
+    // The short side counts, so 16:9 and 1:1 have the same box as 9:16.
+    assert.deepEqual(resolveLogo('16:9', 'tr', {}, null).box, { w: 152, h: 152 });
+});
+
+test('logo corners keep the engine\'s insets; bottom corners sit higher', () => {
+    const at = (canvas, corner) => {
+        const r = resolveLogo(canvas, corner, {}, null);
+        return [r.x, r.y];
+    };
+    assert.deepEqual(at('9:16', 'tl'), [43, 67]);
+    assert.deepEqual(at('1:1', 'tr'), [1080 - 152 - 43, 38]);
+    assert.deepEqual(at('16:9', 'bl'), [77, 1080 - 152 - 76]);
+    assert.deepEqual(at('4:5', 'br'), [1080 - 152 - 43, 1350 - 152 - 94]);
+    assert.equal(resolveLogo('9:16', 'zz', {}, null).corner, 'tr');
+    assert.equal(resolveLogo('9:16', 'tl', {}, null).free, false);
+    assert.equal(resolveLogo('9:16', 'tl', {}, null).opacity, 0.9);
+    assert.equal(resolveLogo('9:16', 'tl', { opacity: 0.456 }, null).opacity, 0.46);
+    assert.equal(resolveLogo('9:16', 'tl', { opacity: 3 }, null).opacity, 1);
+});
+
+test('a free logo is centred on its point and wins over the corner', () => {
+    const o = (look, nat = null) => {
+        const r = resolveLogo('9:16', 'bl', look, nat);
+        return [r.x, r.y];
+    };
+    assert.deepEqual(o({ x: 0.5, y: 0.5 }), [464, 884]);
+    assert.deepEqual(o({ x: 0.25 }), [194, 884]);
+    assert.deepEqual(o({ y: 0.1 }), [464, 116]);
+    assert.deepEqual(o({ x: 0.5, y: 0.5 }, { w: 4, h: 1 }), [400, 926]);
+    assert.equal(resolveLogo('9:16', 'bl', { y: 0.1 }, null).free, true);
+    const c = resolveLogo('9:16', 'bl', { x: 0.5, y: 0.5 }, null).center;
+    assert.deepEqual(c, { x: 0.5, y: 960 / 1920 });
+});
+
+test('a free logo never leaves the frame', () => {
+    assert.equal(resolveLogo('9:16', 'tr', { x: 0, y: 0 }, null).x, 0);
+    let r = resolveLogo('9:16', 'tr', { x: 1, y: 1 }, null);
+    assert.deepEqual([r.x, r.y], [928, 1768]);
+    r = resolveLogo('9:16', 'tr', { size: 2.5, x: 1, y: 0.5 }, { w: 4, h: 1 });
+    assert.deepEqual([r.box.w, r.box.h, r.x, r.y], [702, 176, 378, 872]);
+    for (const canvas of Object.keys(CANVASES)) {
+        const { w, h } = CANVASES[canvas];
+        for (const aspect of [1, 4, 0.5]) {
+            for (const size of [0.4, 1, 2.5]) {
+                for (const [x, y] of [[0, 0], [1, 1], [0, 1], [1, 0], [0.5, 0.01]]) {
+                    const l = resolveLogo(canvas, 'tr', { size, x, y }, { w: aspect * 100, h: 100 });
+                    assert.ok(l.x + l.box.w <= w && l.y + l.box.h <= h, `${canvas} ${aspect} ${size}`);
+                    assert.ok(l.x % 2 === 0 && l.y % 2 === 0 && l.x >= 0 && l.y >= 0);
+                }
+            }
+        }
+    }
+});
+
+// ---- snapping --------------------------------------------------------------
+
+test('snapping pulls the centre to the middle lines and the 5% margins', () => {
+    assert.deepEqual(snapAxis(0.51, 0.1, 0.02), { v: 0.5, guide: 0.5 });
+    assert.deepEqual(snapAxis(0.2, 0.1, 0.02), { v: 0.2, guide: null });
+    assert.deepEqual(snapAxis(0.055, 0.1, 0.01), { v: 0.05, guide: 0.05 });
+    assert.deepEqual(snapAxis(0.945, 0.1, 0.01), { v: 0.95, guide: 0.95 });
+    // The box's edge snaps to the margin too, and the guide is the margin line.
+    const e = snapAxis(0.148, 0.1, 0.01);
+    close(e.v, 0.15);
+    assert.equal(e.guide, 0.05);
+    // The nearest one wins.
+    assert.equal(snapAxis(0.498, 0.3, 0.01).guide, 0.5);
+    // Both axes; Alt (free) leaves the point alone.
+    assert.deepEqual(snapCentre(0.51, 0.949, { x: 0.1, y: 0.05 }, { x: 0.02, y: 0.02 }), { x: 0.5, y: 0.95, guideX: 0.5, guideY: 0.95 });
+    assert.deepEqual(snapCentre(0.51, 0.949, { x: 0.1, y: 0.05 }, { x: 0.02, y: 0.02 }, true), { x: 0.51, y: 0.949, guideX: null, guideY: null });
 });

@@ -230,14 +230,22 @@ export function Slider({ label, value, min = 0, max = 1, step = 0.01, bigStep, o
                 onKeyDown={onKey}
                 onPointerDown={(e) => {
                     if (e.button !== 0) return;
-                    e.currentTarget.setPointerCapture(e.pointerId);
+                    // Act first: a capture that fails (a pointer the page
+                    // cannot hold) must not cost the click its value.
                     setDrag(true);
                     at(e.clientX);
+                    try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                    } catch {
+                    }
                 }}
                 onPointerMove={(e) => { if (drag) at(e.clientX); }}
                 onPointerUp={(e) => {
                     setDrag(false);
-                    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                    try {
+                        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                    } catch {
+                    }
                 }}
                 onPointerCancel={() => setDrag(false)}
                 onDoubleClick={() => { if (reset) reset(); }}
