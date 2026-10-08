@@ -144,7 +144,7 @@ export default function Stage({ canvas, resolved, lines, measure, layers, select
                                 {bar && <BarLayer r={bar} clock={clock} len={sample.len} />}
                                 {logo && <LogoLayer r={logo} file={logoFile} />}
                                 <CaptionLayer r={resolved} lines={lines} clock={clock} reduced={reduced} measure={measure} />
-                                {resolved.show && <CaptionProbe r={resolved} lines={lines} measure={measure} onSize={onCapSize} />}
+                                {resolved.show && <CaptionProbe r={resolved} lines={lines} clock={clock} measure={measure} onSize={onCapSize} />}
                                 {headline && <HeadlineLayer r={headline} clock={clock} len={sample.len} reduced={reduced} onSize={onHeadSize} />}
                                 {safe && tall && <SafeAreas unit={1 / s} />}
                             </div>

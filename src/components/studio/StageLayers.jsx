@@ -3,8 +3,9 @@ import { ImagePlus } from 'lucide-react';
 import { fontBox, outlineRing } from '../../lib/captionStyles';
 import { blockExtent, cfgOf, planFor } from '../../lib/captionMotion';
 import { headlineMotion } from '../../lib/layers';
+import { blockAt } from '../../lib/stageTime';
 import { baseName } from '../digiclip/JobOptions';
-import { useClock } from './usePlayer';
+import { useClock, useClockPick } from './usePlayer';
 
 const STILL = { opacity: 1, scale: 1 };
 
@@ -136,48 +137,42 @@ export function LogoLayer({ r, file }) {
 }
 
 /**
- * An invisible copy of the widest caption line, laid out exactly like the
- * real one, so the stage knows how big the caption block is even between
- * lines (for its selection box).
+ * An invisible copy of the caption block on screen (between lines, the
+ * nearest one), laid out exactly like the real one, so the stage knows how
+ * big the caption is at the playhead (for its selection box).
  */
 export function CaptionProbe(props) {
     return props.r.wordLevel ? <WordProbe {...props} /> : <LineProbe {...props} />;
 }
 
 /** The word-level caption's size comes from its layout, not the DOM: the
- *  biggest block of the sample (rows, boxes, stroke, tilt) and its row height. */
-function WordProbe({ r, lines, measure, onSize }) {
+ *  block at the playhead (rows, boxes, stroke, tilt) and its row height. */
+function WordProbe({ r, lines, clock, measure, onSize }) {
+    const picked = useClockPick(clock, (t) => blockAt(lines, t));
     const ext = useMemo(() => {
         const cfg = cfgOf(r);
-        let blocks = lines;
-        if (!blocks.length) {
+        let block = picked;
+        if (!block) {
             const w = (text, s, e) => ({ text, raw: text, s, e, key: false });
             const up = (x) => (r.caps ? x.toUpperCase() : x);
-            blocks = [{ t0: 0, t1: 1, words: [w(up('Stop'), 0, 0.4), w(up('scrolling'), 0.4, 0.9)] }];
+            block = { t0: 0, t1: 1, words: [w(up('Stop'), 0, 0.4), w(up('scrolling'), 0.4, 0.9)] };
         }
-        let out = { w: 0, h: 0, bh: 0 };
-        for (const b of blocks) {
-            const e = blockExtent(planFor(cfg, r, b, measure), r);
-            out = { w: Math.max(out.w, e.w), h: Math.max(out.h, e.h), bh: Math.max(out.bh, e.bh) };
-        }
-        return out;
-    }, [r, lines, measure]);
+        const e = blockExtent(planFor(cfg, r, block, measure), r);
+        return { w: e.w, h: e.h, bh: e.bh };
+    }, [r, picked, measure]);
     useLayoutEffect(() => {
         onSize?.(ext);
     }, [ext, onSize]);
     return null;
 }
 
-function LineProbe({ r, lines, onSize }) {
+function LineProbe({ r, lines, clock, onSize }) {
     const fb = useMemo(() => fontBox(r.font, r.fontPx), [r.font, r.fontPx]);
-    const text = useMemo(() => {
-        let best = '';
-        for (const l of lines) {
-            const s = l.words.map((w) => w.text).join(' ');
-            if (s.length > best.length) best = s;
-        }
-        return best || (r.caps ? 'STOP SCROLLING' : 'Stop scrolling');
-    }, [lines, r.caps]);
+    const picked = useClockPick(clock, (t) => blockAt(lines, t));
+    const text = useMemo(
+        () => (picked ? picked.words.map((w) => w.text).join(' ') : (r.caps ? 'STOP SCROLLING' : 'Stop scrolling')),
+        [picked, r.caps],
+    );
     const ref = useRef(null);
     useSize(ref, onSize, [r.font, r.fontPx, r.wrapW, r.box?.pad, text]);
     const pad = r.box ? r.box.pad : 0;

@@ -2,6 +2,24 @@ import { RotateCcw } from 'lucide-react';
 import Tip from '../digiclip/Tooltip';
 import { Kicker } from '../digiclip/JobOptions';
 import { useT } from '../../lib/i18n';
+import { cn } from '../../lib/utils';
+
+/** The small "back to the style's own value" button of a control. */
+export function ResetBtn({ label, onClick, className }) {
+    const t = useT();
+    return (
+        <Tip label={t('Back to the style’s own value')} side="left">
+            <button
+                type="button"
+                aria-label={t('Reset {name}', { name: label })}
+                onClick={onClick}
+                className={cn('fade flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none', className)}
+            >
+                <RotateCcw className="size-3" aria-hidden />
+            </button>
+        </Tip>
+    );
+}
 
 /**
  * A labelled inspector control. `set` says the Look overrides the style's
@@ -14,18 +32,7 @@ export default function Field({ label, set = false, onReset, hint, children }) {
         <div className="space-y-1.5">
             <div className="flex h-5 items-center justify-between">
                 <Kicker>{label}</Kicker>
-                {set && onReset && (
-                    <Tip label={t('Back to the style’s own value')} side="left">
-                        <button
-                            type="button"
-                            aria-label={t('Reset {name}', { name: label })}
-                            onClick={onReset}
-                            className="fade -mr-1 flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                        >
-                            <RotateCcw className="size-3" aria-hidden />
-                        </button>
-                    </Tip>
-                )}
+                {set && onReset && <ResetBtn label={label} onClick={onReset} className="-mr-1" />}
             </div>
             {children}
             {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}

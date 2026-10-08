@@ -17,7 +17,7 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
  * frame); `placed` says the Look sets it. Moving one axis pins both, so the
  * other stays where it is shown.
  */
-export default function PlaceField({ center, placed, onPlace, onReset, grid = true, disabled = false, hint }) {
+export default function PlaceField({ center, placed, onPlace, onReset, grid = true, disabled = false, hint, onDragStart, onDragEnd }) {
     const t = useT();
     const places = [
         [t('Top left'), t('Top centre'), t('Top right')],
@@ -42,6 +42,8 @@ export default function PlaceField({ center, placed, onPlace, onReset, grid = tr
                             dim={!placed}
                             disabled={disabled}
                             onReset={onReset}
+                            onDragStart={onDragStart}
+                            onDragEnd={onDragEnd}
                             onChange={(v) => moveTo(v / 100, center.y)}
                         />
                     </div>
@@ -58,6 +60,8 @@ export default function PlaceField({ center, placed, onPlace, onReset, grid = tr
                             dim={!placed}
                             disabled={disabled}
                             onReset={onReset}
+                            onDragStart={onDragStart}
+                            onDragEnd={onDragEnd}
                             onChange={(v) => moveTo(center.x, v / 100)}
                         />
                     </div>

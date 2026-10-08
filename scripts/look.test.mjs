@@ -24,6 +24,15 @@ import {
 import {
     ALIGNS, BOX_PERS, EASES, ENTER_KINDS, ENTER_MS, EXIT_KINDS, EXIT_MS, FIELD_SPECS, FILLS, WORD_MODES, effectiveMotion, rangeOf,
 } from '../src/lib/captionFields.js';
+import {
+    ALIASES, ENUM_ORDER, FIELD_SECTION, SECTION_CAP, SECTION_IDS, SECTION_PATHS, dirtySections, numSpec, numUi, sectionHasOverrides, sectionKeys,
+    sectionResetPatch, sectionOf,
+} from '../src/lib/captionSections.js';
+import {
+    activeExtraPatch, boxModePatch, captionView, clearPatch, editPatch, getPath, glowPatch, nest, shadowPatch,
+} from '../src/lib/captionEffective.js';
+import { blockAt, parkTime } from '../src/lib/stageTime.js';
+import { PREVIEW_KEYWORD, previewBlock, previewTiming } from '../src/lib/captionPreview.js';
 
 // ---------------------------------------------------------------------------
 // the panel state -> engine options contract
@@ -1999,4 +2008,357 @@ test('a block\'s size for the selection box covers rows, boxes and stroke', () =
     near(blockExtent(h.plan(), h.r).w, h.plan().blockW + 2 * h.r.box.pad, 1e-9);
     // The row height alone is what sits against the anchor.
     near(e1.bh, boxed.plan().blockH, 1e-9);
+});
+
+// ---------------------------------------------------------------------------
+// the caption designer: which section owns which field, and what its controls show
+// ---------------------------------------------------------------------------
+
+const V1_FIELDS = ['show', 'x', 'y', 'size', 'font', 'case', 'color', 'active', 'accent', 'max_words', 'outline', 'outline_w', 'shadow', 'box', 'box_opacity', 'anim'];
+
+/** A value inside the field's range, for the path. */
+function sampleOf(path) {
+    const s = FIELD_SPECS[path];
+    if (s.type === 'number') return s.int ? s.max : (s.min + s.max) / 2 === s.def ? s.max : (s.min + s.max) / 2;
+    if (s.type === 'enum') return s.values[s.values.length - 1];
+    return '#123456';
+}
+
+/** A Look that sets every v2 field (the object forms of shadow and box). */
+function fullLook() {
+    const out = {};
+    for (const p of Object.keys(FIELD_SPECS)) {
+        const keys = p.split('.');
+        let cur = out;
+        keys.forEach((k, i) => {
+            if (i === keys.length - 1) cur[k] = sampleOf(p);
+            else cur = (cur[k] ??= {});
+        });
+    }
+    // The v1 forms that do not clash with the objects.
+    return { ...out, show: false, x: 0.4, y: 0.6, size: 1.2, font: 'Anton', case: 'asis', color: '#FFFFFF', active: '#FFFF00', accent: '#00FFFF', max_words: 3, outline: '#000000', outline_w: 2, box_opacity: 0.5, anim: 'fade' };
+}
+
+test('every caption field has a section, and the map matches what the Look can hold', () => {
+    const paths = [...Object.keys(FIELD_SPECS), ...V1_FIELDS];
+    for (const p of paths) assert.ok(sectionOf(p), `no section for ${p}`);
+    // Each path is listed once, under a real section, and nothing is listed that is not a field.
+    const listed = SECTION_IDS.flatMap((s) => SECTION_PATHS[s]);
+    assert.equal(new Set(listed).size, listed.length, 'a path is listed twice');
+    const known = new Set([...paths, 'glow']);
+    for (const p of listed) assert.ok(known.has(p), `${p} is not a caption field`);
+    assert.deepEqual(Object.keys(SECTION_PATHS), SECTION_IDS);
+    // The v1 forms that a v2 control also edits point at a path of the same section.
+    for (const [v1, target] of Object.entries(ALIASES)) {
+        assert.ok(FIELD_SECTION[target], `${v1} -> ${target}`);
+        assert.equal(sectionOf(v1), sectionOf(target));
+    }
+    // A section other than the first needs an engine ability, named the way the panels ask for it.
+    for (const s of SECTION_IDS.slice(1)) assert.match(SECTION_CAP[s], /^look\.captions\.(type|fx|words|motion)$/);
+    assert.equal(SECTION_CAP.style, undefined);
+    // Every field of the specs is one the engine's reader keeps (so a control can really set it).
+    const clean = cleanCaptions(fullLook());
+    for (const p of Object.keys(FIELD_SPECS)) assert.notEqual(getPath(clean, p), undefined, `${p} did not survive cleaning`);
+});
+
+test('every field of the specs has the control its kind needs: number display, choice order', () => {
+    for (const [p, s] of Object.entries(FIELD_SPECS)) {
+        if (s.type === 'number') {
+            assert.deepEqual([numSpec(p).min, numSpec(p).max], [s.min, s.max]);
+            const ui = numUi(p);
+            assert.ok(ui && ui.k > 0 && Number.isInteger(ui.digits), `${p} has no number display`);
+        }
+        if (s.type === 'enum') assert.deepEqual([...ENUM_ORDER[p]].sort(), [...s.values].sort(), `${p} choices`);
+    }
+    // The v1 numbers with a control of their own.
+    assert.deepEqual([numSpec('size').min, numSpec('size').max, numSpec('max_words').max], [0.5, 2, 8]);
+    // Shares of the type size and 0..1 amounts read as percent, a line gap as a multiple.
+    assert.deepEqual(numUi('words.release_ms'), { k: 1, unit: 'ms', digits: 0 });
+    assert.deepEqual(numUi('shadow.opacity'), { k: 100, unit: '%', digits: 0 });
+    assert.deepEqual(numUi('spacing'), { k: 100, unit: '%', digits: 1 });
+    assert.deepEqual(numUi('line_gap'), { k: 1, unit: '', digits: 2 });
+    assert.equal(numUi('rotate').unit, '°');
+});
+
+test('a section knows when it changes the style, and puts itself back in one patch', () => {
+    const full = fullLook();
+    assert.deepEqual(dirtySections({}), []);
+    assert.deepEqual(dirtySections(undefined), []);
+    // An object left empty says nothing.
+    assert.equal(sectionHasOverrides({ shadow: {}, words: { active: {} } }, 'shadow'), false);
+    assert.equal(sectionHasOverrides({ words: { active: {} } }, 'words'), false);
+    assert.deepEqual(dirtySections({ show: false }), ['style']);
+    assert.deepEqual(dirtySections({ words: { release_ms: 500 } }), ['words']);
+    assert.deepEqual(dirtySections({ outline_w: 4, glow: { size: 3 }, accent: '#00FF00' }), ['fill', 'shadow', 'words']);
+    for (const s of SECTION_IDS) {
+        assert.equal(sectionHasOverrides(full, s), true, s);
+        const patch = sectionResetPatch(full, s);
+        assert.deepEqual(Object.keys(patch).sort(), sectionKeys(s).sort(), `${s} reset names its keys`);
+        const after = applyCaptions({ look: { captions: full } }, patch).look.captions;
+        assert.equal(sectionHasOverrides(after, s), false, `${s} still has overrides`);
+        // The other sections keep every field.
+        for (const o of SECTION_IDS.filter((x) => x !== s)) {
+            for (const k of sectionKeys(o)) assert.deepEqual(after[k], full[k], `${s} reset touched ${k}`);
+        }
+    }
+    // Nothing set, nothing to clear.
+    assert.deepEqual(sectionResetPatch({}, 'words'), {});
+    // The keys a section owns do not overlap.
+    const all = SECTION_IDS.flatMap(sectionKeys);
+    assert.equal(new Set(all).size, all.length);
+    // One reset is one undo step.
+    let clock = 0;
+    const store = createLookStore({ storage: null, now: () => (clock += 1000) });
+    store.setCaptions({ font: 'Anton', size: 1.2, spacing: 0.1, words: { release_ms: 400 } });
+    const before = JSON.stringify(store.get().options.look);
+    store.setCaptions(sectionResetPatch(store.get().options.look.captions, 'type'));
+    assert.equal(sectionHasOverrides(store.get().options.look.captions, 'type'), false);
+    assert.equal(store.get().options.look.captions.words.release_ms, 400);
+    store.undo();
+    assert.equal(JSON.stringify(store.get().options.look), before);
+});
+
+const viewOf = (style, L = {}, flat = {}, canvas = '9:16') => captionView(style, canvas, L, flat);
+const applied = (patch, L = {}) => applyCaptions({ look: { captions: L } }, patch).look.captions;
+
+test('controls show the style\'s own value until the Look sets the field', () => {
+    const k = viewOf('karaoke');
+    assert.equal(k.val('words.active.color'), STYLES.karaoke.active.toUpperCase());
+    assert.equal(k.val('words.upcoming.color'), '#FFFFFF');
+    assert.equal(k.val('words.keyword.color'), STYLES.karaoke.accent.toUpperCase());
+    assert.equal(k.val('words.spoken.color'), k.val('words.active.color'));
+    assert.equal(k.val('color'), '#FFFFFF');
+    assert.equal(k.val('font'), 'Archivo Black');
+    assert.equal(k.val('lines'), 2);
+    assert.equal(k.val('align'), 'center');
+    assert.equal(k.val('line_gap'), 1);
+    assert.equal(k.val('words.hold_ms'), 0);
+    assert.equal(k.val('words.upcoming.scale'), 1);
+    assert.equal(k.val('stroke.width'), 3);
+    assert.equal(k.val('max_words'), 3);
+    assert.equal(k.val('max_chars'), 14);
+    for (const p of ['words.active.color', 'font', 'lines', 'stroke.width', 'shadow', 'box', 'enter.kind', 'x']) assert.equal(k.isSet(p), false, p);
+    // The Look's own value wins and reads as set.
+    const o = viewOf('karaoke', { words: { active: { color: '#123456' }, release_ms: 500 }, lines: 1, stroke: { width: 7 }, x: 0.3 });
+    assert.equal(o.val('words.active.color'), '#123456');
+    assert.equal(o.val('words.release_ms'), 500);
+    assert.equal(o.val('lines'), 1);
+    assert.equal(o.val('stroke.width'), 7);
+    assert.equal(o.isSet('x') && o.isSet('y'), true);
+    for (const p of ['words.active.color', 'words.release_ms', 'lines', 'stroke.width']) assert.equal(o.isSet(p), true, p);
+    // The v1 forms count: an older Look's colour, outline and motion show in the v2 controls.
+    const v1 = viewOf('karaoke', { active: '#ABCDEF', accent: '#FEDCBA', outline_w: 5, outline: '#222222', anim: 'none' });
+    assert.equal(v1.val('words.active.color'), '#ABCDEF');
+    assert.equal(v1.val('words.keyword.color'), '#FEDCBA');
+    assert.equal(v1.val('stroke.width'), 5);
+    assert.equal(v1.val('stroke.color'), '#222222');
+    assert.equal(v1.val('enter.kind'), 'none');
+    for (const p of ['words.active.color', 'words.keyword.color', 'stroke.width', 'stroke.color', 'enter.kind', 'exit.kind']) assert.equal(v1.isSet(p), true, p);
+    // The style's own motion: pop in 200 ms; the reveal follows the motion.
+    assert.deepEqual([k.val('enter.kind'), k.val('enter.ms'), k.val('exit.kind')], ['pop', 200, 'fade']);
+    const w = viewOf('karaoke', {}, { anim: 'words' });
+    assert.equal(w.val('words.mode'), 'build');
+    assert.equal(w.val('words.attack_ms'), 80);
+    assert.equal(w.isSet('words.mode'), false);
+    assert.equal(viewOf('karaoke', { words: { mode: 'single' } }).val('words.mode'), 'single');
+    // Case follows the style until set.
+    assert.equal(viewOf('minimal').val('case'), 'asis');
+    assert.equal(viewOf('minimal', { case: 'upper' }).val('case'), 'upper');
+    // Glow starts from the speaking colour, or white when that is too dark.
+    assert.equal(viewOf('karaoke').val('glow.color'), STYLES.karaoke.active.toUpperCase());
+    assert.equal(viewOf('highlight').val('glow.color'), '#FFFFFF');
+    assert.deepEqual([k.val('glow.size'), k.val('glow.strength')], [12, 0.8]);
+});
+
+test('the shadow and the box start from what the style draws, so a first touch does not jump', () => {
+    // A style with a shadow: its depth is a hard offset in its colour.
+    const t = viewOf('tiktok');
+    assert.equal(t.shadowOn, true);
+    assert.equal(t.shadowIsObject, false);
+    assert.deepEqual([t.val('shadow.x'), t.val('shadow.y'), t.val('shadow.blur'), t.val('shadow.opacity'), t.val('shadow.color')], [2, 2, 0, 1, '#FE2C55']);
+    assert.deepEqual(editPatch(t, 'shadow.blur', 6), { shadow: { color: '#FE2C55', x: 2, y: 2, blur: 6, opacity: 1 } });
+    // Once it is an object, a touch changes only its field.
+    const o = viewOf('tiktok', { shadow: { color: '#FE2C55', x: 2, y: 2, blur: 6, opacity: 1 } });
+    assert.deepEqual(editPatch(o, 'shadow.x', 9), { shadow: { x: 9 } });
+    assert.equal(applied(editPatch(o, 'shadow.x', 9), { shadow: { x: 2, blur: 6 } }).shadow.blur, 6);
+    // A style without one: the engine's own defaults, and the first touch writes only that field.
+    const k = viewOf('karaoke');
+    assert.equal(k.shadowOn, false);
+    assert.deepEqual([k.val('shadow.x'), k.val('shadow.y'), k.val('shadow.blur'), k.val('shadow.opacity'), k.val('shadow.color')], [0, 4, 4, 0.6, '#000000']);
+    assert.deepEqual(editPatch(k, 'shadow.x', 5), { shadow: { x: 5 } });
+    // The switch: on starts from the style (or the default opacity); off is a zero depth only where the style has a shadow.
+    assert.deepEqual(shadowPatch(k, true), { shadow: { opacity: 0.6 } });
+    assert.deepEqual(shadowPatch(t, true), { shadow: { color: '#FE2C55', x: 2, y: 2, blur: 0, opacity: 1 } });
+    assert.deepEqual(shadowPatch(t, false), { shadow: 0 });
+    assert.deepEqual(shadowPatch(k, false), { shadow: undefined });
+    assert.equal(viewOf('tiktok', { shadow: 0 }).shadowOn, false);
+    assert.equal(viewOf('karaoke', { shadow: { y: 6 } }).shadowOn, true);
+    // A v1 depth is the offset, in the style's colour.
+    const v = viewOf('karaoke', { shadow: 3 });
+    assert.deepEqual([v.shadowOn, v.val('shadow.x'), v.val('shadow.y'), v.val('shadow.blur')], [true, 3, 3, 0]);
+    assert.deepEqual(editPatch(v, 'shadow.blur', 2).shadow.blur, 2);
+    assert.equal(applied(editPatch(v, 'shadow.blur', 2), { shadow: 3 }).shadow.x, 3);
+    // Glow: a switch with the engine's size and strength.
+    assert.deepEqual(glowPatch(true), { glow: { size: 12, strength: 0.8 } });
+    assert.deepEqual(glowPatch(false), { glow: undefined });
+    assert.equal(viewOf('karaoke', { glow: { size: 3 } }).glowOn, true);
+    // The box: the style's own is "behind the line", none is off, the object says per line or word.
+    const h = viewOf('hormozi');
+    assert.equal(h.boxMode(), 'line');
+    assert.equal(h.isSet('box'), false);
+    assert.equal(k.boxMode(), 'off');
+    assert.equal(viewOf('karaoke', { box: { per: 'word' } }).boxMode(), 'word');
+    assert.equal(viewOf('hormozi', { box: 'none' }).boxMode(), 'off');
+    assert.equal(viewOf('karaoke', { box: '#112233' }).boxMode(), 'line');
+    assert.deepEqual([k.val('box.pad_x'), k.val('box.pad_y'), k.val('box.radius'), k.val('box.opacity')], [16, 8, 0, 1]);
+    assert.deepEqual(boxModePatch(k, 'word'), { box: { per: 'word', opacity: 0.6 }, box_opacity: undefined });
+    assert.deepEqual(boxModePatch(h, 'word'), { box: { per: 'word' }, box_opacity: undefined });
+    assert.deepEqual(boxModePatch(h, 'off'), { box: 'none', box_opacity: undefined });
+    assert.deepEqual(boxModePatch(k, 'off'), { box: undefined, box_opacity: undefined });
+    assert.deepEqual(boxModePatch(viewOf('karaoke', { box: { per: 'line', radius: 0.5 } }), 'word'), { box: { per: 'word' } });
+    assert.deepEqual(editPatch(k, 'box.radius', 0.4), { box: { per: 'line', opacity: 0.6, radius: 0.4 } });
+    // The box object replaces a v1 colour box and the style's: the patch swaps the form.
+    assert.deepEqual(applied(boxModePatch(k, 'line'), { box: '#112233' }).box, { per: 'line', opacity: 0.6 });
+    assert.equal(applied(boxModePatch(h, 'off'), {}).box, 'none');
+    // The spoken word's own stroke, glow and box start from the caption's.
+    const s = viewOf('karaoke');
+    assert.deepEqual(activeExtraPatch(s, 'stroke', true), { words: { active: { stroke: { color: '#000000', width: 3 } } } });
+    assert.deepEqual(activeExtraPatch(s, 'glow', true), { words: { active: { glow: { size: 12, strength: 0.8 } } } });
+    assert.deepEqual(activeExtraPatch(s, 'box', true), { words: { active: { box: { opacity: 1 } } } });
+    assert.deepEqual(activeExtraPatch(s, 'glow', false), { words: { active: { glow: undefined } } });
+    const hadGlow = { words: { active: { glow: { size: 5 }, scale: 1.2 } } };
+    assert.equal(applied(activeExtraPatch(s, 'glow', false), hadGlow).words.active.glow, undefined);
+    assert.equal(applied(activeExtraPatch(s, 'glow', false), hadGlow).words.active.scale, 1.2);
+});
+
+test('an edit writes one field and a reset clears it, with the v1 forms folded in', () => {
+    const k = viewOf('karaoke', { active: '#ABCDEF', accent: '#FEDCBA' });
+    // The speaking and keyword colours say it once, in the v2 field.
+    const a = applied(editPatch(k, 'words.active.color', '#111111'), { active: '#ABCDEF', size: 1.1 });
+    assert.deepEqual(a, { size: 1.1, words: { active: { color: '#111111' } } });
+    assert.equal(applied(editPatch(k, 'words.keyword.color', '#222222'), { accent: '#FEDCBA' }).accent, undefined);
+    // Deep fields nest; a number lands where the path says.
+    assert.deepEqual(nest('words.active.glow.size', 9), { words: { active: { glow: { size: 9 } } } });
+    assert.deepEqual(editPatch(k, 'words.release_ms', 450), { words: { release_ms: 450 } });
+    assert.deepEqual(editPatch(k, 'lines', 1), { lines: 1 });
+    // Clearing a field clears what it also reads.
+    assert.deepEqual(clearPatch('stroke.width'), { stroke: { width: undefined }, outline_w: undefined });
+    assert.deepEqual(clearPatch('stroke.color'), { stroke: { color: undefined }, outline: undefined });
+    assert.deepEqual(clearPatch('x'), { x: undefined, y: undefined });
+    assert.deepEqual(clearPatch('enter.kind'), { enter: { kind: undefined }, anim: undefined });
+    assert.deepEqual(clearPatch('words.active.color'), { words: { active: { color: undefined } }, active: undefined });
+    const L = { stroke: { color: '#112233', width: 4 }, outline_w: 6, words: { active: { color: '#445566', scale: 1.2 } }, active: '#778899' };
+    const after = applied(clearPatch('stroke.width'), L);
+    assert.deepEqual(after.stroke, { color: '#112233' });
+    assert.equal(after.outline_w, undefined);
+    assert.deepEqual(applied(clearPatch('words.active.color'), L).words.active, { scale: 1.2 });
+    // The last field of an object takes the object with it.
+    assert.equal(applied(clearPatch('stroke.width'), { stroke: { width: 3 } }).stroke, undefined);
+});
+
+// A few steady lines on the sample's clock.
+const PARK_LINES = [{ t0: 0.2, t1: 1.4 }, { t0: 1.6, t1: 3 }];
+const pop = { clean: {}, anim: 'pop' };
+
+test('the playhead parks where a caption is up and settled, and where the headline is too', () => {
+    // The first line, after its entrance (pop is 200 ms) and a hair more.
+    near(parkTime(PARK_LINES, { len: 6, ...pop }), 0.2 + 0.2 + 0.05);
+    // A slower entrance settles later; no entrance is up at once.
+    near(parkTime(PARK_LINES, { len: 6, clean: {}, anim: 'bounce' }), 0.2 + 0.34 + 0.05);
+    near(parkTime(PARK_LINES, { len: 6, clean: {}, anim: 'none' }), 0.2 + 0.05);
+    near(parkTime(PARK_LINES, { len: 6, clean: { enter: { kind: 'slide_up', ms: 500 } }, anim: 'pop' }), 0.2 + 0.5 + 0.05);
+    // The headline must be settled too (pop 340 ms): a line up from the start waits for it.
+    near(parkTime([{ t0: 0, t1: 2 }], { len: 6, ...pop, headline: { anim: 'pop', seconds: 0 } }), 0.34 + 0.05);
+    near(parkTime(PARK_LINES, { len: 6, ...pop, headline: { anim: 'fade', seconds: 0 } }), 0.4 + 0.05);
+    near(parkTime(PARK_LINES, { len: 6, ...pop, headline: { anim: 'none', seconds: 0 } }), 0.45);
+    // A first line gone before the headline has settled: the next line that is up with it.
+    near(parkTime([{ t0: 0, t1: 0.3 }, { t0: 1, t1: 3 }], { len: 6, ...pop, headline: { anim: 'pop', seconds: 0 } }), 1.25);
+    // A headline gone before any line settles: the first settled line.
+    near(parkTime(PARK_LINES, { len: 6, ...pop, headline: { anim: 'pop', seconds: 0.3 } }), 0.2 + 0.2 + 0.05);
+    // Captions off: only the headline counts. Nothing at all: the start.
+    near(parkTime(PARK_LINES, { len: 6, captions: false, ...pop, headline: { anim: 'pop', seconds: 0 } }), 0.39);
+    assert.equal(parkTime(PARK_LINES, { len: 6, captions: false, ...pop }), 0);
+    assert.equal(parkTime([], { len: 6, ...pop }), 0);
+    near(parkTime([], { len: 6, ...pop, headline: { anim: 'none', seconds: 0 } }), 0.05);
+    // Never past the end of the window.
+    assert.ok(parkTime([{ t0: 9, t1: 10 }], { len: 3, ...pop }) <= 3);
+    // On the real stand-in: it lands inside a line that is on screen.
+    const r = resolveCaptions('karaoke', '9:16', {});
+    const lines = captionLines(SAMPLE, r);
+    const at = parkTime(lines, { len: 6, clean: r.clean, anim: r.anim });
+    assert.ok(lines.some((l) => at >= l.t0 && at < l.t1), 'parked inside a line');
+    assert.ok(at > 0);
+});
+
+test('the sample headline is the typed text, else the first clip\'s title, else the video\'s, else the fixed line', () => {
+    const job = { name: 'Podcast 41.mp4', clips: [{ title: 'Why I quit' }, { title: 'Second' }] };
+    assert.equal(stageHeadline('My own words', job), 'My own words');
+    assert.equal(stageHeadline('', job), 'Why I quit');
+    assert.equal(stageHeadline('   ', job), 'Why I quit');
+    assert.equal(stageHeadline(' {} ', job), 'Why I quit');
+    assert.equal(stageHeadline('', { name: 'Podcast 41.mp4', clips: [{ title: '  ' }] }), 'Podcast 41.mp4');
+    assert.equal(stageHeadline('', { name: 'Podcast 41.mp4', clips: [] }), 'Podcast 41.mp4');
+    assert.equal(stageHeadline('', { name: 'Podcast 41.mp4' }), 'Podcast 41.mp4');
+    // The fixed line is only the stand-in's (no video), or a video with no title at all.
+    assert.equal(stageHeadline('', null), HEADLINE_SAMPLE);
+    assert.equal(stageHeadline(''), HEADLINE_SAMPLE);
+    assert.equal(stageHeadline('', { name: '', clips: [{}] }), HEADLINE_SAMPLE);
+    assert.equal(stageHeadline(undefined, undefined), HEADLINE_SAMPLE);
+    // It goes through the engine's own clean-up like any headline.
+    assert.equal(headlineText(stageHeadline('', job)), 'Why I quit');
+});
+
+test('the selection box follows the caption block at the playhead', () => {
+    const lines = [{ t0: 1, t1: 2, id: 'a' }, { t0: 3, t1: 4, id: 'b' }];
+    assert.equal(blockAt(lines, 1.5).id, 'a');
+    assert.equal(blockAt(lines, 3).id, 'b');
+    assert.equal(blockAt(lines, 2).id, 'a', 'a line ends where the gap starts: the nearest is the one that just left');
+    // Between lines: the nearest in time (the one that just left on a tie).
+    assert.equal(blockAt(lines, 2.2).id, 'a');
+    assert.equal(blockAt(lines, 2.8).id, 'b');
+    assert.equal(blockAt(lines, 2.5).id, 'a');
+    assert.equal(blockAt(lines, 0).id, 'a');
+    assert.equal(blockAt(lines, 9).id, 'b');
+    assert.equal(blockAt([], 1), null);
+    assert.equal(blockAt(undefined, 1), null);
+    // Its size is the block's, not the widest of the sample.
+    const m = (t) => ({ w: [...t].length * 10, top: 70, bottom: -20, lsb: 0, rsb: 0 });
+    const r = resolveCaptions('karaoke', '9:16', { words: { mode: 'all' } }, { anim: 'none' });
+    const words = [{ w: 'Hi', s: 0, e: 0.3 }, { w: 'yo', s: 0.3, e: 0.6 }, { w: 'Amazing', s: 5, e: 5.5 }, { w: 'people', s: 5.5, e: 6 }];
+    const blocks = captionBlocks(words, r, m);
+    assert.equal(blocks.length, 2);
+    const ext = (t) => blockExtent(planFor(cfgOf(r), r, blockAt(blocks, t), m), r).w;
+    assert.ok(ext(0.4) < ext(5.2), 'the short block is narrower than the long one');
+    near(ext(0.4), planFor(cfgOf(r), r, blocks[0], m).blockW + 2 * 3, 1e-9);
+});
+
+test('the preview strip loops the real timing: three words, the middle a keyword', () => {
+    const t0 = previewTiming({});
+    assert.equal(t0.words.length, 3);
+    assert.equal(PREVIEW_KEYWORD, 1);
+    // Plain timing: the last word is said by 1.45 s, then a pause before the loop restarts.
+    assert.equal(t0.loopMs, 2150);
+    near(t0.lineEnd, 1.9);
+    assert.equal(t0.stillMs, 775);
+    // The loop grows with the hold and the fade back; the fade back is what you wait to see.
+    assert.equal(previewTiming({ release_ms: 500 }).loopMs, 2650);
+    assert.equal(previewTiming({ hold_ms: 300, attack_ms: 400 }).loopMs, 2450);
+    assert.ok(previewTiming({ release_ms: 2000 }).loopMs >= 4150);
+    // A bad number does not break it.
+    assert.equal(previewTiming({ attack_ms: -5, hold_ms: NaN, release_ms: undefined }).loopMs >= 2000, true);
+    const b = previewBlock(['Just', 'stop', 'now'], t0);
+    assert.deepEqual(b.words.map((w) => w.key), [false, true, false]);
+    assert.deepEqual([b.t0, b.t1], [0, t0.lineEnd]);
+    assert.equal(b.words[1].s, 0.6);
+    // Drawn with the stage's model, the middle word settles over the fade back: active at its end, spoken half a second later.
+    // (The middle word is the keyword, so its speaking colour is the keyword colour.)
+    const L = { words: { release_ms: 500, keyword: { color: '#FF0000' }, spoken: { color: '#00FF00' }, upcoming: { color: '#0000FF' } } };
+    const r = resolveCaptions('karaoke', { w: 300, h: 400 }, { ...L, x: 0.5, y: 0.5 }, { anim: 'pop' });
+    const tm = previewTiming({ release_ms: 500 });
+    const plan = planFor(cfgOf(r), r, previewBlock(['JUST', 'STOP', 'NOW'], tm), flatMeasure());
+    const col = (ms) => frameAt(plan, ms).groups[0].words.find((w) => w.i === 1).col;
+    nearAll(col(949), [255, 0, 0], 1e-6);
+    const mid = col(950 + 250);
+    assert.ok(mid[0] > 0 && mid[0] < 255 && mid[1] > 0 && mid[1] < 255, `mid-fade colour ${mid}`);
+    nearAll(col(950 + 500), [0, 255, 0], 1e-6);
 });

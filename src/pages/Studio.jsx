@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { aspectList, useLook } from '../lib/look';
 import { CANVASES, captionLines, clamp, resolveCaptions } from '../lib/captionStyles';
 import { captionBlocks } from '../lib/captionMotion';
+import { parkTime } from '../lib/stageTime';
 import { logoClear, resolveBar, resolveHeadline, resolveLogo, stageHeadline } from '../lib/layers';
 import { useStore } from '../lib/socket';
 import { useT } from '../lib/i18n';
@@ -37,7 +38,7 @@ function spaceIsFree(el) {
 /** Controls that own the arrow keys and Delete themselves. */
 function ownsArrows(el) {
     if (!el || !el.closest) return false;
-    return !!el.closest('[role="slider"], [role="listbox"], [role="menu"], select');
+    return !!el.closest('[role="slider"], [role="listbox"], [role="menu"], [role="radiogroup"], [role="tablist"], select');
 }
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
@@ -112,9 +113,9 @@ export default function Studio() {
         [options.logo, options.logo_pos, shape, L.logo],
     );
     const headline = useMemo(
-        () => (options.headline ? resolveHeadline(stageHeadline(options.headline_text), shape, L.headline, { clear: logoClear(logo) }) : null),
+        () => (options.headline ? resolveHeadline(stageHeadline(options.headline_text, sample.job), shape, L.headline, { clear: logoClear(logo) }) : null),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [options.headline, options.headline_text, shape, L.headline, logo],
+        [options.headline, options.headline_text, sample.job, shape, L.headline, logo],
     );
     const bar = useMemo(
         () => (options.progress_bar ? resolveBar(shape, options.bar_color, L.bar) : null),
@@ -125,6 +126,21 @@ export default function Studio() {
         () => ({ captions: L.captions?.size ?? 1, headline: L.headline?.size ?? 1, logo: L.logo?.size ?? 1 }),
         [L.captions?.size, L.headline?.size, L.logo?.size],
     );
+
+    // Opening Studio (or picking another sample) parks the playhead where a
+    // caption line is up and settled, instead of at 0:00 where nothing is on
+    // screen yet. It waits for the transcript, and leaves a playhead the
+    // person has already moved (or started) alone.
+    const parked = useRef(null);
+    const parkKey = sample.status === 'loading' ? null : (sample.job?.id ?? 'standin');
+    useEffect(() => {
+        if (parkKey === null || parked.current === parkKey) return;
+        parked.current = parkKey;
+        if (player.clock.get() > 0 || player.playing) return;
+        const at = parkTime(lines, { len: sample.len, captions: resolved.show, clean: resolved.clean, anim: resolved.anim, headline });
+        if (at > 0) player.seek(at);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [parkKey]);
 
     // What the pointer and the keys do to the stage's layers.
     const edit = useMemo(() => {
@@ -251,7 +267,7 @@ export default function Studio() {
                     safe={safe}
                     notice={notice}
                 />
-                <Inspector selected={selected} look={look} />
+                <Inspector selected={selected} look={look} job={sample.job} />
             </div>
             <Transport player={player} len={sample.len} words={sample.words} loop={loop} onLoop={setLoop} safe={safe} onSafe={setSafe} />
         </div>

@@ -172,9 +172,23 @@ const decimals = (step) => (String(step).split('.')[1] ?? '').length;
  * when given, else to `defaultValue`. `dim` draws it as "not set" (a
  * style default). `marks` are 0..1 positions drawn as small ticks.
  */
-export function Slider({ label, value, min = 0, max = 1, step = 0.01, bigStep, onChange, onReset, defaultValue, format, dim = false, marks, disabled = false, showValue = true, className }) {
+export function Slider({ label, value, min = 0, max = 1, step = 0.01, bigStep, onChange, onReset, defaultValue, format, dim = false, marks, disabled = false, showValue = true, className, onDragStart, onDragEnd }) {
     const trackRef = useRef(null);
     const [drag, setDrag] = useState(false);
+    // `onDragStart` / `onDragEnd` bracket a pointer drag (a caller that wants it
+    // to be one undo step opens and closes a gesture with them).
+    const dragging = useRef(false);
+    function begin() {
+        if (dragging.current) return;
+        dragging.current = true;
+        onDragStart?.();
+    }
+    function finish() {
+        setDrag(false);
+        if (!dragging.current) return;
+        dragging.current = false;
+        onDragEnd?.();
+    }
     const span = max - min || 1;
     const shown = Number.isFinite(+value) ? +value : min;
     const frac = clampN((shown - min) / span, 0, 1);
@@ -233,6 +247,7 @@ export function Slider({ label, value, min = 0, max = 1, step = 0.01, bigStep, o
                     // Act first: a capture that fails (a pointer the page
                     // cannot hold) must not cost the click its value.
                     setDrag(true);
+                    begin();
                     at(e.clientX);
                     try {
                         e.currentTarget.setPointerCapture(e.pointerId);
@@ -241,13 +256,14 @@ export function Slider({ label, value, min = 0, max = 1, step = 0.01, bigStep, o
                 }}
                 onPointerMove={(e) => { if (drag) at(e.clientX); }}
                 onPointerUp={(e) => {
-                    setDrag(false);
+                    finish();
                     try {
                         if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
                     } catch {
                     }
                 }}
-                onPointerCancel={() => setDrag(false)}
+                onPointerCancel={finish}
+                onLostPointerCapture={finish}
                 onDoubleClick={() => { if (reset) reset(); }}
                 className="group/sl relative flex h-full min-w-0 flex-1 cursor-pointer touch-none items-center px-2 outline-none"
             >

@@ -133,10 +133,20 @@ export function headlineText(raw, max = HEADLINE_MAX) {
     return out ? out[0].toUpperCase() + out.slice(1) : '';
 }
 
-/** The text the stage draws for the typed headline: itself, or the sample
- *  title while it is empty (or nothing the engine would keep). */
-export function stageHeadline(raw) {
-    return headlineText(raw, HEADLINE_MAX) ? String(raw) : HEADLINE_SAMPLE;
+const filled = (v) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : '');
+
+/**
+ * The text the stage draws for the headline, in the order the engine picks it:
+ * the typed text (when the engine would keep something of it), else the title
+ * of the sample video's first clip, else the video's own title. The fixed line
+ * is only for the stand-in sample (`job` null) or a video with no title at all.
+ *
+ * @param {string} raw  the headline text option
+ * @param {{name?: string, clips?: {title?: string}[]}|null} [job]  the sample video
+ */
+export function stageHeadline(raw, job = null) {
+    if (headlineText(raw, HEADLINE_MAX)) return String(raw);
+    return filled(job?.clips?.[0]?.title) || filled(job?.name) || HEADLINE_SAMPLE;
 }
 
 /** The headline as lines of words, one word the accent: two balanced lines
@@ -294,6 +304,16 @@ export function resolveHeadline(text, canvas, look, opts = {}) {
         anim: c.anim ?? 'pop',
         seconds,
     };
+}
+
+/** When the headline's entrance has settled (ms into the clip). */
+export function headlineSettleMs(r) {
+    return r.anim === 'pop' ? 340 : r.anim === 'fade' ? HEADLINE_FADE_IN : 0;
+}
+
+/** When the headline goes (ms into a clip `durMs` long). */
+export function headlineEndMs(r, durMs) {
+    return r.seconds > 0 && r.seconds * 1000 < durMs ? r.seconds * 1000 : durMs;
 }
 
 /**

@@ -32,11 +32,11 @@ const BAR_POS_OPTS = [
 
 /** The Headline inspector: the title card's text, place, size, colours,
  *  entrance and time on screen. */
-export function HeadlinePanel({ options, update, setHeadline, reset }) {
+export function HeadlinePanel({ options, update, setHeadline, reset, job = null }) {
     const t = useT();
     const L = options.look?.headline ?? {};
     const canvas = aspectList(options.aspect)[0];
-    const text = stageHeadline(options.headline_text);
+    const text = stageHeadline(options.headline_text, job);
     const r = resolveHeadline(text, canvas, L);
     const has = (k) => L[k] !== undefined;
     const clear = (...keys) => () => setHeadline(Object.fromEntries(keys.map((k) => [k, undefined])));

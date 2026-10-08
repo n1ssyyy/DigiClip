@@ -9,6 +9,12 @@ export function useClock(clock) {
     return useSyncExternalStore(clock.subscribe, clock.get, clock.get);
 }
 
+/** Subscribe to something derived from the playhead (`pick` of the time in
+ *  seconds), re-rendering only when that value changes. */
+export function useClockPick(clock, pick) {
+    return useSyncExternalStore(clock.subscribe, () => pick(clock.get()), () => pick(clock.get()));
+}
+
 /**
  * The stage's transport. While playing, the video's own `currentTime`
  * drives the playhead (requestAnimationFrame); when there is no usable

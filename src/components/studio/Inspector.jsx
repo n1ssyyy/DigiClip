@@ -8,9 +8,9 @@ const NAMES = Object.fromEntries(LAYER_GROUPS.flatMap((g) => g.rows.map((r) => [
 
 /** Right pane: the controls of the picked layer. Each panel shows its own
  *  "engine is older" note, only when the engine lacks what it needs. */
-export default function Inspector({ selected, look }) {
+export default function Inspector({ selected, look, job }) {
     const t = useT();
-    const { options, update, setCaptions, setHeadline, setBar, setLogo, edit, reset } = look;
+    const { options, update, setCaptions, setHeadline, setBar, setLogo, edit, reset, beginGesture, endGesture } = look;
     return (
         <Card className="stagger-2 flex min-h-0 w-[300px] shrink-0 flex-col overflow-hidden">
             <div className="flex h-10 shrink-0 items-center border-b border-white/[0.06] px-4">
@@ -20,8 +20,8 @@ export default function Inspector({ selected, look }) {
                 {/* Remount per layer so each arrival replays the page's rise. */}
                 <div key={selected ?? 'none'} className="rise">
                     {!selected && <p className="text-[12px] text-muted-foreground">{t('Pick a layer on the stage or in the list to edit it.')}</p>}
-                    {selected === 'captions' && <CaptionsPanel options={options} update={update} setCaptions={setCaptions} reset={reset} />}
-                    {selected === 'headline' && <HeadlinePanel options={options} update={update} setHeadline={setHeadline} reset={reset} />}
+                    {selected === 'captions' && <CaptionsPanel options={options} update={update} setCaptions={setCaptions} reset={reset} gesture={{ begin: beginGesture, end: endGesture }} />}
+                    {selected === 'headline' && <HeadlinePanel options={options} update={update} setHeadline={setHeadline} reset={reset} job={job} />}
                     {selected === 'bar' && <BarPanel options={options} update={update} setBar={setBar} reset={reset} />}
                     {selected === 'logo' && <LogoPanel options={options} update={update} setLogo={setLogo} edit={edit} reset={reset} />}
                     {selected === 'music' && <MusicPanel options={options} update={update} />}
