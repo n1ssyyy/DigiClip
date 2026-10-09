@@ -31,7 +31,8 @@ enum Boot {
 
 struct ShellState {
     boot: Mutex<Boot>,
-    child: Mutex<Option<tokio::process::Child>>,
+    /// The engine process and the epoch of the boot that started it.
+    child: Mutex<Option<(u64, tokio::process::Child)>>,
     /// Bumped by `stop_engine`: a boot that started before it gives up.
     epoch: AtomicU64,
 }
@@ -188,16 +189,41 @@ fn with_tail(base: &str, tail: &Arc<Mutex<Tail>>) -> String {
     }
 }
 
-/// Kill the sidecar (if any) and wait for it to be gone, so the next start
-/// never runs beside a leftover and the engine file is released.
-async fn reap_child(app: &AppHandle) {
+/// Kill the sidecar that belongs to the boot of `epoch` (or to an older
+/// one) and wait for it to be gone, so the next start never runs beside a
+/// leftover and the engine file is released. A child tagged with a newer
+/// epoch was started by a boot that began after a stop: it is not ours.
+async fn reap_child(app: &AppHandle, epoch: u64) {
     let child = {
         let state: State<ShellState> = app.state();
-        state.child.lock().ok().and_then(|mut slot| slot.take())
+        let mut slot = match state.child.lock() {
+            Ok(slot) => slot,
+            Err(_) => return,
+        };
+        match slot.take() {
+            Some((tag, child)) if tag <= epoch => Some(child),
+            other => {
+                *slot = other;
+                None
+            }
+        }
     };
     if let Some(mut child) = child {
         let _ = child.start_kill();
         let _ = tokio::time::timeout(std::time::Duration::from_secs(3), child.wait()).await;
+    }
+}
+
+/// Is the engine process this shell started still running? No child, or
+/// one that has exited, is dead; a child whose state cannot be read counts
+/// as alive (a healthy engine is never replaced on a doubt).
+fn engine_alive(state: &ShellState) -> bool {
+    match state.child.lock() {
+        Ok(mut slot) => match slot.as_mut() {
+            Some((_, child)) => !matches!(child.try_wait(), Ok(Some(_))),
+            None => false,
+        },
+        Err(_) => true,
     }
 }
 
@@ -215,7 +241,7 @@ enum Ev {
 /// `DIGICLIP_SERVE` banner. A failure leaves no child behind.
 async fn boot_once(app: &AppHandle, epoch: u64) -> anyhow::Result<ServeInfo> {
     // Never two engines: whatever is left of an earlier start goes first.
-    reap_child(app).await;
+    reap_child(app, epoch).await;
     let bin = engine_binary(app).ok_or_else(|| anyhow::anyhow!("engine binary not found"))?;
     eprintln!("[shell] engine: {}", bin.display());
     // Fixed port when free, else the next open one: a stale sidecar from
@@ -279,10 +305,25 @@ async fn boot_once(app: &AppHandle, epoch: u64) -> anyhow::Result<ServeInfo> {
         .take()
         .ok_or_else(|| anyhow::anyhow!("no sidecar stderr"))?;
     // Held in the shell state from the start, so `stop_engine` can kill an
-    // engine that is still starting.
-    {
+    // engine that is still starting. The epoch is checked under the same
+    // lock `stop_engine` kills under: a stop that came first leaves this
+    // child unstored (killed here); one that comes later finds it.
+    let unstored = {
         let state: State<ShellState> = app.state();
-        *state.child.lock().unwrap() = Some(child);
+        let mut slot = state.child.lock().unwrap();
+        if state.epoch.load(Ordering::SeqCst) != epoch {
+            Some(child)
+        } else {
+            if let Some((_, mut old)) = slot.replace((epoch, child)) {
+                let _ = old.start_kill();
+            }
+            None
+        }
+    };
+    if let Some(mut child) = unstored {
+        let _ = child.start_kill();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(3), child.wait()).await;
+        anyhow::bail!("the engine was stopped");
     }
 
     // Both pipes are drained for the child's whole life, from the moment it
@@ -345,12 +386,12 @@ async fn boot_once(app: &AppHandle, epoch: u64) -> anyhow::Result<ServeInfo> {
         )),
     };
     if let Some(msg) = failure {
-        if !stopped_since(app, epoch) {
-            reap_child(app).await;
-        }
+        reap_child(app, epoch).await;
         anyhow::bail!(msg);
     }
     if stopped_since(app, epoch) {
+        // A stop during the start: this boot's engine does not outlive it.
+        reap_child(app, epoch).await;
         anyhow::bail!("the engine was stopped");
     }
     eprintln!("[shell] serve ready on port {port}");
@@ -366,6 +407,23 @@ fn begin_boot(app: &AppHandle) -> bool {
     match *boot {
         Boot::Booting | Boot::Ready(_) => false,
         Boot::Idle | Boot::Failed(_) => {
+            *boot = Boot::Booting;
+            true
+        }
+    }
+}
+
+/// The error card's Retry: like `begin_boot`, and also when the state says
+/// the engine is ready but its process is gone (it died after its banner,
+/// or the page could not reach it): that counts as a failed boot. A live
+/// engine is never replaced, however slow it is to answer.
+fn begin_retry(app: &AppHandle) -> bool {
+    let state: State<ShellState> = app.state();
+    let mut boot = state.boot.lock().unwrap();
+    match *boot {
+        Boot::Booting => false,
+        Boot::Ready(_) if engine_alive(&state) => false,
+        Boot::Idle | Boot::Failed(_) | Boot::Ready(_) => {
             *boot = Boot::Booting;
             true
         }
@@ -420,7 +478,7 @@ pub(crate) fn stop_engine(app: &AppHandle) {
     if let Some(state) = app.try_state::<ShellState>() {
         state.epoch.fetch_add(1, Ordering::SeqCst);
         if let Ok(mut slot) = state.child.lock() {
-            if let Some(child) = slot.as_mut() {
+            if let Some((_, child)) = slot.as_mut() {
                 let _ = child.start_kill();
             }
             *slot = None;
@@ -467,10 +525,12 @@ fn boot_status(state: State<ShellState>) -> BootStatus {
 }
 
 /// The error card's Retry: start a new boot after a failed one. A boot
-/// already running is joined, an engine already up is left alone.
+/// already running is joined, a live engine is left alone; an engine that
+/// is "ready" but dead is started again. The state is `booting` before this
+/// returns, so the page's next `boot_status` already shows it.
 #[tauri::command]
 fn retry_boot(app: AppHandle) {
-    if begin_boot(&app) {
+    if begin_retry(&app) {
         tauri::async_runtime::spawn(async move {
             let _ = run_boot(&app, 1).await;
         });

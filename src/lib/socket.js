@@ -120,6 +120,9 @@ export function srcUrl(jobId) {
 
 export function connect(serve) {
     S.serve = serve;
+    // A new address (after a retry) is a new engine: an earlier sync says
+    // nothing about it, so the boot gate waits for this socket's own hello.
+    synced = false;
     openSocket();
 }
 
