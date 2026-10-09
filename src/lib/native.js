@@ -90,6 +90,11 @@ export function pickImage() {
     return pickOne('Image', ['png', 'jpg', 'jpeg']);
 }
 
+/** Browse for a font file the engine takes (null outside the app). */
+export function pickFont() {
+    return pickOne('Font', ['ttf', 'otf']);
+}
+
 export function pickAudio() {
     return pickOne('Audio', ['mp3', 'm4a', 'wav', 'aac', 'ogg', 'flac']);
 }

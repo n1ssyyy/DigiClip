@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import Tip from './Tooltip';
@@ -60,7 +61,7 @@ export function Reveal({ open, children }) {
  * measuring. `options`: `{ id, label, tip? }` (label may be a node);
  * `size`: `sm` (h-8, dense panels) or `md` (h-9, forms).
  */
-export function Segmented({ label, value, options, onChange, size = 'md', className }) {
+export function Segmented({ label, value, options, onChange, size = 'md', className, dim = false }) {
     const t = useT();
     const idx = options.findIndex((o) => o.id === value);
     const n = options.length;
@@ -80,6 +81,7 @@ export function Segmented({ label, value, options, onChange, size = 'md', classN
                     'pointer-events-none absolute inset-y-[3px] left-[3px] rounded-[4px] border-t border-white/15 bg-accent shadow-[0_1px_3px_rgb(0_0_0/0.45)]',
                     'motion-safe:transition-[translate,opacity] motion-safe:duration-300 motion-safe:ease-[var(--spring)]',
                     idx < 0 && 'opacity-0',
+                    dim && idx >= 0 && 'opacity-50',
                 )}
                 style={{ width: `calc((100% - 6px) / ${n})`, translate: `${Math.max(0, idx) * 100}% 0` }}
             />
@@ -96,7 +98,7 @@ export function Segmented({ label, value, options, onChange, size = 'md', classN
                         className={cn(
                             'relative flex h-full min-w-0 flex-1 items-center justify-center truncate rounded-[4px] px-1.5 transition-[color,background-color] duration-150',
                             size === 'sm' ? 'text-[11px]' : 'text-[12px]',
-                            on ? 'font-medium text-foreground' : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+                            on ? (dim ? 'text-muted-foreground' : 'font-medium text-foreground') : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
                         )}
                     >
                         {typeof o.label === 'string' ? t(o.label) : o.label}
@@ -156,5 +158,205 @@ export function TightenSeg({ value, onChange, compact = false }) {
                 { id: 'punchy', label: 'Punchy' },
             ]}
         />
+    );
+}
+
+const clampN = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+const decimals = (step) => (String(step).split('.')[1] ?? '').length;
+
+/**
+ * Slider in the Segmented/Stepper language: a 32px bevelled box with a
+ * thin track, a round thumb and the value at the right. Pointer drag
+ * (captured), arrow keys step (Shift = bigger step, PageUp/PageDown too),
+ * Home/End jump to the ends, and a double-click resets: to `onReset()`
+ * when given, else to `defaultValue`. `dim` draws it as "not set" (a
+ * style default). `marks` are 0..1 positions drawn as small ticks.
+ */
+export function Slider({ label, value, min = 0, max = 1, step = 0.01, bigStep, onChange, onReset, defaultValue, format, dim = false, marks, disabled = false, showValue = true, className, onDragStart, onDragEnd }) {
+    const trackRef = useRef(null);
+    const [drag, setDrag] = useState(false);
+    // `onDragStart` / `onDragEnd` bracket a pointer drag (a caller that wants it
+    // to be one undo step opens and closes a gesture with them).
+    const dragging = useRef(false);
+    function begin() {
+        if (dragging.current) return;
+        dragging.current = true;
+        onDragStart?.();
+    }
+    function finish() {
+        setDrag(false);
+        if (!dragging.current) return;
+        dragging.current = false;
+        onDragEnd?.();
+    }
+    const span = max - min || 1;
+    const shown = Number.isFinite(+value) ? +value : min;
+    const frac = clampN((shown - min) / span, 0, 1);
+    const fmt = format ?? ((v) => String(Math.round(v * 100) / 100));
+    const big = bigStep ?? step * 10;
+
+    function snap(v) {
+        const n = Math.round((v - min) / step) * step + min;
+        return clampN(Number(n.toFixed(decimals(step) + 2)), min, max);
+    }
+    function emit(v) {
+        const n = snap(v);
+        if (n !== shown) onChange(n);
+    }
+    function at(clientX) {
+        const r = trackRef.current.getBoundingClientRect();
+        emit(min + clampN((clientX - r.left) / (r.width || 1), 0, 1) * span);
+    }
+    function onKey(e) {
+        const k = e.key;
+        const d = e.shiftKey ? big : step;
+        let next = null;
+        if (k === 'ArrowRight' || k === 'ArrowUp') next = shown + d;
+        else if (k === 'ArrowLeft' || k === 'ArrowDown') next = shown - d;
+        else if (k === 'PageUp') next = shown + big;
+        else if (k === 'PageDown') next = shown - big;
+        else if (k === 'Home') next = min;
+        else if (k === 'End') next = max;
+        if (next == null) return;
+        e.preventDefault();
+        emit(next);
+    }
+    const reset = onReset ?? (defaultValue !== undefined ? () => onChange(defaultValue) : null);
+
+    return (
+        <div
+            className={cn(
+                'flex h-8 w-full items-center gap-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-2.5 pl-1 transition-shadow focus-within:ring-2 focus-within:ring-ring',
+                disabled && 'pointer-events-none opacity-50',
+                className,
+            )}
+        >
+            <div
+                ref={trackRef}
+                role="slider"
+                tabIndex={disabled ? -1 : 0}
+                aria-label={label}
+                aria-valuemin={min}
+                aria-valuemax={max}
+                aria-valuenow={shown}
+                aria-valuetext={fmt(shown)}
+                aria-disabled={disabled || undefined}
+                onKeyDown={onKey}
+                onPointerDown={(e) => {
+                    if (e.button !== 0) return;
+                    // Act first: a capture that fails (a pointer the page
+                    // cannot hold) must not cost the click its value.
+                    setDrag(true);
+                    begin();
+                    at(e.clientX);
+                    try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                    } catch {
+                    }
+                }}
+                onPointerMove={(e) => { if (drag) at(e.clientX); }}
+                onPointerUp={(e) => {
+                    finish();
+                    try {
+                        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                    } catch {
+                    }
+                }}
+                onPointerCancel={finish}
+                onLostPointerCapture={finish}
+                onDoubleClick={() => { if (reset) reset(); }}
+                className="group/sl relative flex h-full min-w-0 flex-1 cursor-pointer touch-none items-center px-2 outline-none"
+            >
+                <div className="relative h-1 w-full rounded-full bg-white/10">
+                    <span aria-hidden className={cn('absolute inset-y-0 left-0 rounded-full', dim ? 'bg-white/25' : 'bg-foreground/70')} style={{ width: `${frac * 100}%` }} />
+                    {marks?.map((m, i) => (
+                        <span key={i} aria-hidden className="absolute top-1/2 h-2 w-px -translate-y-1/2 bg-white/35" style={{ left: `${clampN(m, 0, 1) * 100}%` }} />
+                    ))}
+                    <span
+                        aria-hidden
+                        className={cn(
+                            'absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-black/40 shadow-[0_1px_2px_rgb(0_0_0/0.5)]',
+                            'motion-safe:transition-[scale] motion-safe:duration-150 motion-safe:ease-[var(--spring)]',
+                            dim ? 'bg-white/60' : 'bg-foreground',
+                            drag ? 'scale-125' : 'group-hover/sl:scale-110 group-focus-visible/sl:scale-110',
+                        )}
+                        style={{ left: `${frac * 100}%` }}
+                    />
+                </div>
+            </div>
+            {showValue && (
+                <span className={cn('w-11 shrink-0 text-right font-mono text-[11px] tabular-nums', dim ? 'text-muted-foreground' : 'text-foreground')}>
+                    {fmt(shown)}
+                </span>
+            )}
+        </div>
+    );
+}
+
+const HEX6 = /^#?[0-9a-f]{6}$/i;
+const normHex = (v) => `#${String(v).trim().replace('#', '').toUpperCase()}`;
+
+/**
+ * Colour well: a swatch that opens the native colour input, a hex field,
+ * and an "unset" state (`value` empty) that shows `fallback` (the
+ * style's colour) dimmed. `onReset` adds a small reset once a value is set.
+ */
+export function Swatch({ label, value, fallback = '#FFFFFF', onChange, onReset, resetLabel, disabled = false, className }) {
+    const set = HEX6.test(value ?? '');
+    const shown = set ? normHex(value) : normHex(fallback);
+    const [draft, setDraft] = useState(null);
+    const text = draft ?? (set ? shown : '');
+    function commit(v) {
+        if (HEX6.test(v)) onChange(normHex(v));
+        setDraft(null);
+    }
+    return (
+        <div
+            className={cn(
+                'flex h-8 w-full items-center gap-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-1 pl-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring',
+                disabled && 'pointer-events-none opacity-50',
+                className,
+            )}
+        >
+            <label className="relative size-5 shrink-0 cursor-pointer overflow-hidden rounded border border-white/25" style={{ backgroundColor: shown, opacity: set ? 1 : 0.45 }}>
+                <input
+                    type="color"
+                    value={shown.toLowerCase()}
+                    onChange={(e) => onChange(normHex(e.target.value))}
+                    aria-label={label}
+                    disabled={disabled}
+                    className="absolute inset-0 size-full cursor-pointer opacity-0"
+                />
+            </label>
+            <input
+                type="text"
+                value={text}
+                placeholder={shown}
+                spellCheck={false}
+                maxLength={7}
+                aria-label={`${label} (hex)`}
+                disabled={disabled}
+                onChange={(e) => {
+                    setDraft(e.target.value);
+                    if (HEX6.test(e.target.value)) onChange(normHex(e.target.value));
+                }}
+                onBlur={(e) => commit(e.target.value)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') commit(e.currentTarget.value);
+                    if (e.key === 'Escape') setDraft(null);
+                }}
+                className={cn('min-w-0 flex-1 bg-transparent font-mono text-[12px] uppercase outline-none placeholder:text-muted-foreground/60', !set && 'text-muted-foreground')}
+            />
+            {set && onReset && (
+                <button
+                    type="button"
+                    aria-label={resetLabel ?? label}
+                    onClick={onReset}
+                    className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                    <RotateCcw className="size-3" aria-hidden />
+                </button>
+            )}
+        </div>
     );
 }

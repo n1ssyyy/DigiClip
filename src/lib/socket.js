@@ -9,6 +9,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { t } from './i18n';
+import { fontFileUrl } from './fontLibrary';
 import { broadcastSettings, isTauri, onSettings, openMain, windowLabel } from './native';
 
 const S = {
@@ -23,7 +24,8 @@ const S = {
     flash: null,
     mcp: null, // MCP server: port, token, clients, activity, tools, installed apps
     focus: null, // { job, seq }: an AI app asked to show this project
-    page: 'home', // home | health | mcp | settings
+    caps: [], // engine abilities from `hello` (absent on older engines), e.g. 'look'
+    page: 'home', // home | studio | health | mcp | settings
     busy: 0, // PageLine counter: full actions only, never background events
 };
 
@@ -105,6 +107,12 @@ export function artUrl(jobId, file, rev) {
     return `http://127.0.0.1:${port}/art/${encodeURIComponent(jobId)}/${encodeURIComponent(file)}?token=${encodeURIComponent(token)}${v}`;
 }
 
+/** A listed font's file on the engine (`GET /font/<file>`), for the stage's
+ *  `FontFace`; null before the engine's address is known. */
+export function fontUrl(entry) {
+    return fontFileUrl(S.serve, entry);
+}
+
 export function srcUrl(jobId) {
     const { port, token } = S.serve;
     return `http://127.0.0.1:${port}/src/${encodeURIComponent(jobId)}?token=${encodeURIComponent(token)}`;
@@ -143,6 +151,7 @@ function openSocket() {
             S.models = data.models ?? {};
             S.health = data.health ?? null;
             S.mcp = data.mcp ?? null;
+            S.caps = Array.isArray(data.caps) ? data.caps.filter((c) => typeof c === 'string') : [];
             markSynced();
             emit();
         }).catch(() => {});
@@ -269,7 +278,7 @@ function armFlash() {
     }, FLASH_MS);
 }
 
-/** Hold the banner open while the pointer is on it; leaving gives it a
+/** Hold the toast open while the pointer is on it; leaving gives it a
  *  fresh full life again. */
 export function holdFlash(on) {
     if (!S.flash) return;
@@ -392,13 +401,13 @@ function apply(frame) {
 // actions (what the old router.post / fetch calls did)
 // ---------------------------------------------------------------------------
 
-/** Show the app banner line (same flash under the header). Lets UI
+/** Show the app's floating toast (the flash message). Lets UI
  *  actions surface errors that would otherwise fail silently. */
 export function flashMessage(text) {
     flash(text);
 }
 
-/** Close the banner early (its own dismiss button). */
+/** Close the toast early (its own dismiss button). */
 export function dismissFlash() {
     if (flashTimer) clearTimeout(flashTimer);
     flashTimer = null;
