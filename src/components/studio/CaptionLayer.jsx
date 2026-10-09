@@ -1,4 +1,5 @@
 import { Fragment, useMemo } from 'react';
+import { alphaOf, cssColour, cssRgb, rgbOf } from '../../lib/alpha';
 import { cssFont } from '../../lib/fontNames';
 import { fontBox, keywordBump, lineMotion, outlineRing, rgba, wordReveal } from '../../lib/captionStyles';
 import { useClock } from './usePlayer';
@@ -39,12 +40,16 @@ function LineCaption({ r, lines, clock, reduced }) {
     const time = useClock(clock);
     const fb = useMemo(() => fontBox(r.font, r.fontPx), [r.font, r.fontPx]);
     const style = useMemo(() => {
-        const shadow = r.shadow > 0
-            ? `drop-shadow(${r.shadow}px ${r.shadow}px 0 ${rgba(r.shadowColor, r.shadowOpacity)})`
-            : undefined;
-        const ring = r.outline && r.outline.width > 0 ? outlineRing(r.outline.width, r.outline.color) : undefined;
-        return { shadow, ring };
-    }, [r.shadow, r.shadowColor, r.shadowOpacity, r.outline]);
+        const width = r.outline && r.outline.width > 0 ? r.outline.width : 0;
+        const strokeCol = r.outline ? cssRgb(rgbOf(r.outline.color)) : null;
+        const shadowCol = cssRgb(rgbOf(r.shadowColor));
+        return {
+            // A box's own shadow is the box's shape; without one it is a copy of the type.
+            boxShadow: r.box && r.shadow > 0 ? `drop-shadow(${r.shadow}px ${r.shadow}px 0 ${rgba(r.shadowColor, r.shadowOpacity)})` : undefined,
+            shadow: !r.box && r.shadow > 0 ? { col: shadowCol, off: r.shadow, a: alphaOf(r.shadowColor) * r.shadowOpacity, ring: width ? outlineRing(width, shadowCol) : undefined } : null,
+            stroke: width ? { col: strokeCol, a: alphaOf(r.outline.color), ring: outlineRing(width, strokeCol) } : null,
+        };
+    }, [r.shadow, r.shadowColor, r.shadowOpacity, r.outline, r.box]);
 
     if (!r.show) return null;
     const line = lines.find((l) => time >= l.t0 && time < l.t1);
@@ -54,12 +59,13 @@ function LineCaption({ r, lines, clock, reduced }) {
     const dur = (line.t1 - line.t0) * 1000;
     const m = reduced ? STILL : lineMotion(r.anim, local, dur, r.h);
     const bottom = r.anchor.mode === 'bottom';
+    // The line's fade and the element's opacity, on every part (no group opacity).
+    const fade = m.opacity * r.opacity;
 
     const outer = {
         position: 'absolute',
         left: r.anchor.x - r.wrapW / 2,
         width: r.wrapW,
-        opacity: m.opacity,
         pointerEvents: 'none',
         userSelect: 'none',
         transformOrigin: bottom ? '50% 100%' : '50% 50%',
@@ -81,7 +87,7 @@ function LineCaption({ r, lines, clock, reduced }) {
 
     const box = r.box;
     const pad = box ? box.pad : 0;
-    // The box layer and the text layer wrap the same words in the same
+    // The box layer and the text layers wrap the same words in the same
     // padded runs, so they break lines in the same places.
     const run = (extra) => ({
         paddingLeft: pad,
@@ -92,15 +98,18 @@ function LineCaption({ r, lines, clock, reduced }) {
     });
 
     const first = line.words[0].s;
-    const words = line.words.map((w, i) => {
+    /** The line's words in one layer: `paint(spoken, key)` is the colour of a word
+     *  (its part's own opacity included), `ring` its stroke ring, `group`
+     *  whether the layer carries the word's reveal as an opacity of its own
+     *  (a single-colour layer) or the colour already holds it. */
+    const words = (paint, ring, group) => line.words.map((w, i) => {
         const spoken = time >= w.k;
         const dt = (w.s - first) * 1000;
-        const color = spoken ? (w.key ? r.accent : r.active) : r.color;
         const alpha = reduced ? 1 : wordReveal(r.anim, i, dt, local);
         const bump = !reduced && w.key ? keywordBump(r.anim, dt, (time - w.s) * 1000) : 1;
-        const s = { color };
-        if (style.ring) s.textShadow = style.ring;
-        if (alpha !== 1) s.opacity = alpha;
+        const s = { color: paint(spoken, w.key, alpha) };
+        if (ring) s.textShadow = ring;
+        if (group && alpha !== 1) s.opacity = alpha;
         if (bump !== 1) {
             s.display = 'inline-block';
             s.transform = `scale(${bump})`;
@@ -113,15 +122,16 @@ function LineCaption({ r, lines, clock, reduced }) {
             </Fragment>
         );
     });
+    const layer = { gridArea: '1 / 1', position: 'relative' };
 
     return (
         <div style={outer} aria-hidden>
             <div style={type}>
                 {box && (
-                    <div style={{ gridArea: '1 / 1', opacity: box.opacity, filter: style.shadow }}>
+                    <div style={{ gridArea: '1 / 1', filter: style.boxShadow }}>
                         <span
                             style={run({
-                                backgroundColor: box.color,
+                                backgroundColor: cssColour(box.color, box.opacity, fade),
                                 color: 'transparent',
                                 paddingTop: fb.padAbove + pad,
                                 paddingBottom: fb.padBelow + pad,
@@ -131,8 +141,21 @@ function LineCaption({ r, lines, clock, reduced }) {
                         </span>
                     </div>
                 )}
-                <div style={{ gridArea: '1 / 1', position: 'relative', filter: box ? undefined : style.shadow }}>
-                    {box ? <span style={run({})}>{words}</span> : words}
+                {style.shadow && (
+                    <div style={{ ...layer, opacity: style.shadow.a * fade, transform: `translate(${style.shadow.off}px, ${style.shadow.off}px)` }}>
+                        {words(() => style.shadow.col, style.shadow.ring, true)}
+                    </div>
+                )}
+                {style.stroke && (
+                    <div style={{ ...layer, opacity: style.stroke.a * fade }}>
+                        {words(() => style.stroke.col, style.stroke.ring, true)}
+                    </div>
+                )}
+                <div style={layer}>
+                    {(() => {
+                        const fill = words((spoken, key, alpha) => cssColour(spoken ? (key ? r.accent : r.active) : r.color, fade, alpha), undefined, false);
+                        return box ? <span style={run({})}>{fill}</span> : fill;
+                    })()}
                 </div>
             </div>
         </div>

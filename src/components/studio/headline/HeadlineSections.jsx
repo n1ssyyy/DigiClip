@@ -7,7 +7,7 @@ import { CapNotice } from '../Notice';
 import PlaceField from '../PlaceField';
 import { Choice } from '../kit/choices';
 import { usePanel } from '../kit/context';
-import { Colour, Num, Row, useDrag } from '../kit/inputs';
+import { Colour, ElementOpacity, Num, Row, useDrag } from '../kit/inputs';
 import MotionFields from '../kit/MotionFields';
 import { ShadowFields, GlowFields } from '../kit/FxSections';
 import { AlignRow, CaseRow, FontRow } from '../kit/TypeRows';
@@ -27,6 +27,7 @@ export function HeadlineSection({ options, update, onResetAll, anySet }) {
             <SwitchRow checked={options.headline} onChange={(v) => update({ headline: v })} title={t('Headline')} hint={t('A title card shown over the clip.')} />
             {options.headline && (
                 <>
+                    <ElementOpacity />
                     <Field label={t('Headline text')} hint={t('The stage shows a sample title while this is empty; each clip uses its own title.')}>
                         <input
                             type="text"
@@ -136,8 +137,7 @@ export function CardSection() {
             </Row>
             {view.cardOn && (
                 <>
-                    <Colour path="card.color" label={t('Colour')} />
-                    <Num path="card.opacity" label={t('Opacity')} />
+                    <Colour path="card.color" opacity="card.opacity" label={t('Colour')} />
                     <Num path="card.pad" label={t('Padding')} />
                     <Num path="card.radius" label={t('Roundness')} />
                 </>

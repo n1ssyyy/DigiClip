@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { stripLookAlpha } from '../../../lib/alpha';
 import { previewBlock, previewTiming } from '../../../lib/captionPreview';
 import { resolveCaptions } from '../../../lib/captionStyles';
 import { useT } from '../../../lib/i18n';
 import { prefersReducedMotion } from '../CaptionLayer';
+import { useAlpha } from '../useAlpha';
 import { useFontVersion } from '../useFonts';
 import { useMeasure } from '../useMeasure';
 import WordCaption from '../WordCaption';
@@ -76,6 +78,7 @@ export default function WordPreview() {
     const measure = useMeasure();
     const faces = useFontVersion();
     const reduced = useMemo(prefersReducedMotion, []);
+    const alpha = useAlpha();
     const wrap = useRef(null);
     const [width, setWidth] = useState(252);
 
@@ -93,7 +96,10 @@ export default function WordPreview() {
     const timing = useMemo(() => previewTiming({ attack_ms: attack, hold_ms: hold, release_ms: release }), [attack, hold, release]);
 
     // The Look's own fields in the caption's style, centred, one size.
-    const look = JSON.stringify({ ...view.c, x: 0.5, y: 0.5, size: undefined, show: undefined, max_chars: undefined, max_words: undefined, lines: undefined });
+    // (An engine without `look.alpha` draws no opacity, so neither does the strip;
+    // the caption's own opacity is left out: the strip shows the words, not a fade.)
+    const own = alpha ? view.c : stripLookAlpha({ captions: view.c }).captions;
+    const look = JSON.stringify({ ...own, x: 0.5, y: 0.5, size: undefined, show: undefined, opacity: undefined, max_chars: undefined, max_words: undefined, lines: undefined });
     const r = useMemo(
         () => resolveCaptions(view.r.style, FRAME, JSON.parse(look), { anim: view.r.anim }),
         // eslint-disable-next-line react-hooks/exhaustive-deps

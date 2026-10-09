@@ -5,6 +5,7 @@
 // it can be tested from Node; the store is a factory with an injectable
 // storage and clock for the same reason. The React hooks sit at the bottom.
 import { useSyncExternalStore } from 'react';
+import { isColour, stripLookAlpha, stripOptionsAlpha } from './alpha.js';
 import { cleanCaptions } from './captionStyles.js';
 import { cleanBar, cleanHeadline, cleanLogo } from './layers.js';
 import { SCENE_CLEANERS } from './sceneFields.js';
@@ -81,7 +82,7 @@ export function lookOptions(o) {
     if (CAPTION_ANIMS.includes(o.caption_anim) && o.caption_anim !== 'pop') out.caption_anim = o.caption_anim;
     // Empty headline = the clip's own title.
     if (o.headline) out.headline = (o.headline_text ?? '').trim();
-    if (o.progress_bar) out.progress_bar = /^#[0-9a-f]{6}$/i.test(o.bar_color ?? '') ? o.bar_color : '';
+    if (o.progress_bar) out.progress_bar = /^#/.test(o.bar_color ?? '') && isColour(o.bar_color) ? o.bar_color : '';
     if (o.logo) {
         out.logo = o.logo;
         out.logo_pos = o.logo_pos || 'tr';
@@ -142,12 +143,15 @@ function pruneSection(s) {
 }
 
 /** The Look as the engine takes it: `{v: 1, ...sections}` with empty
- *  sections and fields dropped, or `null` when there is nothing real. */
-export function lookToEngine(look) {
+ *  sections and fields dropped, or `null` when there is nothing real.
+ *  `alpha: false` (an engine without `look.alpha`) cuts 8-digit colours to six
+ *  digits and drops the new element opacities; the Look itself keeps them. */
+export function lookToEngine(look, { alpha = true } = {}) {
     if (!look || typeof look !== 'object') return null;
+    const src = alpha ? look : stripLookAlpha(look);
     const out = {};
     for (const sec of LOOK_SECTIONS) {
-        const p = pruneSection(look[sec]);
+        const p = pruneSection(src[sec]);
         if (Object.keys(p).length) out[sec] = p;
     }
     return Object.keys(out).length ? { v: 1, ...out } : null;
@@ -169,8 +173,11 @@ export function sanitizeLook(raw) {
 }
 
 /** Panel state -> engine job options. Machine settings (model, GPU) are
- *  left to the caller, so presets and the watch folder stay portable. */
-export function toEngine(o) {
+ *  left to the caller, so presets and the watch folder stay portable.
+ *  `alpha` says whether the engine takes opacity in colours (`look.alpha`);
+ *  what is saved as a Look keeps everything (the default), what is sent to an
+ *  engine without it is cut by `stripOptionsAlpha`. */
+export function toEngine(o, { alpha = true } = {}) {
     const out = {
         mode: 'clips',
         kind: o.kind,
@@ -195,7 +202,7 @@ export function toEngine(o) {
         }
         out.look = look;
     }
-    return out;
+    return alpha ? out : stripOptionsAlpha(out);
 }
 
 /** Engine job options (a preset) -> panel state. Unset fields fall back

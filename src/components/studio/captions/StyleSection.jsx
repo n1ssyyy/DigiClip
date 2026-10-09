@@ -7,6 +7,7 @@ import { cn } from '../../../lib/utils';
 import Field, { ResetButton } from '../Field';
 import { CapNotice } from '../Notice';
 import { useRoving } from '../kit/choices';
+import { ElementOpacity } from '../kit/inputs';
 import { usePanel } from '../kit/context';
 
 /** One style drawn in its own look: a small caption sample. */
@@ -64,6 +65,7 @@ export default function StyleSection({ options, update, onResetAll }) {
     return (
         <>
             <CapNotice cap="look.captions" text={t('This engine is older than Studio. Position, size, colour and the new motions apply after the next engine update.')} />
+            <ElementOpacity />
             <SwitchRow
                 checked={view.r.show}
                 onChange={(v) => setPatch({ show: v ? undefined : false })}

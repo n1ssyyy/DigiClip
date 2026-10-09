@@ -10,6 +10,7 @@
 // model (`captionMotion.js`) lays out and `WordCaption` draws. When this file
 // and the engine disagree, the engine is right. Pure functions: no React, no
 // DOM; text widths come from a `measure` the caller supplies.
+import { rgbOf } from './alpha.js';
 import { canvasSize } from './captionStyles.js';
 import { mergeMotion } from './captionFields.js';
 import { balancedRows, breakRows, cfgOf, flatMeasure, lineBox, planFor } from './captionMotion.js';
@@ -25,9 +26,10 @@ const FADE_IN = 200;
 const FADE_OUT = 200;
 const POP_MS = 340;
 
+/** The brightness of a colour's RGB (its opacity does not enter). */
 const luma = (hexColour) => {
-    const n = parseInt(hexColour.slice(1), 16);
-    return 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255);
+    const [r, g, b] = rgbOf(hexColour);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 
 /** The room the headline text has across the frame (px), as the engine
@@ -240,6 +242,7 @@ export function resolveHeadlineV2(text, c, canvas, { measure = flatMeasure(), cl
         h: ph,
         k,
         show: true,
+        opacity: c.opacity ?? 1,
         font,
         fontPx,
         lineH: fontPx,
@@ -274,6 +277,7 @@ export function resolveHeadlineV2(text, c, canvas, { measure = flatMeasure(), cl
     const centreY = blockTop + (topInk + bottomInk) / 2;
     return {
         positioned: true,
+        opacity: c.opacity ?? 1,
         w: pw,
         h: ph,
         k,

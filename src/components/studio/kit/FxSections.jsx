@@ -16,10 +16,9 @@ export function ShadowFields() {
             <ToggleRow label={t('Shadow')} checked={view.shadowOn} set={view.shadowOn} onChange={(on) => setPatch(shadowFxPatch(on))} />
             {view.shadowOn && (
                 <div className="space-y-3 border-l border-white/[0.07] pl-3">
-                    <Colour path="shadow.color" label={t('Colour')} />
+                    <Colour path="shadow.color" opacity="shadow.opacity" label={t('Colour')} />
                     <OffsetPad />
                     <Num path="shadow.blur" label={t('Blur')} />
-                    <Num path="shadow.opacity" label={t('Opacity')} />
                 </div>
             )}
         </>

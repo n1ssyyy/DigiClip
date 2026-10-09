@@ -1,4 +1,5 @@
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
+import { alphaOf, cssColour, cssRgb, rgbOf } from '../../lib/alpha';
 import { cssFont } from '../../lib/fontNames';
 import { fontBox, outlineRing } from '../../lib/captionStyles';
 import { blockExtent, cfgOf, planFor } from '../../lib/captionMotion';
@@ -33,12 +34,14 @@ function useSize(ref, onSize, deps) {
 export function HeadlineLayer({ r, clock, len, reduced, onSize }) {
     const time = useClock(clock);
     const fb = useMemo(() => fontBox(r.font, r.fontPx), [r.font, r.fontPx]);
-    const ring = useMemo(() => (r.outline ? outlineRing(r.outline.width, r.outline.color) : undefined), [r.outline]);
+    const ring = useMemo(() => (r.outline ? outlineRing(r.outline.width, cssRgb(rgbOf(r.outline.color))) : undefined), [r.outline]);
     const ref = useRef(null);
     useSize(ref, onSize, [r.font, r.fontPx, r.text, r.wrapW, r.edgeW, r.noCard]);
 
     const m = headlineMotion(r, time * 1000, len * 1000);
     const live = m ? (reduced ? STILL : m) : null;
+    // The fade and the element's opacity, on every part (no group opacity).
+    const fade = live ? live.opacity * r.opacity : 0;
     const pad = r.card ? r.card.pad : 0;
     const boxH = r.block + 2 * pad;
     const outer = {
@@ -48,38 +51,40 @@ export function HeadlineLayer({ r, clock, len, reduced, onSize }) {
         width: 'max-content',
         maxWidth: r.wrapW + 2 * pad,
         boxSizing: 'border-box',
-        opacity: live ? live.opacity : 0,
         pointerEvents: 'none',
         userSelect: 'none',
         transformOrigin: r.originTop ? `50% ${pad}px` : '50% 50%',
         transform: `translateX(-50%) scale(${live ? live.scale : 1})`,
     };
+    const type = {
+        top: fb.shiftY,
+        fontFamily: `${cssFont(r.font)}, sans-serif`,
+        fontSize: fb.em,
+        lineHeight: `${fb.lineH}px`,
+        textAlign: 'center',
+        whiteSpace: 'normal',
+        fontWeight: 400,
+    };
+    const rows = (paint, textShadow) => r.lines.map((line, i) => (
+        <div key={i}>
+            {line.map((w, j) => (
+                <Fragment key={j}>
+                    {j > 0 && ' '}
+                    <span style={{ color: paint(w.accent ? r.accent : r.ink), textShadow }}>{w.text}</span>
+                </Fragment>
+            ))}
+        </div>
+    ));
     return (
-        <div ref={ref} style={{ ...outer, backgroundColor: r.card ? r.card.color : undefined, padding: pad }} aria-hidden>
-            <div
-                style={{
-                    position: 'relative',
-                    top: fb.shiftY,
-                    fontFamily: `${cssFont(r.font)}, sans-serif`,
-                    fontSize: fb.em,
-                    lineHeight: `${fb.lineH}px`,
-                    textAlign: 'center',
-                    whiteSpace: 'normal',
-                    fontWeight: 400,
-                    color: r.ink,
-                    textShadow: ring,
-                }}
-            >
-                {r.lines.map((line, i) => (
-                    <div key={i}>
-                        {line.map((w, j) => (
-                            <Fragment key={j}>
-                                {j > 0 && ' '}
-                                <span style={w.accent ? { color: r.accent } : undefined}>{w.text}</span>
-                            </Fragment>
-                        ))}
+        <div ref={ref} style={{ ...outer, backgroundColor: r.card ? cssColour(r.card.color, fade) : undefined, padding: pad }} aria-hidden>
+            <div style={{ position: 'relative' }}>
+                {ring && (
+                    // The outline, under the type (a clear ink shows it through).
+                    <div style={{ ...type, position: 'absolute', left: 0, right: 0, opacity: alphaOf(r.outline.color) * fade }}>
+                        {rows(() => cssRgb(rgbOf(r.outline.color)), ring)}
                     </div>
-                ))}
+                )}
+                <div style={{ ...type, position: 'relative' }}>{rows((c) => cssColour(c, fade))}</div>
             </div>
         </div>
     );

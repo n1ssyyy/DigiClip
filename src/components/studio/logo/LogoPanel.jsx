@@ -10,7 +10,7 @@ import Field, { ResetButton } from '../Field';
 import PlaceField from '../PlaceField';
 import { CapNotice } from '../Notice';
 import { panelValue, usePanel } from '../kit/context';
-import { Num, useDrag } from '../kit/inputs';
+import { ElementOpacity, Num, useDrag } from '../kit/inputs';
 import { GlowFields, ShadowFields } from '../kit/FxSections';
 import LayerSections, { useLayerLabels } from '../kit/LayerSections';
 
@@ -41,6 +41,7 @@ function LogoSection({ options, update, edit, onResetAll, anySet }) {
                 <LogoSlot value={options.logo} onChange={(v) => update({ logo: v })} />
             </Field>
             <Needs file={file}>
+                <ElementOpacity always disabled={!file} />
                 <Field label={t('Logo corner')}>
                     <Seg
                         label={t('Logo corner')}
@@ -60,7 +61,6 @@ function LogoSection({ options, update, edit, onResetAll, anySet }) {
                     onDragEnd={drag.end}
                 />
                 <Num path="size" label={t('Size')} disabled={!file} />
-                <Num path="opacity" label={t('Opacity')} disabled={!file} />
             </Needs>
             <ResetButton disabled={!anySet} onClick={onResetAll}>{t('Reset logo')}</ResetButton>
         </>

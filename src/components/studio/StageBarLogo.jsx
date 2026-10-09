@@ -1,10 +1,11 @@
 import { ImagePlus } from 'lucide-react';
-import { rgba } from '../../lib/captionStyles';
+import { cssColour } from '../../lib/alpha';
 import { baseName } from '../../lib/utils';
 import { useClock } from './usePlayer';
 
 const rnd = (v, d = 100) => Math.round(v * d) / d;
-const PLAIN_TRACK = 'rgb(0 0 0 / 0.55)';
+/** The plain bar's dimmed track. */
+const PLAIN_TRACK = 0.55;
 
 /**
  * The progress bar. The plain bar is the engine's dimmed track with the fill
@@ -12,14 +13,21 @@ const PLAIN_TRACK = 'rgb(0 0 0 / 0.55)';
  * (the Look sets a track, an inset, a radius or a glow) is drawn in the
  * engine's order: the track, the glow, the fill, the fill ending where the
  * playhead is and not on a two-pixel step.
+ *
+ * Each part is laid over the picture with its own opacity (straight alpha, no
+ * group): the fill's colour opacity x `bar.opacity`, the track's colour
+ * opacity x `track_opacity` x `bar.opacity`, the glow's colour opacity x
+ * its strength x `bar.opacity`.
  */
 export function BarLayer({ r, clock, len }) {
     const time = useClock(clock);
     const end = r.fill(len > 0 ? time / len : 0);
+    const el = r.opacity;
     if (!r.shaped) {
         return (
-            <div aria-hidden style={{ position: 'absolute', left: 0, top: r.y, width: r.w, height: r.thickness, background: PLAIN_TRACK, pointerEvents: 'none' }}>
-                <div style={{ width: end, height: '100%', background: r.color }} />
+            <div aria-hidden style={{ position: 'absolute', left: 0, top: r.y, width: r.w, height: r.thickness, pointerEvents: 'none' }}>
+                <div style={{ position: 'absolute', inset: 0, background: `rgb(0 0 0 / ${Math.round(PLAIN_TRACK * el * 1000) / 1000})` }} />
+                <div style={{ position: 'absolute', left: 0, top: 0, width: end, height: '100%', background: cssColour(r.color, el) }} />
             </div>
         );
     }
@@ -38,7 +46,7 @@ export function BarLayer({ r, clock, len }) {
                     width: trackW,
                     height: r.thickness,
                     borderRadius: radius,
-                    background: r.track ? rgba(r.track.color, r.track.opacity) : PLAIN_TRACK,
+                    background: r.track ? cssColour(r.track.color, r.track.opacity, el) : `rgb(0 0 0 / ${Math.round(PLAIN_TRACK * el * 1000) / 1000})`,
                 }}
             />
             {g && fillW > 0.5 && (
@@ -50,14 +58,13 @@ export function BarLayer({ r, clock, len }) {
                         width: fillW + 2 * g.grow,
                         height: r.thickness + 2 * g.grow,
                         borderRadius: fillRadius + g.grow,
-                        background: g.color,
-                        opacity: Math.min(g.strength, 1),
+                        background: cssColour(g.color, Math.min(g.strength, 1), el),
                         filter: g.sigma > 0.05 ? `blur(${rnd(g.sigma)}px)` : undefined,
                     }}
                 />
             )}
             {fillW > 0.5 && (
-                <div style={{ position: 'absolute', left: r.x0, top: r.y, width: fillW, height: r.thickness, borderRadius: fillRadius, background: r.color }} />
+                <div style={{ position: 'absolute', left: r.x0, top: r.y, width: fillW, height: r.thickness, borderRadius: fillRadius, background: cssColour(r.color, el) }} />
             )}
         </div>
     );
@@ -69,7 +76,9 @@ export function BarLayer({ r, clock, len }) {
  * engine's size stands in, with the file's name. A turned logo turns the
  * stand-in about its centre; a shadow and a glow are copies of the box under
  * it (the shadow moved on the screen, not in the logo's own turn; the glow
- * grown and blurred), and the opacity is the whole stack's.
+ * grown and blurred), and the opacity is the whole stack's (a group: the one
+ * place where that is right). The shadow's own opacity is its colour's x
+ * `shadow.opacity`, the glow's its colour's x its strength.
  */
 export function LogoLayer({ r, file }) {
     const { w, h } = r.box;
@@ -95,8 +104,7 @@ export function LogoLayer({ r, file }) {
                 <div
                     style={{
                         ...copy,
-                        background: sh.color,
-                        opacity: sh.opacity,
+                        background: cssColour(sh.color, sh.opacity),
                         filter: sh.blur > 0.05 ? `blur(${rnd(sh.blur)}px)` : undefined,
                         transform: `translate(${rnd(sh.x)}px, ${rnd(sh.y)}px) ${turn}`.trim(),
                     }}
@@ -107,8 +115,7 @@ export function LogoLayer({ r, file }) {
                     style={{
                         ...copy,
                         inset: -gl.grow,
-                        background: gl.color,
-                        opacity: Math.min(gl.strength, 1),
+                        background: cssColour(gl.color, Math.min(gl.strength, 1)),
                         filter: gl.sigma > 0.05 ? `blur(${rnd(gl.sigma)}px)` : undefined,
                         transform: turn || undefined,
                     }}

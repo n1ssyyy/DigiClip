@@ -6,6 +6,8 @@
 // and the stage read their numbers from here too, so a range changed here is
 // changed everywhere. Pure data and functions: no React, no DOM.
 
+import { normColour } from './alpha.js';
+
 export const ALIGNS = ['left', 'center', 'right'];
 export const WORD_MODES = ['all', 'build', 'single'];
 export const FILLS = ['snap', 'sweep'];
@@ -26,6 +28,8 @@ export const WORD_STATES = ['upcoming', 'active', 'spoken'];
  * that does not depend on the style.
  */
 export const FIELD_SPECS = {
+    // the whole caption's opacity (multiplies every part's own)
+    opacity: { type: 'number', min: 0, max: 1, step: 0.05, unit: 'ratio', def: 1 },
     // type
     spacing: { type: 'number', min: -0.05, max: 0.3, step: 0.005, unit: 'em', def: 0 },
     line_gap: { type: 'number', min: 0.8, max: 1.6, step: 0.05, unit: 'ratio', def: 1 },
@@ -119,8 +123,8 @@ const clampN = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 // The readers every section of the Look is cleaned with (the headline, bar
 // and logo cleaners in layerFields.js use these too).
 export const numIn = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clampN(v, lo, hi) : undefined);
-const HEX = /^#?[0-9a-f]{6}$/i;
-export const hexOf = (v) => (typeof v === 'string' && HEX.test(v.trim()) ? `#${v.trim().replace('#', '').toUpperCase()}` : undefined);
+/** A colour of the Look: `#RRGGBB` or `#RRGGBBAA`, upper-cased; absent when it is neither. */
+export const hexOf = normColour;
 export const plain = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
 export const word = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : undefined);
 export const oneOf = (v, list) => {

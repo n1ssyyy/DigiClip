@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { isColour } from '../../../lib/alpha';
 import { aspectList } from '../../../lib/look';
 import { BAR_DEFAULT_COLOR, resolveBar } from '../../../lib/layers';
 import { barView, layerClear, layerPatch } from '../../../lib/layerEffective';
@@ -9,13 +10,12 @@ import { ResetButton } from '../Field';
 import { CapNotice } from '../Notice';
 import { Choice } from '../kit/choices';
 import { panelValue, usePanel } from '../kit/context';
-import { Colour, Num, Row } from '../kit/inputs';
+import { Colour, ElementOpacity, Num, Row } from '../kit/inputs';
 import { GlowFields } from '../kit/FxSections';
 import LayerSections, { useLayerLabels } from '../kit/LayerSections';
 
 const def = BAR_LAYER;
 const NONE = {};
-const HEX = /^#[0-9a-f]{6}$/i;
 const v2Note = (t) => t('This engine is older than these controls. They apply after the next engine update.');
 
 /** Bar: on or off, which edge, how thick, what colour. The colour is the
@@ -29,6 +29,7 @@ function BarSection({ options, update, edit, onResetAll, anySet }) {
             <SwitchRow checked={options.progress_bar} onChange={(v) => update({ progress_bar: v })} title={t('Progress bar')} hint={t('A thin bar that fills as the clip plays.')} />
             {options.progress_bar && (
                 <>
+                    <ElementOpacity />
                     <Row label={t('Place')} set={view.isSet('pos')} onReset={() => clear('pos')} hint={t('Drag the bar on the stage past the middle to flip it.')}>
                         <Choice
                             label={t('Bar place')}
@@ -58,8 +59,7 @@ function TrackSection() {
     return (
         <>
             <CapNotice cap="look.bar.v2" text={v2Note(t)} />
-            <Colour path="track" label={t('Colour')} />
-            <Num path="track_opacity" label={t('Opacity')} />
+            <Colour path="track" opacity="track_opacity" label={t('Colour')} />
         </>
     );
 }
@@ -96,7 +96,7 @@ export default function BarPanel({ look }) {
     const { options, update, setBar, edit, beginGesture, endGesture } = look;
     const L = options.look?.bar ?? NONE;
     const canvas = aspectList(options.aspect)[0];
-    const flat = HEX.test(options.bar_color ?? '') ? options.bar_color : BAR_DEFAULT_COLOR;
+    const flat = /^#/.test(options.bar_color ?? '') && isColour(options.bar_color) ? options.bar_color : BAR_DEFAULT_COLOR;
     const flatSet = flat.toUpperCase() !== BAR_DEFAULT_COLOR;
     const view = useMemo(() => barView(resolveBar(canvas, flat, L), L, flatSet), [canvas, flat, L, flatSet]);
     const g = useMemo(() => ({ begin: beginGesture, end: endGesture }), [beginGesture, endGesture]);

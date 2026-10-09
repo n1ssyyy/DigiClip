@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { flashMessage, startJob, startJobUrl, useStore } from '../../lib/socket';
 import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../../lib/native';
+import { ALPHA_CAP } from '../../lib/alpha';
 import { toEngine, useJobOptions } from '../../lib/look';
 import { useT } from '../../lib/i18n';
 
@@ -13,6 +14,7 @@ const VIDEO_RE = new RegExp(`\\.(${VIDEO_EXT.join('|')})$`, 'i');
 export default function useAddVideo() {
     const t = useT();
     const settings = useStore((s) => s.settings);
+    const alpha = useStore((s) => s.caps.includes(ALPHA_CAP));
     const [jobOptions] = useJobOptions(settings);
     const [link, setLink] = useState('');
     const [uploading, setUploading] = useState(null);
@@ -32,7 +34,7 @@ export default function useAddVideo() {
      *  the engine an inverted window; auto sends nothing (15-90s). */
     function baseOptions() {
         return {
-            ...toEngine(jobOptions),
+            ...toEngine(jobOptions, { alpha }),
             model: settings?.stt_model,
             gpu: settings?.gpu,
         };

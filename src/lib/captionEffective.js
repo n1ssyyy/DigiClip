@@ -217,13 +217,22 @@ export function editPatch(view, path, value) {
     if (path === 'words.keyword.color') patch.accent = undefined;
     if (path.startsWith('shadow.') && !view.shadowIsObject) patch = { shadow: { ...view.shadowSeed(), ...patch.shadow } };
     if (path.startsWith('box.') && !view.boxIsObject) patch = { box: { per: 'line', ...boxSeed(view), ...patch.box } };
+    // The box's opacity is one number: the v1 `box_opacity` it replaces goes.
+    if (path === 'box.opacity') patch.box_opacity = undefined;
     return patch;
 }
 
-/** What a new box starts with: the style's own box keeps its colour; a box on
- *  a style without one starts see-through-ish rather than solid black. */
+/** What a new box starts with: a v1 box keeps its colour and opacity; the
+ *  style's own box keeps its colour; a box on a style without one starts
+ *  see-through-ish rather than solid black. */
 function boxSeed(view) {
-    return view.base.box ? {} : { opacity: 0.6 };
+    const c = view.c;
+    const own = typeof c.box === 'string' && c.box !== 'none' ? c.box : null;
+    const seed = {};
+    if (own) seed.color = own;
+    if (c.box_opacity !== undefined) seed.opacity = c.box_opacity;
+    else if (!own && !view.base.box) seed.opacity = 0.6;
+    return seed;
 }
 
 /** The patch for the shadow switch. */

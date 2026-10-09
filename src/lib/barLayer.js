@@ -83,6 +83,8 @@ export function resolveBar(canvas, color, look) {
         x1,
         inset,
         shaped,
+        /** The whole bar's opacity: it multiplies the fill, the track and the glow. */
+        opacity: c.opacity ?? 1,
         color: fill,
         radius: shaped ? (c.radius ?? 0) * (thickness / 2) : 0,
         glow,

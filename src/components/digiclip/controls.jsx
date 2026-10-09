@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { alphaOf, colourOnly, cssRgb, fromPercent, isColour, normColour, percentOf, rgbOf } from '../../lib/alpha';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 import Tip from './Tooltip';
@@ -293,69 +294,123 @@ export function Slider({ label, value, min = 0, max = 1, step = 0.01, bigStep, o
     );
 }
 
-const HEX6 = /^#?[0-9a-f]{6}$/i;
-const normHex = (v) => `#${String(v).trim().replace('#', '').toUpperCase()}`;
+/** A colour well's checkerboard: what shows through a colour that is not opaque. */
+const CHECKER = {
+    backgroundColor: '#3a3a3d',
+    backgroundImage: 'conic-gradient(#6a6a6e 25%, transparent 0 50%, #6a6a6e 0 75%, transparent 0)',
+    backgroundSize: '8px 8px',
+};
 
 /**
- * Colour well: a swatch that opens the native colour input, a hex field,
- * and an "unset" state (`value` empty) that shows `fallback` (the
- * style's colour) dimmed. `onReset` adds a small reset once a value is set.
+ * Colour well: a swatch (over a checkerboard, so transparency shows) that
+ * opens the native colour input, a hex field taking six or eight digits
+ * (`#RRGGBB`, or `#RRGGBBAA` with the colour's own opacity), and an "unset"
+ * state (`value` empty) that shows `fallback` (the style's colour) dimmed.
+ * `onReset` adds a small reset once something is set.
+ *
+ * `onChange` gets what was typed or picked, normalised (six or eight digits).
+ * With `opacity` (`{value, label, set, onChange, onDragStart, onDragEnd}`,
+ * `value` 0..1) the well also has the opacity chip, which opens a slider
+ * under it: 0 to 100 %, arrows step 1, Shift+arrows 10, Home and End jump to
+ * the ends, the value is always shown. `set` says the well shows something
+ * the Look sets even when `value` is empty (an opacity of its own).
  */
-export function Swatch({ label, value, fallback = '#FFFFFF', onChange, onReset, resetLabel, disabled = false, className }) {
-    const set = HEX6.test(value ?? '');
-    const shown = set ? normHex(value) : normHex(fallback);
+export function Swatch({ label, value, fallback = '#FFFFFF', onChange, onReset, resetLabel, disabled = false, set: setProp, opacity, className }) {
+    const t = useT();
+    const uid = useId();
+    const [open, setOpen] = useState(false);
+    const own = isColour(value ?? '');
+    const set = setProp ?? own;
+    const shown = normColour(own ? value : fallback) ?? '#FFFFFF';
     const [draft, setDraft] = useState(null);
-    const text = draft ?? (set ? shown : '');
+    const text = draft ?? (own ? shown : '');
+    const pct = opacity ? percentOf(opacity.value) : null;
     function commit(v) {
-        if (HEX6.test(v)) onChange(normHex(v));
+        if (isColour(v)) onChange(normColour(v));
         setDraft(null);
     }
     return (
-        <div
-            className={cn(
-                'flex h-8 w-full items-center gap-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-1 pl-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring',
-                disabled && 'pointer-events-none opacity-50',
-                className,
-            )}
-        >
-            <label className="relative size-5 shrink-0 cursor-pointer overflow-hidden rounded border border-white/25" style={{ backgroundColor: shown, opacity: set ? 1 : 0.45 }}>
+        <div className={cn('flex min-w-0 flex-col gap-1', className)}>
+            <div
+                className={cn(
+                    'flex h-8 w-full items-center gap-1.5 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-1 pl-1.5 transition-shadow focus-within:ring-2 focus-within:ring-ring',
+                    disabled && 'pointer-events-none opacity-50',
+                )}
+            >
+                <label className="relative size-5 shrink-0 cursor-pointer overflow-hidden rounded border border-white/25" style={{ ...CHECKER, opacity: set ? 1 : 0.45 }}>
+                    <span aria-hidden className="absolute inset-0" style={{ backgroundColor: cssRgb(rgbOf(shown), opacity ? opacity.value : alphaOf(shown)) }} />
+                    <input
+                        type="color"
+                        value={colourOnly(shown).toLowerCase()}
+                        onChange={(e) => onChange(normColour(e.target.value))}
+                        aria-label={label}
+                        disabled={disabled}
+                        className="absolute inset-0 size-full cursor-pointer opacity-0"
+                    />
+                </label>
                 <input
-                    type="color"
-                    value={shown.toLowerCase()}
-                    onChange={(e) => onChange(normHex(e.target.value))}
-                    aria-label={label}
+                    type="text"
+                    value={text}
+                    placeholder={shown}
+                    spellCheck={false}
+                    maxLength={9}
+                    aria-label={`${label} (hex)`}
                     disabled={disabled}
-                    className="absolute inset-0 size-full cursor-pointer opacity-0"
+                    onChange={(e) => {
+                        setDraft(e.target.value);
+                        if (isColour(e.target.value)) onChange(normColour(e.target.value));
+                    }}
+                    onBlur={(e) => commit(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') commit(e.currentTarget.value);
+                        if (e.key === 'Escape') setDraft(null);
+                    }}
+                    className={cn('min-w-0 flex-1 bg-transparent font-mono text-[11px] uppercase outline-none placeholder:text-muted-foreground/60', !set && 'text-muted-foreground')}
                 />
-            </label>
-            <input
-                type="text"
-                value={text}
-                placeholder={shown}
-                spellCheck={false}
-                maxLength={7}
-                aria-label={`${label} (hex)`}
-                disabled={disabled}
-                onChange={(e) => {
-                    setDraft(e.target.value);
-                    if (HEX6.test(e.target.value)) onChange(normHex(e.target.value));
-                }}
-                onBlur={(e) => commit(e.target.value)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter') commit(e.currentTarget.value);
-                    if (e.key === 'Escape') setDraft(null);
-                }}
-                className={cn('min-w-0 flex-1 bg-transparent font-mono text-[12px] uppercase outline-none placeholder:text-muted-foreground/60', !set && 'text-muted-foreground')}
-            />
-            {set && onReset && (
-                <button
-                    type="button"
-                    aria-label={resetLabel ?? label}
-                    onClick={onReset}
-                    className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                >
-                    <RotateCcw className="size-3" aria-hidden />
-                </button>
+                {opacity && (
+                    <button
+                        type="button"
+                        aria-label={t('Show opacity of {name}', { name: label })}
+                        aria-expanded={open}
+                        aria-controls={`${uid}-op`}
+                        disabled={disabled}
+                        onClick={() => setOpen((o) => !o)}
+                        className={cn(
+                            'h-6 shrink-0 rounded px-1 font-mono text-[10px] tabular-nums transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                            open ? 'bg-accent text-foreground' : opacity.set ? 'text-foreground' : 'text-muted-foreground',
+                        )}
+                    >
+                        {pct}%
+                    </button>
+                )}
+                {set && onReset && (
+                    <button
+                        type="button"
+                        aria-label={resetLabel ?? label}
+                        onClick={onReset}
+                        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                        <RotateCcw className="size-3" aria-hidden />
+                    </button>
+                )}
+            </div>
+            {opacity && open && (
+                <div id={`${uid}-op`}>
+                    <Slider
+                        label={opacity.label}
+                        value={pct}
+                        min={0}
+                        max={100}
+                        step={1}
+                        bigStep={10}
+                        format={(v) => `${Math.round(v)}%`}
+                        dim={!opacity.set}
+                        disabled={disabled}
+                        onChange={(v) => opacity.onChange(fromPercent(v))}
+                        onDragStart={opacity.onDragStart}
+                        onDragEnd={opacity.onDragEnd}
+                    />
+                </div>
             )}
         </div>
     );
