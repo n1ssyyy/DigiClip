@@ -2,10 +2,13 @@ import { Camera, Captions, Columns2, Eye, EyeOff, Gauge, Heading, ImagePlus, Mus
 import { Card } from '../ui/card';
 import Tip from '../digiclip/Tooltip';
 import { Kicker, baseName } from '../digiclip/JobOptions';
+import { fontTrait, withFont } from '../../lib/lookSummary';
 import { sceneSummary } from '../../lib/sceneSummary';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 
+/** Characters a layer's summary line holds in the 232 px pane (10 px mono). */
+const ROW_MAX = 24;
 const KIND_LABEL = { smart: 'Smart', complete: 'Complete', moments: 'Moments', timecut: 'Timecut' };
 
 /** The rows of the Layers pane, grouped. `eye` rows have an on/off
@@ -44,12 +47,13 @@ function summary(id, o, t) {
     switch (id) {
         case 'captions': {
             if (o.look?.captions?.show === false) return t('Hidden');
-            return `${o.style} · ${Math.round((o.look?.captions?.size ?? 1) * 100)}%`;
+            return withFont(`${o.style} · ${Math.round((o.look?.captions?.size ?? 1) * 100)}%`, o.look?.captions?.font && fontTrait({ style: o.style, look: { captions: o.look.captions } }), ROW_MAX);
         }
         case 'headline': {
             if (!o.headline) return t('Off');
             const size = o.look?.headline?.size;
-            return `${(o.headline_text ?? '').trim() || t("The clip's own title")}${size !== undefined ? ` · ${Math.round(size * 100)}%` : ''}`;
+            const line = `${(o.headline_text ?? '').trim() || t("The clip's own title")}${size !== undefined ? ` · ${Math.round(size * 100)}%` : ''}`;
+            return withFont(line, fontTrait({ style: o.style, headline: true, look: { headline: o.look?.headline } }), ROW_MAX);
         }
         case 'bar': {
             if (!o.progress_bar) return t('Off');

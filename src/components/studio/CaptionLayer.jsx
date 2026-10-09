@@ -1,4 +1,5 @@
 import { Fragment, useMemo } from 'react';
+import { cssFont } from '../../lib/fontNames';
 import { fontBox, keywordBump, lineMotion, outlineRing, rgba, wordReveal } from '../../lib/captionStyles';
 import { useClock } from './usePlayer';
 import WordCaption from './WordCaption';
@@ -69,7 +70,7 @@ function LineCaption({ r, lines, clock, reduced }) {
         position: 'relative',
         top: fb.shiftY,
         display: 'grid',
-        fontFamily: `'${r.font}', sans-serif`,
+        fontFamily: `${cssFont(r.font)}, sans-serif`,
         fontSize: fb.em,
         lineHeight: `${fb.lineH}px`,
         textAlign: 'center',

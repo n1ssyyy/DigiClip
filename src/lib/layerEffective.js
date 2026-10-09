@@ -10,7 +10,7 @@
 // React, no DOM.
 import { glowDefault, rgbOf } from './captionMotion.js';
 import { getPath, nest } from './captionEffective.js';
-import { cleanBar, cleanHeadline, cleanLogo, GLOW_DEFAULTS, HEADLINE_PAD, SHADOW_DEFAULTS, TRACK_OPACITY } from './layerFields.js';
+import { cleanBar, cleanHeadline, cleanLogo, GLOW_DEFAULTS, HEADLINE_FONT, HEADLINE_PAD, SHADOW_DEFAULTS, TRACK_OPACITY } from './layerFields.js';
 import { headlineTiming } from './headlineV2.js';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -57,7 +57,7 @@ export function headlineView(r, look, { len = Infinity, room = 0.8 } = {}) {
             case 'x': return r.center.x;
             case 'y': return r.center.y;
             case 'size': return r.size;
-            case 'font': return r.font;
+            case 'font': return L.font ?? HEADLINE_FONT;
             case 'case': return L.case ?? 'asis';
             case 'spacing': return L.spacing ?? 0;
             case 'align': return L.align ?? 'center';
@@ -104,6 +104,8 @@ export function headlineView(r, look, { len = Infinity, room = 0.8 } = {}) {
         shadowOn: !!L.shadow,
         glowOn: !!L.glow,
         shadowIsObject: !!L.shadow,
+        /** The font the headline draws without the Look. */
+        defaultFont: HEADLINE_FONT,
     };
 }
 

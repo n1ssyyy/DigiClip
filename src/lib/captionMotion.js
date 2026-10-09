@@ -14,7 +14,7 @@
 // Times in a plan are milliseconds on the sample's clock; lengths are output
 // pixels.
 
-import { FONT_METRICS, captionLines } from './captionStyles.js';
+import { captionLines, metricsOf } from './captionStyles.js';
 import { ENTER_MS, EXIT_MS, effectiveMotion, fromAnim } from './captionFields.js';
 
 // ---- constants (motion.rs) ---------------------------------------------------
@@ -530,7 +530,7 @@ export function flatMeasure(advance = 0.6) {
 /** libass' line box above and below the baseline for a font at `fontPx`:
  *  the ascent and the descent (both positive; together `fontPx`). */
 export function lineBox(font, fontPx) {
-    const m = FONT_METRICS[font] ?? FONT_METRICS['Archivo Black'];
+    const m = metricsOf(font);
     const cell = m.winA + m.winD;
     return { asc: (m.winA / cell) * fontPx, desc: (m.winD / cell) * fontPx };
 }

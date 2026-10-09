@@ -9,7 +9,6 @@
 // the panel builds its number and choice controls from `numSpec` and `enums`,
 // so a field cannot gain a range there without gaining a control here.
 import { ALIGNS, EASES, ENTER_KINDS, EXIT_KINDS } from './captionFields.js';
-import { FONTS } from './captionStyles.js';
 import {
     ACCENT_WORDS, BAR_POSITIONS, BAR_SPECS, CASES, HEADLINE_ANIMS, HEADLINE_SPECS, LOGO_SPECS,
 } from './layerFields.js';
@@ -38,7 +37,6 @@ export const HEADLINE_LAYER = {
     aliases: { anim: 'enter.kind' },
     /** The order a choice control lists the values of an enum field. */
     enums: {
-        font: FONTS,
         case: CASES,
         align: ALIGNS,
         accent_word: ACCENT_WORDS,

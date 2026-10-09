@@ -1,29 +1,34 @@
 import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
-import { FONTS } from '../../../lib/captionStyles';
 import { useT } from '../../../lib/i18n';
+import { CapNotice } from '../Notice';
+import { useFaceStatus } from '../useFonts';
 import { Choice } from './choices';
+import FontPicker from './FontPicker';
 import { usePanel } from './context';
 import { Row } from './inputs';
 
-const FONT_LABEL = { 'Anton': 'Anton', 'Archivo Black': 'Archivo Black', 'Inter Medium': 'Inter', 'JetBrains Mono': 'JetBrains Mono' };
 const ALIGN_ICON = { left: AlignLeft, center: AlignCenter, right: AlignRight };
 const ALIGNS = ['left', 'center', 'right'];
 
-/** The four fonts, each set in its own face. */
-export function FontRow() {
+/** The font: a picker over every font the engine has, each in its own face.
+ *  `layer` is the stage layer a hover previews on; `unless` names the ability
+ *  whose own "older engine" note already covers this section. */
+export function FontRow({ layer, unless }) {
     const t = useT();
     const { view, set, clear } = usePanel();
+    const value = view.val('font');
+    const status = useFaceStatus(value);
     return (
         <Row label={t('Font')} set={view.isSet('font')} onReset={() => clear('font')}>
-            <Choice
+            <CapNotice cap="look.fonts" unless={unless} text={t('This engine only has the four built-in fonts. The rest apply after the next engine update.')} />
+            <FontPicker
                 label={t('Font')}
-                size="lg"
-                cols={2}
-                value={view.val('font')}
-                set={view.isSet('font')}
-                onChange={(v) => set('font', v)}
-                options={FONTS.map((f) => ({ id: f, label: FONT_LABEL[f], style: { fontFamily: `'${f}', sans-serif` } }))}
+                layer={layer}
+                value={value}
+                def={view.defaultFont}
+                onPick={(f) => (f === undefined ? clear('font') : set('font', f))}
             />
+            {status === 'failed' && <p className="text-[11px] leading-snug text-muted-foreground">{t('This font could not be loaded. The default is shown.')}</p>}
         </Row>
     );
 }

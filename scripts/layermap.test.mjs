@@ -62,7 +62,10 @@ test('every field of the specs has the control its kind needs: number display, c
         for (const p of Object.keys(def.enums)) assert.equal(def.specs[p]?.type, 'enum', `${def.id}: ${p}`);
     }
     assert.deepEqual([CASES, ACCENT_WORDS, HEADLINE_ANIMS, BAR_POSITIONS], [['upper', 'asis'], ['auto', 'none', 'first', 'last'], ['pop', 'fade', 'none'], ['bottom', 'top']]);
-    assert.deepEqual(HEADLINE_LAYER.enums.font, FONTS);
+    // The font is a name, not a list: it has a spec and no fixed choices.
+    assert.equal(HEADLINE_SPECS.font.type, 'font');
+    assert.equal(HEADLINE_LAYER.enums.font, undefined);
+    assert.equal(FONTS.length, 4);
     assert.deepEqual(HEADLINE_LAYER.enums.align, ALIGNS);
     // How the numbers read: shares as percent, seconds, degrees, pixels.
     assert.deepEqual(numUi(BAR_LAYER, 'inset'), { k: 100, unit: '%', digits: 1 });

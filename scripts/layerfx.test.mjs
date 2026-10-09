@@ -181,7 +181,7 @@ test('the headline reader clamps and falls back as look.rs does', () => {
     for (const [j, want] of [['first', 'first'], ['Auto', 'auto'], ['none', 'none']]) assert.equal(cleanHeadline({ accent_word: j }).accent_word, want);
     // Bad values are absent, and empty objects are nothing.
     for (const j of [
-        { font: 'Comic Sans', case: 'title', align: 'middle', accent_word: 'second' },
+        { font: '   ', case: 'title', align: 'middle', accent_word: 'second' },
         { spacing: 'wide', max_lines: 'two', width: null, delay_s: 'soon' },
         { stroke: {}, shadow: {}, glow: {}, card: {}, enter: {}, exit: {} },
         { stroke: 5, shadow: [1], glow: 'big', enter: 'pop', exit: 3 },

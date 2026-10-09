@@ -14,7 +14,8 @@ import { canvasSize } from './captionStyles.js';
 import { mergeMotion } from './captionFields.js';
 import { balancedRows, breakRows, cfgOf, flatMeasure, lineBox, planFor } from './captionMotion.js';
 import { DANGLING, accentPick, bare, charLen } from './headlineText.js';
-import { HEADLINE_EDGE, HEADLINE_PAD } from './layerFields.js';
+import { HEADLINE_EDGE, HEADLINE_FONT, HEADLINE_PAD } from './layerFields.js';
+import { drawFont } from './fontState.js';
 
 const PLAY_W = 1080;
 const HEADLINE_PX = 64;
@@ -115,7 +116,8 @@ export function resolveHeadlineV2(text, c, canvas, { measure = flatMeasure(), cl
     const px = (v) => Math.max(1, Math.round(v * k));
     const tall = pw / ph < 0.6;
     const size = c.size ?? 1;
-    const font = c.font ?? 'Archivo Black';
+    // Drawn in the Look's font once its face is in the page, else the default.
+    const font = drawFont(c.font ?? HEADLINE_FONT, HEADLINE_FONT);
     const fontPx = px(HEADLINE_PX * size);
 
     // The card: a colour or an object; `none` (or an invisible object) is no card.

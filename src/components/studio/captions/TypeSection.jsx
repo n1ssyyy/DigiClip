@@ -16,7 +16,7 @@ export default function TypeSection() {
         <>
             <CapNotice cap="look.captions.type" text={t('This engine is older than these controls. They apply after the next engine update.')} />
 
-            <FontRow />
+            <FontRow layer="captions" unless="look.captions.type" />
 
             <Num path="size" label={t('Size')} />
 

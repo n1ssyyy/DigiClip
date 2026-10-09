@@ -88,7 +88,7 @@ export function captionView(styleId, canvas, L, flat = {}) {
     function val(path) {
         switch (path) {
             case 'show': return r.show;
-            case 'font': return r.font;
+            case 'font': return c.font ?? base.font;
             case 'size': return c.size ?? 1;
             case 'case': return r.caps ? 'upper' : 'asis';
             case 'x': return r.center.x;
@@ -187,6 +187,8 @@ export function captionView(styleId, canvas, L, flat = {}) {
         shadowOn: shadowObj ? true : r.shadow > 0 || (typeof c.shadow === 'number' && c.shadow > 0),
         glowOn: !!c.glow,
         shadowIsObject: shadowObj,
+        /** The font the style draws without the Look. */
+        defaultFont: base.font,
         boxIsObject: boxObj,
         /** The shadow object the caption draws now, less what the engine already assumes. */
         shadowSeed: () => {

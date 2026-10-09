@@ -5,6 +5,7 @@ import { captionBlocks } from '../lib/captionMotion';
 import { parkTime } from '../lib/stageTime';
 import { stageScene } from '../lib/stageScene';
 import { splitPatch } from '../lib/sceneEffective';
+import { withFontPreview } from '../lib/fontPreview';
 import { logoClear, resolveBar, resolveHeadline, resolveLogo, stageHeadline } from '../lib/layers';
 import { flashMessage, useStore } from '../lib/socket';
 import { useT } from '../lib/i18n';
@@ -16,6 +17,7 @@ import Transport from '../components/studio/Transport';
 import { prefersReducedMotion } from '../components/studio/CaptionLayer';
 import { useSample } from '../components/studio/useSample';
 import { useMeasure } from '../components/studio/useMeasure';
+import { useFaces, useFontPreview, useFontSync, useFontVersion } from '../components/studio/useFonts';
 import { usePlayer } from '../components/studio/usePlayer';
 import { useLooks } from '../components/studio/useLooks';
 import { useExactFrame } from '../components/studio/useExactFrame';
@@ -100,6 +102,13 @@ export default function Studio() {
     const shape = aspectList(options.aspect)[0];
     const canvas = CANVASES[shape] ?? CANVASES['9:16'];
     const L = options.look ?? {};
+    // Fonts: the engine's list, the faces of the fonts in use, and the font a
+    // hover in the picker previews (laid over the Look for the stage only).
+    useFontSync();
+    const fontPreview = useFontPreview();
+    const faces = useFontVersion();
+    useFaces([L.captions?.font, L.headline?.font, fontPreview?.font]);
+    const LS = useMemo(() => withFontPreview(L, fontPreview), [L, fontPreview]);
     // What the Look does to the picture, and where a split puts the seam.
     const scene = useMemo(
         () => stageScene(options, canvas),
@@ -107,9 +116,9 @@ export default function Studio() {
         [options.layout, L.camera, L.effects, L.layout, canvas],
     );
     const resolved = useMemo(
-        () => resolveCaptions(options.style, shape, L.captions, { anim: options.caption_anim, seam: scene.seam }),
+        () => resolveCaptions(options.style, shape, LS.captions, { anim: options.caption_anim, seam: scene.seam }),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [options.style, shape, L.captions, options.caption_anim, scene.seam],
+        [options.style, shape, LS.captions, options.caption_anim, scene.seam, faces],
     );
     // Grouping depends on words, the words-per-line budget and whether the
     // motion is a moving one, not on colours or position.
@@ -130,9 +139,9 @@ export default function Studio() {
         [options.logo, options.logo_pos, shape, L.logo],
     );
     const headline = useMemo(
-        () => (options.headline ? resolveHeadline(stageHeadline(options.headline_text, sample.job), shape, L.headline, { clear: logoClear(logo), measure, len: sample.len }) : null),
+        () => (options.headline ? resolveHeadline(stageHeadline(options.headline_text, sample.job), shape, LS.headline, { clear: logoClear(logo), measure, len: sample.len }) : null),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [options.headline, options.headline_text, sample.job, shape, L.headline, logo, measure, sample.len],
+        [options.headline, options.headline_text, sample.job, shape, LS.headline, logo, measure, sample.len, faces],
     );
     const bar = useMemo(
         () => (options.progress_bar ? resolveBar(shape, options.bar_color, L.bar) : null),

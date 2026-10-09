@@ -8,11 +8,14 @@
 // inspector builds its number and choice controls from these tables, the
 // store and the stage take their numbers from here. Pure data and functions:
 // no React, no DOM.
-import { FONTS } from './captionStyles.js';
+import { FONT_NAME_MAX, cleanFontName } from './fontNames.js';
+import { faceStatus } from './fontState.js';
 import {
     FIELD_SPECS as CAP, cleanEnter, cleanExit, cleanGlow, cleanShadowFx, cleanStroke, hexOf, numIn, plain, some, word,
 } from './captionFields.js';
 
+/** The headline's font when the Look names none. */
+export const HEADLINE_FONT = 'Archivo Black';
 export const CASES = ['upper', 'asis'];
 export const ACCENT_WORDS = ['auto', 'none', 'first', 'last'];
 export const HEADLINE_ANIMS = ['pop', 'fade', 'none'];
@@ -37,7 +40,8 @@ export const HEADLINE_SPECS = {
     x: ratio(0, 1, 0.01),
     y: ratio(0, 1, 0.01),
     size: ratio(0.5, 2, 0.05, 1),
-    font: { type: 'enum', values: FONTS, def: 'Archivo Black' },
+    // Any family the engine has: a name, not a fixed list (see fontNames.js).
+    font: { type: 'font', max: FONT_NAME_MAX, def: HEADLINE_FONT },
     case: { type: 'enum', values: CASES, def: 'asis' },
     spacing: CAP.spacing,
     align: { ...CAP.align, def: 'center' },
@@ -115,7 +119,8 @@ export function readFlat(specs, o) {
         } else if (s.type === 'enum') {
             const w = word(o[k]);
             v = s.values.find((x) => x.toLowerCase() === w) ?? (k === 'align' && w === 'centre' ? 'center' : undefined);
-        } else if (s.type === 'colour') v = hexOf(o[k]);
+        } else if (s.type === 'font') v = cleanFontName(o[k]);
+        else if (s.type === 'colour') v = hexOf(o[k]);
         if (v !== undefined) out[k] = v;
     }
     return out;
@@ -175,7 +180,8 @@ export function cleanLogo(l) {
  *  is still v1, a card object is not. */
 export function isPositioned(c) {
     if (!c || typeof c !== 'object') return false;
-    return !!(c.font || c.case || c.spacing !== undefined || c.align || c.max_lines !== undefined || c.width !== undefined
+    // A font the engine does not have is no font to it (the v1 writer stays).
+    return !!((c.font && faceStatus(c.font) !== 'missing') || c.case || c.spacing !== undefined || c.align || c.max_lines !== undefined || c.width !== undefined
         || c.stroke || c.shadow || c.glow || plain(c.card) || c.accent_word || c.enter || c.exit || c.delay_s !== undefined);
 }
 

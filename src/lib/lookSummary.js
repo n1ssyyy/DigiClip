@@ -2,6 +2,9 @@
 // style, the shape and the first couple of traits that stand out. The trait
 // phrases are English source text; the caller passes `tr` (the app's `t`)
 // to show them in the person's language. Pure: no React.
+import { STYLES, validStyle } from './captionStyles.js';
+import { sameFont } from './fontNames.js';
+import { HEADLINE_FONT } from './layerFields.js';
 import { aspectList, fromEngine } from './look.js';
 
 /** How many traits follow the style and the shape, at most. */
@@ -40,21 +43,41 @@ export function traits(o) {
     return out;
 }
 
+/** The font a look sets that is not its layer's default: the captions' first,
+ *  else the headline's (when it is on). A family name, never translated. */
+export function fontTrait(o) {
+    const L = o.look ?? {};
+    const c = L.captions?.font;
+    if (c && !sameFont(c, STYLES[validStyle(o.style)].font)) return c;
+    const h = L.headline?.font;
+    if (o.headline && h && !sameFont(h, HEADLINE_FONT)) return h;
+    return null;
+}
+
+/** `text · font` when that fits in `max` characters, else `text` (a name is
+ *  left out rather than cut). */
+export function withFont(text, font, max) {
+    if (!font) return text;
+    const out = `${text} · ${font}`;
+    return out.length <= max ? out : text;
+}
+
 /** The parts of the summary for engine options (a preset). */
 export function summaryParts(options) {
     const o = fromEngine(options, null);
-    return { style: o.style, shape: aspectList(o.aspect)[0], traits: traits(o).slice(0, TRAITS_SHOWN) };
+    return { style: o.style, shape: aspectList(o.aspect)[0], traits: traits(o).slice(0, TRAITS_SHOWN), font: fontTrait(o) };
 }
 
 /** `karaoke · 9:16 · Progress bar · Cool colour`: the style, the shape and as
  *  many of the first traits as fit on a line (the first always stays). */
 export function lookSummary(options, tr = (s) => s) {
-    const { style, shape, traits: tt } = summaryParts(options);
+    const { style, shape, traits: tt, font } = summaryParts(options);
     const out = [style, shape];
     for (const x of tt) {
         const word = tr(x);
         if (out.length > 2 && [...out, word].join(' · ').length > SUMMARY_MAX) break;
         out.push(word);
     }
-    return out.join(' · ');
+    // A font that is not the default, if the line has room for its name.
+    return withFont(out.join(' · '), font, SUMMARY_MAX);
 }

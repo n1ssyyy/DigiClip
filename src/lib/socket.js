@@ -9,6 +9,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { t } from './i18n';
+import { fontFileUrl } from './fontLibrary';
 import { broadcastSettings, isTauri, onSettings, openMain, windowLabel } from './native';
 
 const S = {
@@ -104,6 +105,12 @@ export function artUrl(jobId, file, rev) {
     const { port, token } = S.serve;
     const v = rev ? `&v=${rev}` : '';
     return `http://127.0.0.1:${port}/art/${encodeURIComponent(jobId)}/${encodeURIComponent(file)}?token=${encodeURIComponent(token)}${v}`;
+}
+
+/** A listed font's file on the engine (`GET /font/<file>`), for the stage's
+ *  `FontFace`; null before the engine's address is known. */
+export function fontUrl(entry) {
+    return fontFileUrl(S.serve, entry);
 }
 
 export function srcUrl(jobId) {

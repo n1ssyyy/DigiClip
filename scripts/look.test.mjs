@@ -135,7 +135,8 @@ test('fromEngine tolerates a junk look', () => {
     }
     const p = fromEngine({ look: { captions: { size: 'big', font: 'Comic Sans', color: 'red', anim: 'spin', x: 4, outline_w: 99, box: null } } }, null);
     // Clamped like the engine reads it; bad enums and colours are absent.
-    assert.deepEqual(p.look.captions, { x: 1, outline_w: 8, box: 'none' });
+    // A font name is kept (the engine may know it); the stage draws the default until it is.
+    assert.deepEqual(p.look.captions, { x: 1, outline_w: 8, box: 'none', font: 'Comic Sans' });
     // No look at all is the default panel look.
     assert.deepEqual(fromEngine({}, null).look, { captions: {} });
     // A deep copy: editing the result leaves the preset alone.
@@ -544,7 +545,9 @@ test('out-of-range and bad values fall back like the engine', () => {
     same({ size: 0.01 }, { size: 0.5 });
     same({ x: 7, y: -2 }, { x: 1, y: 0 });
     same({ outline_w: 99, shadow: 99 }, { outline_w: 8, shadow: 6 });
-    same({ font: 'Papyrus', case: 'title', anim: 'spin' }, {});
+    same({ case: 'title', anim: 'spin' }, {});
+    // An unknown font is kept in the Look, and drawn as the default.
+    assert.equal(resolveCaptions('karaoke', '9:16', { font: 'Papyrus' }).font, resolveCaptions('karaoke', '9:16', {}).font);
     same({ color: 'red', active: '#12345', accent: '#GGGGGG', outline: 7 }, {});
     same({ box: 'teal', box_opacity: 'half', size: 'big', show: 'no' }, {});
     same({ unknown: 1, x: null }, {});
@@ -2371,3 +2374,4 @@ import './scene.test.mjs';
 import './sceneFx.test.mjs';
 import './sceneStage.test.mjs';
 import './looks.test.mjs';
+import './fonts.test.mjs';

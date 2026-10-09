@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FONTS, fontBox } from '../../lib/captionStyles';
+import { cssFont } from '../../lib/fontNames';
+import { useFontVersion } from './useFonts';
 import { flatMeasure } from '../../lib/captionMotion';
 
 let ctx;
@@ -27,7 +29,7 @@ export function createCanvasMeasure() {
     const memo = new Map();
     const caps = new Map();
     const setFont = (font, fontPx) => {
-        c.font = `${fontBox(font, fontPx).em}px '${font}'`;
+        c.font = `${fontBox(font, fontPx).em}px ${cssFont(font)}`;
         try {
             c.fontKerning = 'none';
             c.letterSpacing = '0px';
@@ -67,9 +69,12 @@ export function createCanvasMeasure() {
 }
 
 /** A text measure that is renewed when the caption fonts finish loading
- *  (until then a canvas would measure the fallback face). */
+ *  (until then a canvas would measure the fallback face) and whenever a font
+ *  face arrives from the engine or leaves (the stage only draws a face that
+ *  has loaded, so what it measures is what it draws). */
 export function useMeasure() {
     const [ver, setVer] = useState(0);
+    const faces = useFontVersion();
     useEffect(() => {
         let dead = false;
         const bump = () => {
@@ -78,7 +83,7 @@ export function useMeasure() {
         const fonts = typeof document !== 'undefined' ? document.fonts : null;
         if (fonts) {
             try {
-                Promise.all(FONTS.map((f) => fonts.load(`40px '${f}'`))).then(bump, bump);
+                Promise.all(FONTS.map((f) => fonts.load(`40px ${cssFont(f)}`))).then(bump, bump);
                 fonts.addEventListener?.('loadingdone', bump);
             } catch {
             }
@@ -89,5 +94,5 @@ export function useMeasure() {
         };
     }, []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return useMemo(() => createCanvasMeasure(), [ver]);
+    return useMemo(() => createCanvasMeasure(), [ver, faces]);
 }

@@ -3,6 +3,7 @@ import { previewBlock, previewTiming } from '../../../lib/captionPreview';
 import { resolveCaptions } from '../../../lib/captionStyles';
 import { useT } from '../../../lib/i18n';
 import { prefersReducedMotion } from '../CaptionLayer';
+import { useFontVersion } from '../useFonts';
 import { useMeasure } from '../useMeasure';
 import WordCaption from '../WordCaption';
 import { usePanel, useSectionOpen } from '../kit/context';
@@ -73,6 +74,7 @@ export default function WordPreview() {
     const { view } = usePanel();
     const open = useSectionOpen();
     const measure = useMeasure();
+    const faces = useFontVersion();
     const reduced = useMemo(prefersReducedMotion, []);
     const wrap = useRef(null);
     const [width, setWidth] = useState(252);
@@ -94,7 +96,8 @@ export default function WordPreview() {
     const look = JSON.stringify({ ...view.c, x: 0.5, y: 0.5, size: undefined, show: undefined, max_chars: undefined, max_words: undefined, lines: undefined });
     const r = useMemo(
         () => resolveCaptions(view.r.style, FRAME, JSON.parse(look), { anim: view.r.anim }),
-        [look, view.r.style, view.r.anim],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [look, view.r.style, view.r.anim, faces],
     );
     const sample = t('Just stop now');
     const words = useMemo(() => {

@@ -1,4 +1,5 @@
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
+import { cssFont } from '../../lib/fontNames';
 import { fontBox, outlineRing } from '../../lib/captionStyles';
 import { blockExtent, cfgOf, planFor } from '../../lib/captionMotion';
 import { headlineMotion } from '../../lib/layers';
@@ -59,7 +60,7 @@ export function HeadlineLayer({ r, clock, len, reduced, onSize }) {
                 style={{
                     position: 'relative',
                     top: fb.shiftY,
-                    fontFamily: `'${r.font}', sans-serif`,
+                    fontFamily: `${cssFont(r.font)}, sans-serif`,
                     fontSize: fb.em,
                     lineHeight: `${fb.lineH}px`,
                     textAlign: 'center',
@@ -133,7 +134,7 @@ function LineProbe({ r, lines, clock, onSize }) {
                     maxWidth: '100%',
                     boxSizing: 'border-box',
                     padding: pad,
-                    fontFamily: `'${r.font}', sans-serif`,
+                    fontFamily: `${cssFont(r.font)}, sans-serif`,
                     fontSize: fb.em,
                     lineHeight: `${fb.lineH}px`,
                     textAlign: 'center',

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { cssFont } from '../../lib/fontNames';
 import { fontBox, rgba } from '../../lib/captionStyles';
 import { cfgOf, frameAt, glowParams, planFor } from '../../lib/captionMotion';
 import { useClock } from './usePlayer';
@@ -73,7 +74,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
     const { size, spc, centre } = plan;
     const type = {
         position: 'absolute',
-        fontFamily: `'${r.font}', sans-serif`,
+        fontFamily: `${cssFont(r.font)}, sans-serif`,
         fontSize: fb.em,
         lineHeight: `${size}px`,
         letterSpacing: spc ? `${rnd(spc, 100)}px` : undefined,

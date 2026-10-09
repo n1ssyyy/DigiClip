@@ -7,6 +7,8 @@
 // from Node for the tests.
 
 import { cleanBoxFx, cleanFx, cleanShadowFx, effectiveMotion, isWordLevel } from './captionFields.js';
+import { APP_FONTS, cleanFontName } from './fontNames.js';
+import { drawFont, faceMetrics } from './fontState.js';
 
 export const CAPTION_STYLES = ['tiktok', 'karaoke', 'hormozi', 'minimal', 'beast', 'neon', 'highlight', 'ghost'];
 
@@ -18,7 +20,9 @@ export const CANVASES = {
     '16:9': { w: 1920, h: 1080 },
 };
 
-export const FONTS = ['Anton', 'Archivo Black', 'Inter Medium', 'JetBrains Mono'];
+/** The faces the app bundles. The Look may name any font the engine has; the
+ *  stage draws the others from the engine's files once they have loaded. */
+export const FONTS = APP_FONTS;
 
 export const MOTIONS = ['pop', 'words', 'none', 'fade', 'slide', 'bounce'];
 
@@ -38,6 +42,10 @@ export const FONT_METRICS = {
     'JetBrains Mono': { upm: 1000, winA: 1165, winD: 400, hheaA: 1020, hheaD: 300 },
 };
 
+/** Metrics of a font: a bundled face's, else the loaded file's, else Archivo
+ *  Black's (a font that is not drawn yet is not measured either). */
+export const metricsOf = (font) => FONT_METRICS[font] ?? faceMetrics(font) ?? FONT_METRICS['Archivo Black'];
+
 /**
  * How to set a font so a browser draws it like libass does at ASS size
  * `fontPx`: the CSS font-size (em), how far the cell extends above and
@@ -45,7 +53,7 @@ export const FONT_METRICS = {
  * (so CSS' half-leading can be corrected).
  */
 export function fontBox(font, fontPx) {
-    const m = FONT_METRICS[font] ?? FONT_METRICS['Archivo Black'];
+    const m = metricsOf(font);
     const cell = m.winA + m.winD;
     const em = (fontPx * m.upm) / cell;
     const u = em / m.upm; // px per font unit
@@ -173,10 +181,8 @@ export function cleanCaptions(c) {
     }
     const size = num(o.size, 0.5, 2);
     if (size !== undefined) out.size = size;
-    if (typeof o.font === 'string') {
-        const f = FONTS.find((n) => n.toLowerCase() === o.font.trim().toLowerCase());
-        if (f) out.font = f;
-    }
+    const font = cleanFontName(o.font);
+    if (font) out.font = font;
     if (typeof o.case === 'string') {
         const w = o.case.trim().toLowerCase();
         if (w === 'upper' || w === 'asis') out.case = w;
@@ -276,7 +282,8 @@ export function resolveCaptions(styleId, canvas, look, flat = {}) {
         wrapW = pw - 2 * side;
     }
 
-    const font = c.font ?? st.font;
+    // The font the stage draws: the Look's once its face is in the page, else the style's.
+    const font = drawFont(c.font ?? st.font, st.font);
     const fontPx = px(st.size * (c.size ?? 1));
     const caps = c.case ? c.case === 'upper' : st.caps;
     const active = c.active ?? c.color ?? st.active;

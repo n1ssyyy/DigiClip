@@ -63,7 +63,7 @@ export function TypeSection() {
     return (
         <>
             <CapNotice cap="look.headline.v2" text={v2Note(t)} />
-            <FontRow />
+            <FontRow layer="headline" unless="look.headline.v2" />
             <Num path="size" label={t('Size')} />
             <CaseRow />
             <Num path="spacing" label={t('Letter spacing')} />

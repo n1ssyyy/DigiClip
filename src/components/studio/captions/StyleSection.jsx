@@ -1,4 +1,5 @@
 import { SUBS_LANGS, captionsSet } from '../../../lib/look';
+import { cssFont } from '../../../lib/fontNames';
 import { CAPTION_STYLES, fontBox, outlineRing, resolveCaptions, rgba } from '../../../lib/captionStyles';
 import { Select, SwitchRow } from '../../digiclip/JobOptions';
 import { useT } from '../../../lib/i18n';
@@ -35,7 +36,7 @@ function StyleTile({ id, on, stop, rove, index, onPick }) {
             <span className="flex h-11 items-center justify-center overflow-hidden rounded bg-[#0d0d0f]" aria-hidden>
                 <span
                     style={{
-                        fontFamily: `'${r.font}', sans-serif`,
+                        fontFamily: `${cssFont(r.font)}, sans-serif`,
                         fontSize: fb.em,
                         lineHeight: `${fb.lineH}px`,
                         whiteSpace: 'nowrap',
