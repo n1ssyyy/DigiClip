@@ -12,7 +12,7 @@ import { useT } from '../../lib/i18n';
  *  is drawn over it, the burned-in caption is never cropped), rounded, with a
  *  1px ring that brightens, and the play mark, on hover and focus. Under it the
  *  title (two lines, shortened at a word when longer) and one quiet line: the
- *  score chip (just the number; muted under 70, the accent from 70 up, never a
+ *  score chip (just the number; muted under 70, a white outline from 70 up, never a
  *  warning colour), the length, where it starts in the source, and the
  *  download at the end. A clip still being made, or failed, says so in the
  *  picture's place and keeps its ring (red for failed). Every part has a fixed
@@ -122,7 +122,7 @@ export default function ClipTile({ job, clip, width, onPlay }) {
                                 aria-label={`${t('Virality score (open the clip for why)')}: ${score}`}
                                 className={cn(
                                     'rounded border px-1.5 leading-4 font-medium',
-                                    scoreLevel(score) === 'high' ? 'border-[var(--viral)]/40 text-[var(--viral)]' : 'border-white/10 text-muted-foreground',
+                                    scoreLevel(score) === 'high' ? 'border-primary/40 text-primary' : 'border-white/10 text-muted-foreground',
                                 )}
                             >
                                 {score}

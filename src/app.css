@@ -73,7 +73,6 @@
     --input: hsl(0 0% 90%);
     --ring: hsl(0 0% 9%);
     --radius: 0.625rem;
-    --viral: #65a30d;
     /* Window chrome thickness: 42px rail + header (was 53px). Every
        53px-derived offset in the app reads this var, so the shell
        resizes from one place. */
@@ -101,7 +100,6 @@
     --border: hsl(0 0% 16%);
     --input: hsl(0 0% 16%);
     --ring: hsl(0 0% 83%);
-    --viral: #a3e635;
 }
 
 @layer base {

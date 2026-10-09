@@ -118,7 +118,7 @@ function AiPill() {
                     className="fade pointer-events-auto flex max-w-[min(420px,40vw)] items-center gap-1.5 rounded-full border border-x-white/10 border-t-white/20 border-b-black/60 bg-card px-2.5 py-0.5 text-[11px] transition-colors hover:bg-accent"
                 >
                     <Bot className="size-3.5 shrink-0" aria-hidden />
-                    <span className={cn('size-1.5 shrink-0 rounded-full', running ? 'animate-pulse bg-orange-500' : 'bg-[var(--viral)]')} aria-hidden />
+                    <span className={cn('size-1.5 shrink-0 rounded-full', running ? 'animate-pulse bg-orange-500' : 'bg-foreground')} aria-hidden />
                     <span className="truncate">
                         {running
                             ? t('{app} is working · {tool}', { app: a.client, tool: toolTitle(a.tool) })

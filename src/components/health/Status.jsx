@@ -25,7 +25,7 @@ export default function Status({ overall, count, live, updatedAt }) {
     return (
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
             <div role="status" className="flex min-w-0 items-center gap-2.5">
-                {overall === 'ok' && <CheckCircle2 className="size-5 shrink-0 text-[var(--viral)]" aria-hidden />}
+                {overall === 'ok' && <CheckCircle2 className="size-5 shrink-0 text-foreground" aria-hidden />}
                 {overall === 'problem' && <CircleAlert className="size-5 shrink-0 text-destructive" aria-hidden />}
                 {overall === 'checking' && <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" aria-hidden />}
                 <h2 className="text-[15px] leading-snug font-semibold">{sentence}</h2>
@@ -33,7 +33,7 @@ export default function Status({ overall, count, live, updatedAt }) {
             {overall !== 'checking' && updatedAt != null && (
                 <span className="flex shrink-0 items-center gap-1.5 pt-0.5 text-[11px] text-muted-foreground">
                     <span
-                        className={cn('size-1.5 rounded-full', live ? 'bg-[var(--viral)] motion-safe:animate-pulse' : 'bg-muted-foreground')}
+                        className={cn('size-1.5 rounded-full', live ? 'bg-foreground motion-safe:animate-pulse' : 'bg-muted-foreground')}
                         aria-hidden
                     />
                     {live ? t('Live') : t('Updated')} · {ago(Date.now() - updatedAt, t)}

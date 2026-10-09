@@ -4,7 +4,7 @@ import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
 const ICONS = {
-    success: { Icon: CheckCircle2, cls: 'text-[var(--viral)]' },
+    success: { Icon: CheckCircle2, cls: 'text-foreground' },
     error: { Icon: XCircle, cls: 'text-destructive' },
     info: { Icon: Info, cls: 'text-muted-foreground' },
 };

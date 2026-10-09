@@ -130,7 +130,7 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                     </button>
                                     <span className="flex shrink-0 items-center gap-1.5">
                                         {isDownloaded(id) && (
-                                            <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                            <span className="shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                                                 {t('on disk')}
                                             </span>
                                         )}
@@ -138,7 +138,7 @@ export default function SttModelPicker({ value, onChange, options, downloaded = 
                                             <span className={cn(
                                                 'shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
                                                 id === 'large-v3-turbo-q5_0'
-                                                    ? 'bg-[var(--viral)] text-black'
+                                                    ? 'bg-primary text-primary-foreground'
                                                     : 'bg-secondary text-secondary-foreground',
                                             )}>
                                                 {tag(id)}

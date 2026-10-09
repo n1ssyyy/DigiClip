@@ -29,9 +29,9 @@ export function overall(clip) {
 }
 
 export function scoreTone(v) {
-    if (v >= 70) return 'bg-emerald-500';
-    if (v >= 45) return 'bg-orange-500';
-    return 'bg-red-500';
+    if (v >= 70) return 'bg-primary';
+    if (v >= 45) return 'bg-primary/60';
+    return 'bg-primary/35';
 }
 
 /** Who picked the clip, in words. */

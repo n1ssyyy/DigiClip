@@ -57,7 +57,6 @@
     --input: hsl(0 0% 16%);
     --ring: hsl(0 0% 83%);
     --radius: 0.625rem;
-    --viral: #a3e635;
 }
 
 @layer base {

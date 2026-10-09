@@ -145,7 +145,7 @@ export default function ModelPicker({ provider = 'openrouter', value, onChange, 
             </button>
             <div className="min-h-4 text-[11px]" aria-live="polite">
                 {hint ? (
-                    <p key={hint.seq} className="swap-in mt-1 flex items-center gap-1.5 text-[var(--viral)]">
+                    <p key={hint.seq} className="swap-in mt-1 flex items-center gap-1.5 text-foreground">
                         <Check className="size-3 shrink-0" aria-hidden />
                         <span className="truncate">{t('Picked {model} for you', { model: hint.model })}</span>
                     </p>
@@ -201,7 +201,7 @@ export default function ModelPicker({ provider = 'openrouter', value, onChange, 
                                             onClick={() => setFreeOnly((v) => !v)}
                                             className={cn(
                                                 'rounded-md border px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wide transition-colors',
-                                                freeOnly ? 'border-transparent bg-[var(--viral)] text-black' : 'text-muted-foreground hover:bg-accent',
+                                                freeOnly ? 'border-transparent bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
                                             )}
                                         >
                                             {t('FREE')}
@@ -233,7 +233,7 @@ export default function ModelPicker({ provider = 'openrouter', value, onChange, 
                                         <span className="max-w-[42%] shrink-0 truncate text-right text-[10px] text-muted-foreground">{m.name}</span>
                                     )}
                                     {isOr && isFree(m.id) && (
-                                        <span className="shrink-0 rounded-full bg-[var(--viral)] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-black">{t('FREE')}</span>
+                                        <span className="shrink-0 rounded-full border border-primary/40 px-1.5 py-px font-mono text-[10px] font-semibold text-primary">{t('FREE')}</span>
                                     )}
                                     {isOr && isContributor(m.id) && !isFree(m.id) && (
                                         <span className="shrink-0 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-semibold text-secondary-foreground">CONTRIBUTOR</span>
