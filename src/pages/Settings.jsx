@@ -19,7 +19,8 @@ import { LANGUAGES, setLang, useLang, useT } from '../lib/i18n';
 import { deleteModel, downloadModel, navigate, saveSettings, useStore } from '../lib/socket';
 import { checkForUpdates, ensureAppVersion, runSetup, setAutoUpdate, useUpdates } from '../lib/updates';
 import { idleIconsEnabled, setIdleIcons } from '../lib/iconMotion';
-import { CUSTOM, watchChoice } from '../lib/watchLook';
+import { ALPHA_CAP } from '../lib/alpha';
+import { CUSTOM, watchChoice, watchOptions } from '../lib/watchLook';
 
 const inputCls = 'flex h-9 w-full rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-3 py-1 text-[13px] outline-none transition-[box-shadow,background-color] focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
@@ -605,6 +606,8 @@ export default function Settings() {
     const health = useStore((s) => s.health);
     const liveModels = useStore((s) => s.models);
     const mcpInstalled = useStore((s) => s.mcp?.installed);
+    // An engine without `look.alpha` is handed a Look's options without opacity.
+    const alpha = useStore((s) => s.caps.includes(ALPHA_CAP));
     const appVersion = useUpdates((s) => s.appVersion);
     const lang = useLang();
     const t = useT();
@@ -712,7 +715,7 @@ export default function Settings() {
     const jevMissing = decider === 'jev' && !settings.jev_key_set;
     const presets = settings.presets ?? [];
     const watchDir = v.watch_dir ?? '';
-    const watch = watchChoice(v.watch_options, presets);
+    const watch = watchChoice(v.watch_options, presets, { alpha });
     const connected = Object.values(mcpInstalled ?? {}).filter((c) => c?.added).length;
 
     // Clip AI: the provider in use and what is saved for it. Maps merge the
@@ -1061,7 +1064,7 @@ export default function Settings() {
                                         const p = presets.find((x) => x?.name === name);
                                         // Defaults = every field unset, shaped like the saved value.
                                         const none = Object.fromEntries(Object.keys(settings.watch_options ?? {}).map((k) => [k, null]));
-                                        patch({ watch_options: p ? p.options : none });
+                                        patch({ watch_options: p ? watchOptions(p.options, alpha) : none });
                                     }}
                                 >
                                     <option value="">{t('Defaults (from these settings)')}</option>

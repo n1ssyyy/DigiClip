@@ -1,72 +1,95 @@
+import { useId, useMemo } from 'react';
 import { ImagePlus } from 'lucide-react';
-import { cssColour } from '../../lib/alpha';
+import { cssColour, rgbOf } from '../../lib/alpha';
+import { barParts } from '../../lib/layers';
 import { baseName } from '../../lib/utils';
 import { useClock } from './usePlayer';
 
 const rnd = (v, d = 100) => Math.round(v * d) / d;
-/** The plain bar's dimmed track. */
-const PLAIN_TRACK = 0.55;
+/** `rgb(r, g, b)` of a Look colour (its opacity is the part's own number). */
+const rgbText = (colour) => `rgb(${rgbOf(colour).join(',')})`;
 
 /**
- * The progress bar. The plain bar is the engine's dimmed track with the fill
- * up to the playhead's place in the sample, as it always was. A shaped bar
- * (the Look sets a track, an inset, a radius or a glow) is drawn in the
- * engine's order: the track, the glow, the fill, the fill ending where the
- * playhead is and not on a two-pixel step.
- *
- * Each part is laid over the picture with its own opacity (straight alpha, no
- * group): the fill's colour opacity x `bar.opacity`, the track's colour
- * opacity x `track_opacity` x `bar.opacity`, the glow's colour opacity x
- * its strength x `bar.opacity`.
+ * The progress bar, drawn as the engine draws it: a true group. The bar is
+ * painted exactly as it is at full opacity, bottom to top the picture, the
+ * track, the glow, the fill (the plain bar is a dimmed track with the fill
+ * up to the playhead's place in the sample; a shaped bar, one where the Look
+ * sets a track, an inset, a radius or a glow, has its rounded track, its
+ * halo and its fill ending where the playhead is and not on a two-pixel
+ * step), and that result is blended with the picture by `bar.opacity`. An
+ * SVG `<g opacity>` is that group; inside it each part has only its own
+ * opacity (`barParts`: the fill's colour opacity, the track's colour opacity
+ * x `track_opacity`, the glow's colour opacity x its strength). When the
+ * fill's colour is see-through, the track and the glow are left out where the
+ * fill is (a mask in the shape of the fill), so the picture shows through the
+ * fill and not the track or the glow's body; the glow still shows outside the
+ * fill's shape.
  */
 export function BarLayer({ r, clock, len }) {
     const time = useClock(clock);
+    const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
+    const p = useMemo(() => barParts(r), [r]);
     const end = r.fill(len > 0 ? time / len : 0);
-    const el = r.opacity;
-    if (!r.shaped) {
-        return (
-            <div aria-hidden style={{ position: 'absolute', left: 0, top: r.y, width: r.w, height: r.thickness, pointerEvents: 'none' }}>
-                <div style={{ position: 'absolute', inset: 0, background: `rgb(0 0 0 / ${Math.round(PLAIN_TRACK * el * 1000) / 1000})` }} />
-                <div style={{ position: 'absolute', left: 0, top: 0, width: end, height: '100%', background: cssColour(r.color, el) }} />
-            </div>
-        );
-    }
-    const trackW = r.x1 - r.x0;
-    const fillW = Math.max(end - r.x0, 0);
+    const x0 = r.shaped ? r.x0 : 0;
+    const trackW = r.shaped ? r.x1 - r.x0 : r.w;
+    const fillW = Math.max(end - x0, 0);
     const radius = Math.min(r.radius, trackW / 2, r.thickness / 2);
     const fillRadius = Math.min(r.radius, fillW / 2, r.thickness / 2);
     const g = r.glow;
+    const live = fillW > 0.5;
+    const cut = p.cut && live;
+    const maskId = `dc-bar-cut-${uid}`;
+    const blurId = `dc-bar-glow-${uid}`;
+    const glowOn = g && p.glow && live;
+    const sigma = g ? g.sigma : 0;
+    const blur = glowOn && sigma > 0.05;
+    const gx = x0 - (g ? g.grow : 0);
+    const gy = r.y - (g ? g.grow : 0);
+    const gw = fillW + 2 * (g ? g.grow : 0);
+    const gh = r.thickness + 2 * (g ? g.grow : 0);
+    const reach = 4 * sigma;
     return (
-        <div aria-hidden style={{ position: 'absolute', left: 0, top: 0, width: r.w, height: r.h, pointerEvents: 'none' }}>
-            <div
-                style={{
-                    position: 'absolute',
-                    left: r.x0,
-                    top: r.y,
-                    width: trackW,
-                    height: r.thickness,
-                    borderRadius: radius,
-                    background: r.track ? cssColour(r.track.color, r.track.opacity, el) : `rgb(0 0 0 / ${Math.round(PLAIN_TRACK * el * 1000) / 1000})`,
-                }}
-            />
-            {g && fillW > 0.5 && (
-                <div
-                    style={{
-                        position: 'absolute',
-                        left: r.x0 - g.grow,
-                        top: r.y - g.grow,
-                        width: fillW + 2 * g.grow,
-                        height: r.thickness + 2 * g.grow,
-                        borderRadius: fillRadius + g.grow,
-                        background: cssColour(g.color, Math.min(g.strength, 1), el),
-                        filter: g.sigma > 0.05 ? `blur(${rnd(g.sigma)}px)` : undefined,
-                    }}
+        <svg aria-hidden width={r.w} height={r.h} style={{ position: 'absolute', left: 0, top: 0, overflow: 'visible', pointerEvents: 'none' }}>
+            <defs>
+                {cut && (
+                    <mask id={maskId} maskUnits="userSpaceOnUse" x={-reach} y={-reach} width={r.w + 2 * reach} height={r.h + 2 * reach}>
+                        <rect x={-reach} y={-reach} width={r.w + 2 * reach} height={r.h + 2 * reach} fill="#fff" />
+                        <rect x={x0} y={r.y} width={fillW} height={r.thickness} rx={fillRadius} fill="#000" />
+                    </mask>
+                )}
+                {blur && (
+                    <filter id={blurId} filterUnits="userSpaceOnUse" x={gx - reach} y={gy - reach} width={gw + 2 * reach} height={gh + 2 * reach} colorInterpolationFilters="sRGB">
+                        <feGaussianBlur stdDeviation={rnd(sigma)} />
+                    </filter>
+                )}
+            </defs>
+            <g opacity={rnd(p.group, 1000)}>
+                <rect
+                    x={x0}
+                    y={r.y}
+                    width={trackW}
+                    height={r.thickness}
+                    rx={radius}
+                    fill={rgbText(p.track.color)}
+                    fillOpacity={rnd(p.track.a, 1000)}
+                    mask={cut ? `url(#${maskId})` : undefined}
                 />
-            )}
-            {fillW > 0.5 && (
-                <div style={{ position: 'absolute', left: r.x0, top: r.y, width: fillW, height: r.thickness, borderRadius: fillRadius, background: cssColour(r.color, el) }} />
-            )}
-        </div>
+                {glowOn && (
+                    <rect
+                        x={gx}
+                        y={gy}
+                        width={gw}
+                        height={gh}
+                        rx={fillRadius + g.grow}
+                        fill={rgbText(p.glow.color)}
+                        fillOpacity={rnd(p.glow.a, 1000)}
+                        filter={blur ? `url(#${blurId})` : undefined}
+                        mask={cut ? `url(#${maskId})` : undefined}
+                    />
+                )}
+                {live && <rect x={x0} y={r.y} width={fillW} height={r.thickness} rx={fillRadius} fill={rgbText(r.color)} fillOpacity={rnd(p.fill, 1000)} />}
+            </g>
+        </svg>
     );
 }
 

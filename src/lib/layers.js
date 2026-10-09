@@ -19,7 +19,7 @@ export {
 } from './layerFields.js';
 export { HEADLINE_SAMPLE, headlineMarkup, headlineText, stageHeadline } from './headlineText.js';
 export { headlineRoom, headlineTiming } from './headlineV2.js';
-export { BAR_DEFAULT_COLOR, barThickness, resolveBar } from './barLayer.js';
+export { BAR_DEFAULT_COLOR, PLAIN_TRACK, barParts, barThickness, resolveBar } from './barLayer.js';
 export { CORNERS, logoClear, logoInset, resolveLogo, turnedBox } from './logoLayer.js';
 
 /** Ranges of the sizes the stage resizes (look.rs). */

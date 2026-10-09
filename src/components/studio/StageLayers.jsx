@@ -2,6 +2,8 @@ import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
 import { alphaOf, cssColour, cssRgb, rgbOf } from '../../lib/alpha';
 import { cssFont } from '../../lib/fontNames';
 import { fontBox, outlineRing } from '../../lib/captionStyles';
+import { GLYPH_MARK, RING_MARK, strokeCut } from '../../lib/strokeCut';
+import { RingFilters, ringFilter } from './RingCut';
 import { blockExtent, cfgOf, planFor } from '../../lib/captionMotion';
 import { headlineMotion } from '../../lib/layers';
 import { blockAt } from '../../lib/stageTime';
@@ -34,14 +36,23 @@ function useSize(ref, onSize, deps) {
 export function HeadlineLayer({ r, clock, len, reduced, onSize }) {
     const time = useClock(clock);
     const fb = useMemo(() => fontBox(r.font, r.fontPx), [r.font, r.fontPx]);
-    const ring = useMemo(() => (r.outline ? outlineRing(r.outline.width, cssRgb(rgbOf(r.outline.color))) : undefined), [r.outline]);
+    const ring = useMemo(() => {
+        if (!r.outline) return undefined;
+        const rgb = rgbOf(r.outline.color);
+        return { rgb, plain: outlineRing(r.outline.width, cssRgb(rgb)), mark: outlineRing(r.outline.width, RING_MARK) };
+    }, [r.outline]);
     const ref = useRef(null);
     useSize(ref, onSize, [r.font, r.fontPx, r.text, r.wrapW, r.edgeW, r.noCard]);
 
     const m = headlineMotion(r, time * 1000, len * 1000);
     const live = m ? (reduced ? STILL : m) : null;
-    // The fade and the element's opacity, on every part (no group opacity).
+    // The fade and the element's opacity, on every part (the card and the type each
+    // carry it: the type has no group opacity).
     const fade = live ? live.opacity * r.opacity : 0;
+    // The outline is a ring round the letters and is cut away under them, so a
+    // see-through ink (or one that is fading) shows what lies under the letters,
+    // the card or the picture, and never the outline. Only then is it cut.
+    const cut = !!ring && strokeCut(alphaOf(r.ink) * fade, alphaOf(r.accent) * fade);
     const pad = r.card ? r.card.pad : 0;
     const boxH = r.block + 2 * pad;
     const outer = {
@@ -65,6 +76,7 @@ export function HeadlineLayer({ r, clock, len, reduced, onSize }) {
         whiteSpace: 'normal',
         fontWeight: 400,
     };
+    /** The two lines of words; `paint(colour)` is a word's colour, `textShadow` the ring. */
     const rows = (paint, textShadow) => r.lines.map((line, i) => (
         <div key={i}>
             {line.map((w, j) => (
@@ -79,13 +91,15 @@ export function HeadlineLayer({ r, clock, len, reduced, onSize }) {
         <div ref={ref} style={{ ...outer, backgroundColor: r.card ? cssColour(r.card.color, fade) : undefined, padding: pad }} aria-hidden>
             <div style={{ position: 'relative' }}>
                 {ring && (
-                    // The outline, under the type (a clear ink shows it through).
-                    <div style={{ ...type, position: 'absolute', left: 0, right: 0, opacity: alphaOf(r.outline.color) * fade }}>
-                        {rows(() => cssRgb(rgbOf(r.outline.color)), ring)}
+                    // The outline, under the type: a ring round the letters, at its own opacity
+                    // and nothing under the letters themselves.
+                    <div style={{ ...type, position: 'absolute', left: 0, right: 0, opacity: alphaOf(r.outline.color) * fade, filter: cut ? ringFilter(ring.rgb) : undefined }}>
+                        {rows(() => (cut ? GLYPH_MARK : cssRgb(ring.rgb)), cut ? ring.mark : ring.plain)}
                     </div>
                 )}
                 <div style={{ ...type, position: 'relative' }}>{rows((c) => cssColour(c, fade))}</div>
             </div>
+            {cut && <RingFilters colours={[ring.rgb]} />}
         </div>
     );
 }

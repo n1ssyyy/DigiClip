@@ -69,7 +69,8 @@ export const HEADLINE_SPECS = {
 
 /** `look.bar`. */
 export const BAR_SPECS = {
-    // The whole bar's opacity: it multiplies the fill, the track and the glow.
+    // The whole bar's opacity: the bar is drawn as at full opacity (track, glow, fill)
+    // and that result is blended with the picture by it (a group).
     opacity: ratio(0, 1, 0.05, 1),
     pos: { type: 'enum', values: BAR_POSITIONS, def: 'bottom' },
     height: ratio(0.5, 3, 0.05, 1),

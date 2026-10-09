@@ -3,8 +3,8 @@
 // Every colour of the Look (and the flat `progress_bar` option) is `#RRGGBB`
 // or `#RRGGBBAA`: AA is the colour's own opacity (`FF` opaque), no short
 // forms. This module splits and joins them, multiplies opacities the way the
-// engine does (straight alpha, one product per part) and writes the CSS the
-// stage draws with; the cap-gated stripping for an engine without
+// engine does (straight alpha, one product per text part; the bar and the
+// logo are groups, see `barParts`) and writes the CSS the stage draws with; the cap-gated stripping for an engine without
 // `look.alpha` is here too. Pure: no React, no DOM.
 
 /** The engine ability that takes 8-digit colours and the element opacities. */

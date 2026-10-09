@@ -56,3 +56,13 @@ export function pickOpacity(colour, a, bound) {
     if (bound) return alphaOf(colour) < 1 ? { colour: colourOnly(colour), number: a } : { number: a };
     return { colour: withAlpha(colour, a) };
 }
+
+/**
+ * The colour as the field shows it: without the engine's `look.alpha` there
+ * is no opacity to show, so eight digits read as their six (what is stored
+ * stays as it is, and so does the opacity an edit keeps).
+ *
+ * @param {string} colour
+ * @param {boolean} alpha  the engine takes opacity in colours
+ */
+export const colourText = (colour, alpha) => (alpha ? colour : colourOnly(colour));

@@ -10,12 +10,14 @@ import {
     ALPHA_CAP, alphaOf, colourOnly, cssColour, cssRgb, cutColours, fromPercent, isColour, mul, normColour, percentOf, rgbOf,
     stripLookAlpha, stripOptionsAlpha, withAlpha,
 } from '../src/lib/alpha.js';
-import { colourShown, pickColour, pickOpacity } from '../src/lib/colourField.js';
+import { colourShown, colourText, pickColour, pickOpacity } from '../src/lib/colourField.js';
+import { GLYPH_MARK, RING_MARK, SOLID, ringId, ringLeft, ringMatrix, strokeCut } from '../src/lib/strokeCut.js';
+import { CUSTOM, watchChoice, watchOptions } from '../src/lib/watchLook.js';
 import { createLookStore, defaults, fromEngine, lookOptions, lookToEngine, sanitizeLook, toEngine } from '../src/lib/look.js';
 import { cleanCaptions, rgba, resolveCaptions } from '../src/lib/captionStyles.js';
 import { cfgOf, frameAt, planFor, flatMeasure, wordLooks } from '../src/lib/captionMotion.js';
 import { captionView, clearPatch, editPatch } from '../src/lib/captionEffective.js';
-import { cleanBar, cleanHeadline, cleanLogo, resolveBar, resolveHeadline, resolveLogo } from '../src/lib/layers.js';
+import { PLAIN_TRACK, barParts, cleanBar, cleanHeadline, cleanLogo, resolveBar, resolveHeadline, resolveLogo } from '../src/lib/layers.js';
 import { barView, headlineView } from '../src/lib/layerEffective.js';
 import { frameKey, frameRequest } from '../src/lib/exactFrame.js';
 import { deleteLook, duplicateLook, loaded, saveLook } from '../src/lib/lookLibrary.js';
@@ -457,10 +459,120 @@ test('the bar: the element opacity and the colours\' opacities are kept apart', 
     // The Look's colour wins; the default glow colour is the fill's hue alone.
     assert.equal(resolveBar('9:16', '#FFD400', { color: '#00FF0080' }).color, '#00FF0080');
     assert.equal(resolveBar('9:16', '#FFD40080', { glow: { size: 10 } }).glow.color, '#FFD400');
-    // The CSS the stage draws: fill = colour x opacity; track = colour x track x element; glow = colour x strength x element.
-    assert.equal(cssColour(b.color, b.opacity), `rgb(255 212 0 / ${Math.round((128 / 255) * 0.5 * 1000) / 1000})`);
-    assert.equal(cssColour(b.track.color, b.track.opacity, b.opacity), `rgb(0 0 0 / ${Math.round((128 / 255) * 0.4 * 0.5 * 1000) / 1000})`);
-    assert.equal(cssColour(b.glow.color, b.glow.strength, b.opacity), `rgb(255 255 255 / ${Math.round((64 / 255) * 0.5 * 0.5 * 1000) / 1000})`);
+});
+
+test('the bar is a true group: parts carry only their own opacity, the element opacity is the group\'s', () => {
+    // (This replaces the check of the old rule, the element opacity multiplied into every part.)
+    const b = resolveBar('9:16', '#FFD40080', { opacity: 0.5, track: '#00000080', track_opacity: 0.4, glow: { size: 10, color: '#FFFFFF40', strength: 0.5 } });
+    const p = barParts(b);
+    assert.equal(p.group, 0.5);
+    near(p.fill, 128 / 255);
+    assert.equal(p.track.color, '#00000080');
+    near(p.track.a, (128 / 255) * 0.4);
+    assert.equal(p.glow.color, '#FFFFFF40');
+    near(p.glow.a, (64 / 255) * 0.5);
+    // An opaque fill at 0.5: the fill is 1 inside the group (the group blends it at 0.5), nothing is left out.
+    const solid = barParts(resolveBar('9:16', '#00FFFF', { opacity: 0.5, track: '#0A0F1F', track_opacity: 0.5, radius: 1, glow: { color: '#00FFFF', size: 14, strength: 0.9 } }));
+    assert.equal(solid.group, 0.5);
+    assert.equal(solid.fill, 1);
+    near(solid.track.a, 0.5);
+    near(solid.glow.a, 0.9);
+    assert.equal(solid.cut, false);
+    // Strength is not over 1.
+    near(barParts(resolveBar('9:16', '#00FFFF', { glow: { size: 14, strength: 3 } })).glow.a, 1);
+});
+
+test('the bar: when the fill colour is see-through the track and glow are left out where the fill is', () => {
+    const half = barParts(resolveBar('9:16', '#00FFFF80', { opacity: 0.5, track: '#0A0F1F', track_opacity: 0.5, glow: { color: '#00FFFF', size: 14, strength: 0.9 } }));
+    assert.equal(half.cut, true);
+    near(half.fill, 128 / 255);
+    near(half.track.a, 0.5);
+    // The element's opacity alone never cuts: it is the group's.
+    assert.equal(barParts(resolveBar('9:16', '#00FFFF', { opacity: 0.2, track: '#000000' })).cut, false);
+    assert.equal(barParts(resolveBar('9:16', '#00FFFF', {})).cut, false);
+    assert.equal(barParts(resolveBar('9:16', '#00FFFFFE', {})).cut, true);
+    // The plain bar: the dimmed track (black at 0.55, the stage's stand-in for the darkened picture)
+    // and no glow; its see-through fill cuts the track too.
+    const plain = resolveBar('9:16', '#00FFFF', { opacity: 0.5 });
+    assert.equal(plain.shaped, false);
+    const pp = barParts(plain);
+    assert.equal(pp.group, 0.5);
+    assert.deepEqual(pp.track, { color: '#000000', a: PLAIN_TRACK });
+    assert.equal(pp.glow, null);
+    assert.equal(pp.cut, false);
+    const plainHalf = barParts(resolveBar('9:16', '#00FFFF', { opacity: 0.5, color: '#00FFFF80' }));
+    assert.equal(plainHalf.cut, true);
+    assert.deepEqual(plainHalf.track, { color: '#000000', a: PLAIN_TRACK });
+    // A shaped bar with no track of its own has the dimmed track too; one with a track opacity only has black at that.
+    assert.deepEqual(barParts(resolveBar('9:16', '#00FFFF', { radius: 1 })).track, { color: '#000000', a: PLAIN_TRACK });
+    near(barParts(resolveBar('9:16', '#00FFFF', { track_opacity: 0.3 })).track.a, 0.3);
+    // The group opacity is clamped to 0..1.
+    assert.equal(barParts({ ...plain, opacity: 3 }).group, 1);
+    assert.equal(barParts({ ...plain, opacity: -1 }).group, 0);
+});
+
+// ---------------------------------------------------------------------------
+// the stroke of a see-through fill
+// ---------------------------------------------------------------------------
+
+test('the stroke is cut under the letters only where a fill over it is see-through', () => {
+    assert.equal(strokeCut(1), false);
+    assert.equal(strokeCut(1, 1, 1), false);
+    assert.equal(strokeCut(0.25), true);
+    assert.equal(strokeCut(1, 0.998), true);
+    assert.equal(strokeCut(SOLID), false);
+    assert.equal(strokeCut(0), true);
+    assert.equal(strokeCut(), false);
+    assert.equal(strokeCut(NaN, 1), false);
+    // The finals the stage passes: colour opacity x reveal x fade (x element opacity).
+    assert.equal(strokeCut(alphaOf('#FFFFFF') * 1 * 1), false);
+    assert.equal(strokeCut(alphaOf('#FFFFFF') * 1 * 0.5), true);
+    assert.equal(strokeCut(alphaOf('#FFFFFF40') * 1 * 1), true);
+    // A fade-in is a see-through fill too: the cut holds while the line fades.
+    for (const f of [0.05, 0.5, 0.95]) assert.equal(strokeCut(alphaOf('#FFFFFF') * f), true);
+});
+
+test('the ring filter: the glyph is cut out of the stroke copy, the ring keeps its shape and opacity', () => {
+    assert.equal(GLYPH_MARK, '#FF0000');
+    assert.equal(RING_MARK, '#000000');
+    // Alpha = alpha - red, colour the stroke's own.
+    assert.equal(ringMatrix([0, 0, 0]), '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -1 0 0 1 0');
+    assert.equal(ringMatrix([255, 128, 0]), '0 0 0 0 1  0 0 0 0 0.502  0 0 0 0 0  -1 0 0 1 0');
+    assert.equal(ringId([255, 0, 16]), 'dc-ring-ff0010');
+    // Model of the filter: glyph coverage g over ring coverage k.
+    near(ringLeft(1, 1), 0); // under the glyph: cut away
+    near(ringLeft(0, 1), 1); // the ring proper: whole
+    near(ringLeft(0, 0), 0); // outside: nothing
+    near(ringLeft(0, 0.4), 0.4); // the outer edge keeps its antialiasing
+    near(ringLeft(0.3, 1), 0.7); // the glyph's edge: what the glyph does not cover
+    near(ringLeft(0.5, 1), 0.5);
+});
+
+test('a colour field shows six digits without look.alpha, the stored colour is untouched', () => {
+    assert.equal(colourText('#FFFFFF80', true), '#FFFFFF80');
+    assert.equal(colourText('#FFFFFF80', false), '#FFFFFF');
+    assert.equal(colourText('#ffffff', false), '#FFFFFF');
+    assert.equal(colourText('#FFFFFF', false), '#FFFFFF');
+    // Typing a hue without the ability keeps the stored opacity (the stored value stays as it is).
+    assert.deepEqual(pickColour('#FFFFFF80', '#112233'), { colour: '#11223380' });
+});
+
+test('the watch folder takes a Look as the engine does: stripped without look.alpha, and still found by name', () => {
+    const neon = { name: 'Neon', options: { style: 'neon', progress_bar: '#FFD40080', look: { v: 1, captions: { color: '#FFFFFF80', opacity: 0.5 }, bar: { opacity: 0.4, color: '#00FFFF80' }, logo: { opacity: 0.6 } } } };
+    assert.equal(watchOptions(neon.options, true), neon.options);
+    const cut = watchOptions(neon.options, false);
+    assert.equal(cut.progress_bar, '#FFD400');
+    assert.equal(cut.look.captions.color, '#FFFFFF');
+    assert.equal(cut.look.captions.opacity, undefined);
+    assert.equal(cut.look.bar.opacity, undefined);
+    assert.equal(cut.look.bar.color, '#00FFFF');
+    assert.equal(cut.look.logo.opacity, 0.6);
+    assert.equal(neon.options.look.captions.color, '#FFFFFF80');
+    // What was handed over is still that Look in the list; the unstripped options are not, without the ability.
+    assert.equal(watchChoice(cut, [neon], { alpha: false }).value, 'Neon');
+    assert.equal(watchChoice(neon.options, [neon]).value, 'Neon');
+    assert.equal(watchChoice(neon.options, [neon], { alpha: false }).value, CUSTOM);
+    assert.equal(watchChoice(cut, [neon]).value, CUSTOM);
 });
 
 test('the logo: its stack is one group, its shadow and glow carry their colours\' opacities', () => {

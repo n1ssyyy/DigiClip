@@ -2,7 +2,7 @@ import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { Slider, Swatch } from '../../digiclip/controls';
 import { Kicker } from '../../digiclip/fields';
 import { mergePatch } from '../../../lib/captionEffective';
-import { colourShown, pickColour, pickOpacity } from '../../../lib/colourField';
+import { colourShown, colourText, pickColour, pickOpacity } from '../../../lib/colourField';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
 import { ResetBtn } from '../Field';
@@ -194,8 +194,8 @@ export function Colour({ path, label, opacity: opacityPath, disabled = false, on
             <Swatch
                 label={label}
                 resetLabel={t('Reset {name}', { name: label })}
-                value={colourSet ? value : undefined}
-                fallback={value}
+                value={colourSet ? colourText(value, alpha) : undefined}
+                fallback={colourText(value, alpha)}
                 set={colourSet || numberSet}
                 disabled={disabled}
                 onChange={(typed) => {

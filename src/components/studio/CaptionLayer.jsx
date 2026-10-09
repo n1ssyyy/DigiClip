@@ -2,6 +2,8 @@ import { Fragment, useMemo } from 'react';
 import { alphaOf, cssColour, cssRgb, rgbOf } from '../../lib/alpha';
 import { cssFont } from '../../lib/fontNames';
 import { fontBox, keywordBump, lineMotion, outlineRing, rgba, wordReveal } from '../../lib/captionStyles';
+import { GLYPH_MARK, RING_MARK, strokeCut } from '../../lib/strokeCut';
+import { RingFilters, ringFilter } from './RingCut';
 import { useClock } from './usePlayer';
 import WordCaption from './WordCaption';
 
@@ -41,13 +43,17 @@ function LineCaption({ r, lines, clock, reduced }) {
     const fb = useMemo(() => fontBox(r.font, r.fontPx), [r.font, r.fontPx]);
     const style = useMemo(() => {
         const width = r.outline && r.outline.width > 0 ? r.outline.width : 0;
-        const strokeCol = r.outline ? cssRgb(rgbOf(r.outline.color)) : null;
+        const strokeRgb = r.outline ? rgbOf(r.outline.color) : null;
+        const strokeCol = strokeRgb ? cssRgb(strokeRgb) : null;
         const shadowCol = cssRgb(rgbOf(r.shadowColor));
         return {
             // A box's own shadow is the box's shape; without one it is a copy of the type.
             boxShadow: r.box && r.shadow > 0 ? `drop-shadow(${r.shadow}px ${r.shadow}px 0 ${rgba(r.shadowColor, r.shadowOpacity)})` : undefined,
             shadow: !r.box && r.shadow > 0 ? { col: shadowCol, off: r.shadow, a: alphaOf(r.shadowColor) * r.shadowOpacity, ring: width ? outlineRing(width, shadowCol) : undefined } : null,
-            stroke: width ? { col: strokeCol, a: alphaOf(r.outline.color), ring: outlineRing(width, strokeCol) } : null,
+            // The stroke is a copy of the type in its colour with a ring round it; where a
+            // see-through fill is over it, the copy is painted in the marker colours and
+            // cut to the ring alone (`strokeCut`).
+            stroke: width ? { rgb: strokeRgb, col: strokeCol, a: alphaOf(r.outline.color), ring: outlineRing(width, strokeCol), mark: outlineRing(width, RING_MARK) } : null,
         };
     }, [r.shadow, r.shadowColor, r.shadowOpacity, r.outline, r.box]);
 
@@ -59,7 +65,8 @@ function LineCaption({ r, lines, clock, reduced }) {
     const dur = (line.t1 - line.t0) * 1000;
     const m = reduced ? STILL : lineMotion(r.anim, local, dur, r.h);
     const bottom = r.anchor.mode === 'bottom';
-    // The line's fade and the element's opacity, on every part (no group opacity).
+    // The line's fade and the element's opacity, on every part (text has no group
+    // opacity; what a see-through fill shows is the part's own, see `strokeCut`).
     const fade = m.opacity * r.opacity;
 
     const outer = {
@@ -98,6 +105,11 @@ function LineCaption({ r, lines, clock, reduced }) {
     });
 
     const first = line.words[0].s;
+    /** Each word's reveal (later words fade in under the 'words' animation). */
+    const reveals = line.words.map((w, i) => (reduced ? 1 : wordReveal(r.anim, i, (w.s - first) * 1000, local)));
+    // The stroke is cut under the letters when any fill over it is see-through:
+    // a fill colour's own opacity x the word's reveal x the line's fade.
+    const cut = style.stroke ? strokeCut(...[r.color, r.active, r.accent].flatMap((c) => reveals.map((a) => alphaOf(c) * a * fade))) : false;
     /** The line's words in one layer: `paint(spoken, key)` is the colour of a word
      *  (its part's own opacity included), `ring` its stroke ring, `group`
      *  whether the layer carries the word's reveal as an opacity of its own
@@ -105,7 +117,7 @@ function LineCaption({ r, lines, clock, reduced }) {
     const words = (paint, ring, group) => line.words.map((w, i) => {
         const spoken = time >= w.k;
         const dt = (w.s - first) * 1000;
-        const alpha = reduced ? 1 : wordReveal(r.anim, i, dt, local);
+        const alpha = reveals[i];
         const bump = !reduced && w.key ? keywordBump(r.anim, dt, (time - w.s) * 1000) : 1;
         const s = { color: paint(spoken, w.key, alpha) };
         if (ring) s.textShadow = ring;
@@ -147,8 +159,8 @@ function LineCaption({ r, lines, clock, reduced }) {
                     </div>
                 )}
                 {style.stroke && (
-                    <div style={{ ...layer, opacity: style.stroke.a * fade }}>
-                        {words(() => style.stroke.col, style.stroke.ring, true)}
+                    <div style={{ ...layer, opacity: style.stroke.a * fade, filter: cut ? ringFilter(style.stroke.rgb) : undefined }}>
+                        {words(() => (cut ? GLYPH_MARK : style.stroke.col), cut ? style.stroke.mark : style.stroke.ring, true)}
                     </div>
                 )}
                 <div style={layer}>
@@ -158,6 +170,7 @@ function LineCaption({ r, lines, clock, reduced }) {
                     })()}
                 </div>
             </div>
+            {cut && <RingFilters colours={[style.stroke.rgb]} />}
         </div>
     );
 }

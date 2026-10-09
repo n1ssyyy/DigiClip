@@ -3,6 +3,8 @@ import { alphaOf, cssColour, cssRgb, rgbOf } from '../../lib/alpha';
 import { cssFont } from '../../lib/fontNames';
 import { fontBox, rgba } from '../../lib/captionStyles';
 import { cfgOf, frameAt, glowParams, planFor } from '../../lib/captionMotion';
+import { GLYPH_MARK, RING_MARK, strokeCut } from '../../lib/strokeCut';
+import { RingFilters, ringFilter } from './RingCut';
 import { useClock } from './usePlayer';
 
 const rnd = (v, d = 1000) => Math.round(v * d) / d;
@@ -65,10 +67,13 @@ function wordTransform(st, plan, shift) {
  *
  * Opacity is straight alpha, one product per part and no group opacity for
  * text: a part's own colour opacity x its state's opacity x the line's
- * entrance and exit fade x the element's opacity (`r.opacity`). So a
- * half-transparent fill shows its own stroke and shadow through it, as the
- * real render does. A part is one layer (a layer of a single colour may carry
- * its product as its `opacity`).
+ * entrance and exit fade x the element's opacity (`r.opacity`). A part is one
+ * layer (a layer of a single colour may carry its product as its `opacity`).
+ * What lies under a half-transparent fill shows through it, as in the real
+ * render: the picture, the box, and the shadow and glow, whole copies of the
+ * glyph. The stroke does not: libass draws it as a ring round the glyph and
+ * cuts it away under the glyph, so where a fill is see-through the stroke
+ * layer is cut to its ring (`strokeCut`, an SVG filter, see `RingCut`).
  */
 export default function WordCaption({ r, lines, clock, reduced, measure }) {
     const time = useClock(clock);
@@ -98,6 +103,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
     const styleShadow = r.shadow > 0 && !r.box
         ? { off: r.shadow, col: cssRgb(rgbOf(r.shadowColor)), a: alphaOf(r.shadowColor) * r.shadowOpacity }
         : null;
+    const ringColours = [];
     const boxShadow = r.shadow > 0 && r.box ? `drop-shadow(${r.shadow}px ${r.shadow}px 0 ${rgba(r.shadowColor, r.shadowOpacity)})` : '';
 
     // Where a word's text sits: centred on its slot's middle, the ink (not the
@@ -297,21 +303,27 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                     }
                 }
 
-                // 4: the stroke, the text grown by its width in the stroke's colour,
-                // under the fill (a clear fill shows it through).
+                // 4: the stroke, a ring round the glyph in the stroke's colour and
+                // nothing under the glyph itself: where a fill over it is see-through
+                // the copy is painted in the marker colours (glyph red, ring black) and
+                // the filter keeps the ring only; under a solid fill the plain copy
+                // (the text grown by its width) is the same picture and cheaper.
                 for (const st of g.words) {
                     if (!(st.sw > 0.05)) continue;
                     const w = of(st);
+                    const a = st.op * fade;
+                    const cut = strokeCut(...(st.sweep !== null ? [st.underA * a, st.ca * a] : [(st.under ? st.underA : st.ca) * a]));
                     const col = css(st.scol);
+                    if (cut) ringColours.push(st.scol);
                     out.push(
                         <div
                             key={`k${st.i}`}
                             style={placed(w, {
-                                color: col,
-                                textShadow: ring(st.sw, col),
-                                opacity: rnd(st.sca * st.op * fade),
+                                color: cut ? GLYPH_MARK : col,
+                                textShadow: ring(st.sw, cut ? RING_MARK : col),
+                                opacity: rnd(st.sca * a),
                                 transform: wordTransform(st, plan),
-                                filter: blurOf(st.blur + lf.blur) || undefined,
+                                filter: join(cut ? ringFilter(st.scol) : '', blurOf(st.blur + lf.blur)),
                             })}
                         >
                             {w.text}
@@ -367,6 +379,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                     </div>
                 );
             })}
+            <RingFilters colours={ringColours} />
         </div>
     );
 }

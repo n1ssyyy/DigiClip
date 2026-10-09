@@ -6,6 +6,7 @@
 // `radius` or `glow`) and `bar_color` (the Look's colour wins over the flat
 // one). When this file and the engine disagree, the engine is right. Pure
 // functions: no React, no DOM.
+import { alphaOf } from './alpha.js';
 import { canvasSize, clamp, hex } from './captionStyles.js';
 import { GLOW_BLUR, GLOW_BORD, glowDefault, rgbOf } from './captionMotion.js';
 import { GLOW_DEFAULTS, TRACK_OPACITY, cleanBar, isShaped } from './layerFields.js';
@@ -83,7 +84,8 @@ export function resolveBar(canvas, color, look) {
         x1,
         inset,
         shaped,
-        /** The whole bar's opacity: it multiplies the fill, the track and the glow. */
+        /** The whole bar's opacity: the bar is drawn as at full opacity and that result
+         *  is blended with the picture by it (a group; see `barParts`). */
         opacity: c.opacity ?? 1,
         color: fill,
         radius: shaped ? (c.radius ?? 0) * (thickness / 2) : 0,
@@ -96,5 +98,48 @@ export function resolveBar(canvas, color, look) {
             const p = clamp(Number.isFinite(progress) ? progress : 0, 0, 1);
             return shaped ? x0 + p * (x1 - x0) : Math.min(Math.round((p * w) / 2) * 2, w);
         },
+    };
+}
+
+/** The plain bar's dimmed track, as the opacity of black the stage stands in
+ *  for the picture darkened with. */
+export const PLAIN_TRACK = 0.55;
+
+const clamp01 = (n) => Math.min(1, Math.max(0, n));
+
+/**
+ * The opacities the stage draws the bar's parts with, from `resolveBar`. The
+ * bar is a true group in the engine: drawn exactly as at full opacity, bottom
+ * to top picture, track, glow, fill, and that result blended with the picture
+ * by `opacity` (so an opaque fill at 0.5 is the fill at 0.5 over the picture,
+ * with no track showing through it, and overlapping parts do not add up).
+ * Inside the group a part's opacity is only its own:
+ *
+ * - `fill`: its colour's opacity;
+ * - `track`: its colour's opacity x `track_opacity` (a bar with neither is the
+ *   plain dimmed track: black at `PLAIN_TRACK`, the stage's stand-in for the
+ *   darkened picture);
+ * - `glow`: its colour's opacity x its strength (not over 1).
+ *
+ * `cut`: when the fill's COLOUR is see-through, the track and the glow are
+ * left out where the fill is, so the picture shows through the fill and not
+ * the track or the glow's body; the glow still shows outside the fill's shape
+ * and the track beside it. With an opaque fill colour nothing is left out.
+ * That holds for the plain bar too.
+ *
+ * @returns {{group: number, fill: number, track: {color: string, a: number}, glow: ({color: string, a: number}|null), cut: boolean}}
+ */
+export function barParts(bar) {
+    const fill = alphaOf(bar.color);
+    const track = bar.track
+        ? { color: bar.track.color, a: alphaOf(bar.track.color) * clamp01(bar.track.opacity) }
+        : { color: '#000000', a: PLAIN_TRACK };
+    const g = bar.glow;
+    return {
+        group: clamp01(bar.opacity ?? 1),
+        fill,
+        track,
+        glow: g ? { color: g.color, a: alphaOf(g.color) * clamp01(Math.min(g.strength, 1)) } : null,
+        cut: fill < 1,
     };
 }
