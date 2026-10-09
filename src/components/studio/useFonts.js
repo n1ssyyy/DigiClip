@@ -36,7 +36,9 @@ async function loadFace(entry) {
     const bytes = await res.arrayBuffer();
     const metrics = parseFontMetrics(bytes);
     if (!metrics) throw new Error('not a font the stage can measure');
-    const face = new FontFace(cssFont(entry.family), bytes);
+    // The bare name: a quoted one becomes part of the family in Chromium
+    // (WebView2), and `font-family: 'X'` then never matches it.
+    const face = new FontFace(entry.family, bytes);
     await face.load();
     return { face, metrics };
 }
