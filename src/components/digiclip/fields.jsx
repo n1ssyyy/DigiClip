@@ -1,12 +1,13 @@
 import { ArrowDownLeft, ArrowDownRight, ArrowUpLeft, ArrowUpRight, ChevronDown, ImagePlus, Music, X } from 'lucide-react';
 import { cn, baseName } from '../../lib/utils';
 import Tip from './Tooltip';
+import Dropdown from './Dropdown';
 import { GpuToggle, Segmented } from './controls';
 import { pickAudio, pickImage } from '../../lib/native';
 import { useT } from '../../lib/i18n';
 
 // The small controls Studio's panels are made of: labels, segmented choices,
-// switches, file slots and the native select, in the panel input look.
+// switches, file slots and the dropdown, in the panel input look.
 
 export function Kicker({ children }) {
     return (
@@ -141,20 +142,24 @@ export function MusicSlot({ value, onChange }) {
     return <FileSlot icon={Music} value={value} empty={t('Add a music bed…')} pick={pickAudio} onChange={onChange} />;
 }
 
-/** Native select in the panel's input look. */
+/** A single choice in the panel's input look, opening the app's dropdown list.
+ *  `options`: `[id, name]` pairs, the name translated here. */
 export function Select({ label, value, options, onChange }) {
     const t = useT();
     return (
-        <div className="relative">
-            <select
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                aria-label={label}
-                className={cn(inputCls, 'appearance-none pr-8 [color-scheme:dark]')}
-            >
-                {options.map(([id, name]) => <option key={id} value={id}>{t(name)}</option>)}
-            </select>
-            <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        </div>
+        <Dropdown
+            label={label}
+            value={value}
+            options={options.map(([id, name]) => ({ value: id, text: t(name) }))}
+            onChange={onChange}
+            className={cn(inputCls, 'items-center justify-between gap-2 text-left hover:bg-accent/60')}
+        >
+            {({ open, current }) => (
+                <>
+                    <span className="min-w-0 truncate">{current?.text}</span>
+                    <ChevronDown className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-[var(--ease-out)] motion-reduce:transition-none', open && 'rotate-180')} aria-hidden />
+                </>
+            )}
+        </Dropdown>
     );
 }
