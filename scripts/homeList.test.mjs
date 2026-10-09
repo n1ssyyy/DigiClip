@@ -298,8 +298,8 @@ test('grid: tall tiles can be slim, wide ones need room; a shape\'s minimum < co
 
 test('grid: six clips in each shape at the two window sizes and at 900x520', () => {
     assert.deepEqual(plan(BIG, 6), [[6, 148, 326, true], [3, 155, 256, true], [3, 194, 256, true], [3, 304, 233, true]]);
-    assert.deepEqual(plan(SMALL, 6), [[3, 176, 375, false], [3, 200, 312, false], [2, 224, 286, false], [2, 288, 224, false]]);
-    assert.deepEqual(plan(MID, 6), [[6, 140, 311, true], [4, 200, 312, false], [3, 184, 246, true], [3, 288, 224, true]]);
+    assert.deepEqual(plan(SMALL, 6), [[3, 201, 420, false], [3, 201, 314, false], [2, 296, 358, false], [2, 306, 235, false]]);
+    assert.deepEqual(plan(MID, 6), [[6, 140, 311, true], [4, 214, 330, false], [3, 184, 246, true], [3, 288, 224, true]]);
 });
 
 test('grid: six tall clips in 900x520 are ONE row of six, not five and one', () => {
@@ -311,12 +311,25 @@ test('grid: six tall clips in 900x520 are ONE row of six, not five and one', () 
     assert.ok(p.tileW * 6 + GAP * 5 + PAD * 2 <= MID.w);
 });
 
-test('grid: twelve tall clips in 900x520 cannot all fit, so they scroll at the comfortable width', () => {
+test('grid: twelve tall clips in 900x520 cannot all fit, so they scroll in columns that share the row', () => {
     const p = gridPlan(MID, SHAPES[0], 12);
     assert.equal(p.fits, false);
-    assert.equal(p.tileW, comfortTileWidth(SHAPES[0]));
-    assert.equal(p.cols, 4);
+    assert.equal(p.cols, 4); // the comfortable 176 decides: four fit
+    assert.equal(p.tileW, 214); // and the four share the 880px row
+    assert.ok(p.tileW >= comfortTileWidth(SHAPES[0]) && p.tileW <= maxTileWidth(SHAPES[0]));
     assert.ok(Math.ceil(12 / p.cols) * p.tileH > MID.h, 'taller than the box: it scrolls');
+});
+
+test('grid: twenty tall clips at the 1240 window (920x650 box) fill the row edge to edge', () => {
+    const area = { w: 920, h: 650 };
+    const p = gridPlan(area, SHAPES[0], 20);
+    assert.equal(p.fits, false);
+    assert.deepEqual([p.cols, p.tileW, p.tileH], [4, 219, 452]);
+    const row = p.cols * p.tileW + GAP * (p.cols - 1);
+    assert.ok(area.w - PAD * 2 - row < p.cols, 'less than a pixel a column is left over');
+    // the narrow and the wide windows fill their rows the same way
+    assert.deepEqual([gridPlan({ w: 640, h: 400 }, SHAPES[0], 20).cols, gridPlan({ w: 640, h: 400 }, SHAPES[0], 20).tileW], [3, 201]);
+    assert.equal(gridPlan({ w: 960, h: 650 }, SHAPES[0], 20).cols, 5);
 });
 
 test('grid: one or two clips are capped, not giant, and fill no more than they need', () => {
@@ -341,16 +354,16 @@ test('grid: 1:1 and 16:9 take their own minimums and counts', () => {
     assert.deepEqual(plan(MID, 6)[2], [3, 184, 246, true]);
     // 16:9, six clips, same box: two rows of three, capped nowhere
     assert.deepEqual(plan(MID, 6)[3], [3, 288, 224, true]);
-    // a 16:9 tile never goes under its minimum: twelve in the small box scroll
+    // a 16:9 tile never goes under its minimum: twelve in the small box scroll, never narrower than comfortable
     const wide = gridPlan(SMALL, SHAPES[3], 12);
     assert.equal(wide.fits, false);
-    assert.equal(wide.tileW, comfortTileWidth(SHAPES[3]));
-    assert.ok(wide.tileW >= minTileWidth(SHAPES[3]));
+    assert.equal(wide.tileW, 306); // two columns share the row
+    assert.ok(wide.tileW >= comfortTileWidth(SHAPES[3]) && wide.tileW <= maxTileWidth(SHAPES[3]));
 });
 
 test('grid: a tiny box (640x330) holds two tall clips in one row and scrolls six', () => {
     assert.deepEqual(plan(TINY, 2)[0], [2, 139, 310, true]);
-    assert.deepEqual(plan(TINY, 6), [[3, 176, 375, false], [3, 200, 312, false], [2, 224, 286, false], [2, 288, 224, false]]);
+    assert.deepEqual(plan(TINY, 6), [[3, 201, 420, false], [3, 201, 314, false], [2, 296, 358, false], [2, 306, 235, false]]);
 });
 
 test('grid: when two column counts make the same tile, the one with fewer rows then fewer columns wins', () => {
@@ -392,7 +405,11 @@ test('grid: the column count is the one that makes the largest tile with every c
                         assert.ok(p.tileW >= minTileWidth(shape) && p.tileW <= maxTileWidth(shape), tag);
                     } else {
                         assert.equal(p.fits, false, tag);
-                        assert.ok(p.tileW === comfortTileWidth(shape) || p.tileW === Math.floor(w - PAD * 2), tag);
+                        const W = w - PAD * 2;
+                        const cols = Math.max(1, Math.floor((W + GAP) / (comfortTileWidth(shape) + GAP)));
+                        assert.equal(p.cols, cols, tag);
+                        assert.equal(p.tileW, Math.max(1, Math.min(maxTileWidth(shape), Math.floor((W - GAP * (cols - 1)) / cols))), tag);
+                        assert.ok(p.cols * p.tileW + GAP * (p.cols - 1) <= W || W < comfortTileWidth(shape), tag);
                         assert.ok(p.cols >= 1, tag);
                     }
                 }

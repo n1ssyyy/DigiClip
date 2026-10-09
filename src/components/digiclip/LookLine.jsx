@@ -8,7 +8,7 @@ import LookRows, { focusCurrent, moveInList } from '../studio/LookRows';
 import { useLooks } from '../studio/useLooks';
 import { ASPECTS, useLook } from '../../lib/look';
 import { setMainShape } from '../../lib/shapes';
-import { KINDS, clipsText, countChoices, homePieces, kindText } from '../../lib/homeLine';
+import { KINDS, clipsText, countChoices, countFace, homePieces, kindText } from '../../lib/homeLine';
 import { useStore } from '../../lib/socket';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
@@ -122,6 +122,7 @@ export default function LookLine() {
                 label={t('Clips')}
                 value={p.count.value}
                 text={p.count.text}
+                face={countFace(p.count.value, t)}
                 options={countChoices(options.count).map((n) => ({ value: n, text: clipsText(n, t) }))}
                 onChange={(v) => update({ count: Number(v) })}
             />

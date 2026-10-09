@@ -63,8 +63,9 @@ export function tileHeight(tileW, shape) {
  *  grid holding `count` clips. Among the column counts at which ALL the clips
  *  fit in view without scrolling (every tile at least the shape's minimum wide,
  *  at most its maximum), the one with the largest tile wins; a tie goes to
- *  fewer rows, then to fewer columns (so six clips make 3 + 3, not 5 + 1). When no count fits, tiles take the shape's
- *  comfortable width and the grid scrolls. Tiles never leave their shape.
+ *  fewer rows, then to fewer columns (so six clips make 3 + 3, not 5 + 1). When no count fits, the shape's comfortable
+ *  width decides how many columns the row holds, the tiles share the row's
+ *  width (up to the maximum), and the grid scrolls. Tiles never leave their shape.
  *  `pad` is the grid's padding on every side. */
 export function gridPlan(area, shape, count, gap = 8, pad = 10) {
     const min = minTileWidth(shape);
@@ -89,8 +90,11 @@ export function gridPlan(area, shape, count, gap = 8, pad = 10) {
     }
     if (best) return { cols: best.cols, tileW: best.tileW, tileH: tileHeight(best.tileW, shape), fits: true };
 
+    // Nothing fits: the comfortable width decides how many columns the row
+    // holds, then the tiles share the row (up to the shape's maximum), so no
+    // blank band is left on the right.
     const cols = Math.max(1, Math.floor((W + gap) / (comfort + gap)));
-    const tileW = Math.max(1, Math.min(comfort, Math.floor(W) || comfort));
+    const tileW = Math.max(1, Math.min(max, Math.floor((W - gap * (cols - 1)) / cols) || comfort));
     return { cols, tileW, tileH: tileHeight(tileW, shape), fits: false };
 }
 

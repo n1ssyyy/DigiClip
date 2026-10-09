@@ -6,14 +6,16 @@ import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
 const quiet = 'px-2.5 text-[12px] text-muted-foreground hover:text-foreground';
-/** The words of a labelled button: gone below 560px of header, where the icon
- *  keeps its tooltip and its aria-label. */
-const words = 'hidden @min-[560px]:inline';
+/** The words of a labelled button: gone below 720px of header (the header's
+ *  own width, not the window's), where the icon keeps its tooltip and its
+ *  aria-label. */
+const words = 'hidden @min-[720px]:inline';
 
 /** The head of the shown video: its name (15px, wraps, never cut), under it a
  *  line of facts, and quiet labelled buttons - Play original, and once it has
- *  clips Transcript, Merge clips and remove. Under 560px of header the words
- *  go and the icons stay. No rule below: spacing separates it from the tiles. */
+ *  clips Transcript, Merge clips and remove. The buttons always stay on the
+ *  name's row, top-aligned at the right; under 720px of header the words go and
+ *  the icons stay. No rule below: spacing separates it from the tiles. */
 export default function VideoHeader({ job, ready, onPlaySource, onTranscript, onMerge, onRemove }) {
     const t = useT();
     const facts = [fmtDur(job.duration_s), ready ? clipCountText((job.clips ?? []).length, t) : null, ...jobTags(job, t)].filter(Boolean);
@@ -21,14 +23,14 @@ export default function VideoHeader({ job, ready, onPlaySource, onTranscript, on
 
     return (
         <div className="@container shrink-0 px-3 pt-3 pb-1">
-            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-                <div className="min-w-[min(100%,240px)] flex-1">
+            <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
                     <h2 className="text-[15px] leading-snug font-semibold [overflow-wrap:anywhere]">{job.name}</h2>
                     {facts.length > 0 && (
                         <p className="mt-1 font-mono text-[10px] leading-snug text-muted-foreground [overflow-wrap:anywhere]">{facts.join(' · ')}</p>
                     )}
                 </div>
-                <span className="ml-auto flex shrink-0 items-center gap-1">
+                <span className="flex shrink-0 items-start gap-1">
                     <Tip label={t('Play original')} side="top">
                         <Button
                             type="button"

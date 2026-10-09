@@ -23,16 +23,20 @@ export function PickerFace({ label, text, mark = false, open = false }) {
  * invisibly over it. The select does the work (keyboard, screen reader, the
  * system's own list), so there is no popup of our own to keep in step. The full
  * value is the tooltip, for when the face cuts it. `options`: `{value, text}`.
+ * `face`, when given, is what the face shows instead of `text` (a value that
+ * would only repeat the label, like "5 clips" under "Clips"); the tooltip and
+ * the name then say "Clips: 5", and the list of choices keeps the full wording.
  */
-export default function InlinePick({ label, value, text, options, onChange }) {
+export default function InlinePick({ label, value, text, face, options, onChange }) {
+    const shown = face ?? text;
     return (
-        <Tip label={`${label}: ${text}`} side="bottom" className="w-full">
+        <Tip label={`${label}: ${shown}`} side="bottom" className="w-full">
             <span className={cn(pickerBox, 'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring')}>
-                <PickerFace label={label} text={text} />
+                <PickerFace label={label} text={shown} />
                 <select
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
-                    aria-label={label}
+                    aria-label={face === undefined ? label : `${label}: ${face}`}
                     className="absolute inset-0 size-full cursor-pointer appearance-none opacity-0 outline-none [color-scheme:dark]"
                 >
                     {options.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}
