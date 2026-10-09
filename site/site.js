@@ -150,7 +150,7 @@
     }
 
     const os = detectOS();
-    const state = { version: 'v2.9.0', sizes: {} };
+    const state = { version: 'v2.12.0', sizes: {} };
 
     function paintDownloads() {
         for (const a of $$('[data-dl-main]')) {
@@ -185,8 +185,8 @@
     /* Versions: live from GitHub, with a snapshot to fall back on       */
     /* ---------------------------------------------------------------- */
 
-    const SNAPSHOT_DATE = '30 Sep 2026';
-    const SNAPSHOT_TAGS = ['v2.8.0', 'v2.7.0', 'v2.6.0', 'v2.5.0', 'v2.4.0', 'v2.3.5', 'v2.3.4', 'v2.3.3', 'v2.3.2', 'v2.3.0', 'v2.2.2', 'v2.2.1', 'v2.0.1', 'v2.0.0'];
+    const SNAPSHOT_DATE = '9 Oct 2026';
+    const SNAPSHOT_TAGS = ['v2.11.0', 'v2.10.1', 'v2.10.0', 'v2.9.0', 'v2.8.0', 'v2.7.0', 'v2.6.0', 'v2.5.0', 'v2.4.0', 'v2.3.5', 'v2.3.4', 'v2.3.3', 'v2.3.2', 'v2.3.0', 'v2.2.2', 'v2.2.1', 'v2.0.1', 'v2.0.0'];
     const FIRST_ROWS = 7;
 
     const fmtSize = (bytes) => {
@@ -321,14 +321,14 @@
 
     function snapshotReleases() {
         const latest = {
-            tag: 'v2.9.0',
-            date: '2026-09-30T15:33:12Z',
-            url: `${RELEASES}/tag/v2.9.0`,
+            tag: 'v2.12.0',
+            date: '2026-10-09T16:04:01Z',
+            url: `${RELEASES}/tag/v2.12.0`,
             notes: [],
             assets: {
-                win: { url: latestUrl('win'), size: 31846406 },
-                mac: { url: latestUrl('mac'), size: 24870363 },
-                linux: { url: latestUrl('linux'), size: 248574819 },
+                win: { url: latestUrl('win'), size: 35350316 },
+                mac: { url: latestUrl('mac'), size: 28407676 },
+                linux: { url: latestUrl('linux'), size: 251720368 },
             },
         };
         const older = SNAPSHOT_TAGS.map((tag) => ({ tag, date: null, url: `${RELEASES}/tag/${tag}`, notes: [], assets: {} }));
