@@ -146,5 +146,7 @@ export function usePlayer({ len, start, videoRef, hasVideo, loop, resetKey }) {
         });
     }, [seek]);
 
-    return { clock, playing, toggle, seek, onLoadedMetadata };
+    const pause = useCallback(() => setPlaying(false), []);
+
+    return { clock, playing, toggle, pause, seek, onLoadedMetadata };
 }

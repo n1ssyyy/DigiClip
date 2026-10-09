@@ -7,6 +7,7 @@ import WordCaption from './WordCaption';
 import StageOverlay from './StageOverlay';
 import StagePicture from './StagePicture';
 import StageSeam from './StageSeam';
+import ExactStill, { ExactLine } from './ExactStill';
 
 const PAD = 24; // breathing room around the frame
 const NOTE = 36; // the line under the frame
@@ -35,7 +36,7 @@ const sameSize = (p, n) => p && p.w === n.w && p.h === n.h && p.bh === n.bh;
  * is off); `scene` what the Look does to the picture (`stageScene`); `edit`
  * the actions the pointer layer takes.
  */
-export default function Stage({ canvas, scene, resolved, lines, measure, layers, selected, edit, sizes, logoFile, clock, reduced, sample, videoRef, videoFailed, onVideoError, onLoadedMetadata, safe, notice }) {
+export default function Stage({ canvas, scene, resolved, lines, measure, layers, selected, edit, sizes, logoFile, clock, reduced, sample, videoRef, videoFailed, onVideoError, onLoadedMetadata, safe, notice, exact }) {
     const t = useT();
     const wellRef = useRef(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
@@ -159,6 +160,8 @@ export default function Stage({ canvas, scene, resolved, lines, measure, layers,
                             onBegin={edit.begin}
                             onEnd={edit.end}
                         />
+                        {exact.phase === 'pending' && <ExactLine />}
+                        {exact.phase === 'shown' && <ExactStill exact={exact} />}
                     </div>
                 )}
             </div>

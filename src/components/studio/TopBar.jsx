@@ -11,6 +11,8 @@ import { aspectList } from '../../lib/look';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 import { STAND_IN } from './useSample';
+import LookPicker from './LookPicker';
+import ExactButton from './ExactButton';
 
 const fmtLen = (s) => {
     if (!(s > 0)) return '';
@@ -47,14 +49,14 @@ function SampleMenu({ sample }) {
     const items = [{ id: STAND_IN, name: t('Stand-in'), sub: t('Built-in words, no video') }, ...sample.eligible.map((j) => ({ id: j.id, name: j.name, sub: fmtLen(j.duration_s) }))];
 
     return (
-        <div ref={rootRef} className="relative">
+        <div ref={rootRef} className="relative shrink-0">
             <button
                 type="button"
                 aria-haspopup="listbox"
                 aria-expanded={open}
                 aria-label={`${t('Sample')}: ${current}`}
                 onClick={() => setOpen((o) => !o)}
-                className="flex h-8 w-52 items-center gap-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-2.5 text-left text-[12px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex h-8 w-52 shrink-0 items-center gap-2 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-2.5 text-left text-[12px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
             >
                 <Film className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="min-w-0 flex-1 truncate">{current}</span>
@@ -109,8 +111,8 @@ function HistoryButton({ icon: Icon, label, shortcut, disabled, onClick }) {
     );
 }
 
-/** Title, the stage's shape, the sample, and undo/redo. */
-export default function TopBar({ options, update, sample, history }) {
+/** The Look picker (the page's title), the stage's shape, the sample, the exact frame and undo/redo. */
+export default function TopBar({ options, update, sample, history, looks, lookUi, setLookUi, exact, narrow }) {
     const t = useT();
     const shapes = aspectList(options.aspect);
     // One shape is on the stage: the first of the list. Picking another
@@ -121,11 +123,12 @@ export default function TopBar({ options, update, sample, history }) {
     return (
         <Card className="stagger-1 relative shrink-0">
             <div className="flex h-10 items-center gap-3 px-4">
-                <h1 className="text-[13px] font-semibold">{t('Studio')}</h1>
-                <Segmented label={t('Stage shape')} size="sm" value={shapes[0]} options={ASPECT_OPTS} onChange={pick} className="w-52" />
-                <div className="flex-1" />
+                <div role="heading" aria-level={1} className="min-w-0 shrink"><LookPicker looks={looks} ui={lookUi} setUi={setLookUi} /></div>
+                <Segmented label={t('Stage shape')} size="sm" value={shapes[0]} options={ASPECT_OPTS} onChange={pick} className="w-52 shrink-0" />
+                <div className="min-w-0 flex-1" />
                 <SampleMenu sample={sample} />
-                <div className="flex items-center">
+                <ExactButton exact={exact} narrow={narrow} />
+                <div className="flex shrink-0 items-center">
                     <HistoryButton icon={Undo2} label={t('Undo')} shortcut="Ctrl+Z" disabled={!history.canUndo} onClick={history.undo} />
                     <HistoryButton icon={Redo2} label={t('Redo')} shortcut="Ctrl+Y" disabled={!history.canRedo} onClick={history.redo} />
                 </div>

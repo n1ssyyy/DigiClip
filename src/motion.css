@@ -639,3 +639,36 @@
         animation: banner-out 260ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
 }
+
+/* Studio's exact frame: a thin line along the top of the stage frame while
+   the engine renders. A light slides across it; reduced motion gets the
+   whole line, held faint, with nothing moving. */
+.exact-line {
+    background: rgb(255 255 255 / 0.12);
+}
+.exact-line::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.85), transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+    .exact-line::after {
+        width: 36%;
+        transform: translateX(-100%);
+        animation: exact-slide 1.3s var(--ease-out) infinite;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .exact-line::after {
+        opacity: 0.4;
+    }
+}
+@keyframes exact-slide {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(280%);
+    }
+}

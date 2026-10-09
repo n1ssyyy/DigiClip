@@ -10,6 +10,8 @@ import { cleanBar, cleanHeadline, cleanLogo } from './layers.js';
 import { SCENE_CLEANERS } from './sceneFields.js';
 
 export const STORE_KEY = 'digiclip.jobOptions';
+/** The name of the saved Look last loaded or saved (its own key). */
+export const CURRENT_KEY = 'digiclip.studio.look';
 
 export const ASPECTS = ['9:16', '4:5', '1:1', '16:9'];
 export const CAPTION_ANIMS = ['pop', 'words', 'none'];
@@ -344,16 +346,26 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
     let lastKey = null;
     let lastAt = 0;
     let snap = null;
+    // The name of the Look each working copy belongs to, kept per state
+    // object so undo and redo bring the name back with the options.
+    const names = new WeakMap();
+    const nameOf = (s) => names.get(s) ?? null;
     // A drag in progress: every change inside it is one history step.
     let gesture = null;
     const subs = new Set();
 
     function build() {
-        snap = { options: state, canUndo: past.length > 0, canRedo: future.length > 0 };
+        snap = { options: state, canUndo: past.length > 0, canRedo: future.length > 0, current: nameOf(state) };
     }
     function persist() {
         try {
             storage?.setItem(STORE_KEY, JSON.stringify(state));
+        } catch {
+        }
+        try {
+            const n = nameOf(state);
+            if (n) storage?.setItem(CURRENT_KEY, n);
+            else storage?.removeItem(CURRENT_KEY);
         } catch {
         }
     }
@@ -369,6 +381,8 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
     }
     function commit(next, key) {
         if (next === state) return;
+        // An edit stays on the Look it started from; `load` names its own.
+        if (!names.has(next)) names.set(next, nameOf(state));
         const t = now();
         if (gesture) {
             // The first change of the gesture opens its step, the rest fold in.
@@ -408,6 +422,11 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
         const base = defaults(settings);
         state = saved && typeof saved === 'object' && !Array.isArray(saved) ? { ...base, ...saved } : base;
         state.look = sanitizeLook(state.look);
+        try {
+            const n = storage?.getItem(CURRENT_KEY);
+            names.set(state, typeof n === 'string' && n ? n : null);
+        } catch {
+        }
         build();
     }
 
@@ -470,6 +489,29 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
             if (JSON.stringify(look) === JSON.stringify(state.look)) return;
             commit({ ...state, look }, null);
         },
+        /** Put a whole working copy in place (a Look loaded): one history
+         *  step, so undo brings the previous one back, name included. The
+         *  same options only change the name. */
+        load(next, name) {
+            if (!state) seed(null);
+            if (gesture) return;
+            const copy = { ...next, look: sanitizeLook(next?.look) };
+            if (JSON.stringify(copy) === JSON.stringify(state)) {
+                api.setCurrent(name);
+                return;
+            }
+            names.set(copy, name || null);
+            commit(copy, null);
+        },
+        /** Name the Look the working copy now is (saved, renamed, deleted),
+         *  without a history step. */
+        setCurrent(name) {
+            if (!state) seed(null);
+            const n = name || null;
+            if (nameOf(state) === n) return;
+            names.set(state, n);
+            emit();
+        },
         undo() {
             if (gesture || !past.length) return;
             future.push(state);
@@ -525,6 +567,9 @@ export function useLook(settings) {
         redo: lookStore.redo,
         canUndo: snap.canUndo,
         canRedo: snap.canRedo,
+        current: snap.current,
+        load: lookStore.load,
+        setCurrent: lookStore.setCurrent,
         reset: lookStore.reset,
     };
 }

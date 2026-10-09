@@ -6,7 +6,7 @@ import { parkTime } from '../lib/stageTime';
 import { stageScene } from '../lib/stageScene';
 import { splitPatch } from '../lib/sceneEffective';
 import { logoClear, resolveBar, resolveHeadline, resolveLogo, stageHeadline } from '../lib/layers';
-import { useStore } from '../lib/socket';
+import { flashMessage, useStore } from '../lib/socket';
 import { useT } from '../lib/i18n';
 import TopBar from '../components/studio/TopBar';
 import Layers from '../components/studio/Layers';
@@ -17,6 +17,9 @@ import { prefersReducedMotion } from '../components/studio/CaptionLayer';
 import { useSample } from '../components/studio/useSample';
 import { useMeasure } from '../components/studio/useMeasure';
 import { usePlayer } from '../components/studio/usePlayer';
+import { useLooks } from '../components/studio/useLooks';
+import { useExactFrame } from '../components/studio/useExactFrame';
+import { CLOSED } from '../components/studio/LookPicker';
 
 // Below this page width the Layers pane shrinks to icons.
 const NARROW = 1000;
@@ -34,7 +37,7 @@ function inTextField(el) {
 function spaceIsFree(el) {
     if (!el || el === document.body || !el.closest) return true;
     if (el.getAttribute('role') === 'slider') return true;
-    return !el.closest('button, a, summary, [role="radio"], [role="switch"], [role="option"], [role="checkbox"], [role="tab"], [role="menuitem"]');
+    return !el.closest('button, a, summary, [role="radio"], [role="menuitemradio"], [role="switch"], [role="option"], [role="checkbox"], [role="tab"], [role="menuitem"]');
 }
 
 /** Controls that own the arrow keys and Delete themselves. */
@@ -50,8 +53,9 @@ const r2 = (v) => Math.round(v * 100) / 100;
  * Studio: an interactive stage for designing how clips look. It edits the
  * Look, the same state the options popover on Home edits. Layers are drawn
  * the way the engine burns them and can be picked, moved and resized on the
- * stage itself; the inspector holds the same numbers as sliders. Saved
- * looks come later.
+ * stage itself; the inspector holds the same numbers as sliders. The top bar
+ * holds the Look picker (named, saved looks are presets) and the exact frame
+ * (the engine's own render of the stage).
  */
 export default function Studio() {
     const t = useT();
@@ -79,6 +83,8 @@ export default function Studio() {
 
     const sample = useSample(jobs);
     useEffect(() => { setVideoFailed(false); }, [sample.job?.id]);
+    const looks = useLooks({ look, settings });
+    const [lookUi, setLookUi] = useState(CLOSED);
 
     const player = usePlayer({
         len: sample.len,
@@ -88,6 +94,8 @@ export default function Studio() {
         loop,
         resetKey: `${sample.job?.id ?? 'standin'}`,
     });
+
+    const exact = useExactFrame({ options, sample, hasVideo: !!sample.job && !!sample.src && !videoFailed, player });
 
     const shape = aspectList(options.aspect)[0];
     const canvas = CANVASES[shape] ?? CANVASES['9:16'];
@@ -191,16 +199,25 @@ export default function Studio() {
         };
     }, [setCaptions, setHeadline, setBar, setLogo, setLayout, update, beginGesture, endGesture]);
 
-    const onStage = STAGE_LAYERS.includes(selected) || (selected === 'layout' && scene.splitOn) ? selected : null;
+    // While the engine's still covers the stage nothing on it can be picked or moved.
+    const stillOn = exact.phase === 'shown';
+    const onStage = !stillOn && (STAGE_LAYERS.includes(selected) || (selected === 'layout' && scene.splitOn)) ? selected : null;
     const centres = {
         captions: resolved.show ? resolved.center : null,
         headline: headline?.center ?? null,
         logo: logo?.center ?? null,
         bar: bar?.center ?? null,
     };
+    // Ctrl+S: save over the person's own look, else ask for a name.
+    const save = () => {
+        if (looks.current.kind !== 'mine') setLookUi({ open: true, mode: 'saveas' });
+        else if (looks.edited) looks.save();
+        else flashMessage(t('“{name}” has no changes to save.', { name: looks.current.name }));
+    };
+
     // The key handler reads the latest of these without re-binding.
     const liveRef = useRef({});
-    liveRef.current = { onStage, centres, edit, split: L.layout?.split ?? 0.5 };
+    liveRef.current = { onStage, centres, edit, split: L.layout?.split ?? 0.5, save };
 
     const notice = sample.status === 'loading' ? t('Loading the transcript…')
         : sample.status === 'failed' ? t("Couldn't load this transcript; showing stand-in words.")
@@ -211,6 +228,12 @@ export default function Studio() {
     const onKey = useCallback((e) => {
         if (e.defaultPrevented || e.altKey) return;
         const el = e.target;
+        // Ctrl+S saves the look (from anywhere but the menu's own name field, which has Enter).
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            if (!el?.closest?.('[data-look-menu]')) liveRef.current.save();
+            return;
+        }
         if ((e.ctrlKey || e.metaKey) && !inTextField(el)) {
             const k = e.key.toLowerCase();
             if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
@@ -257,7 +280,7 @@ export default function Studio() {
 
     return (
         <div ref={rootRef} className="studio-root flex h-full min-h-0 flex-col gap-[5px] overflow-hidden">
-            <TopBar options={options} update={update} sample={sample} history={{ canUndo, canRedo, undo, redo }} />
+            <TopBar options={options} update={update} sample={sample} history={{ canUndo, canRedo, undo, redo }} looks={looks} lookUi={lookUi} setLookUi={setLookUi} exact={exact} narrow={narrow} />
             <div className="flex min-h-0 flex-1 gap-[5px]">
                 <Layers options={options} selected={selected} onSelect={setSelected} update={update} setCaptions={setCaptions} narrow={narrow} />
                 <Stage
@@ -280,6 +303,7 @@ export default function Studio() {
                     onLoadedMetadata={player.onLoadedMetadata}
                     safe={safe}
                     notice={notice}
+                    exact={exact}
                 />
                 <Inspector selected={selected} look={look} job={sample.job} measure={measure} len={sample.len} />
             </div>

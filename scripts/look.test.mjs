@@ -2370,3 +2370,4 @@ import './layergeom.test.mjs';
 import './scene.test.mjs';
 import './sceneFx.test.mjs';
 import './sceneStage.test.mjs';
+import './looks.test.mjs';
