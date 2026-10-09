@@ -118,6 +118,10 @@ export default {
 
         // Health
         "Everything DigiClip needs is working.": "Gjithçka që i duhet DigiClip po funksionon.",
+        "Checking that everything DigiClip needs is working…": "Po kontrollohet nëse gjithçka që i duhet DigiClip funksionon…",
+        "Check again": "Kontrollo sërish",
+        "Checking for a compatible graphics card…": "Po kontrollohet një kartë grafike e përshtatshme…",
+        "Couldn't check health: {error}": "Kontrolli i gjendjes nuk u krye: {error}",
         "One thing needs your attention.": "Një gjë ka nevojë për vëmendjen tënde.",
         "{n} things need your attention.": "{n} gjëra kanë nevojë për vëmendjen tënde.",
         "DigiClip can't reach its engine right now. It keeps trying to reconnect.": "DigiClip nuk e arrin motorin e tij tani. Po provon të rilidhet vazhdimisht.",
@@ -330,6 +334,10 @@ export default {
 
         // Health
         "Everything DigiClip needs is working.": "Alles, was DigiClip braucht, funktioniert.",
+        "Checking that everything DigiClip needs is working…": "Prüfe, ob alles funktioniert, was DigiClip braucht…",
+        "Check again": "Erneut prüfen",
+        "Checking for a compatible graphics card…": "Suche nach einer passenden Grafikkarte…",
+        "Couldn't check health: {error}": "Prüfung fehlgeschlagen: {error}",
         "One thing needs your attention.": "Eine Sache braucht Aufmerksamkeit.",
         "{n} things need your attention.": "{n} Dinge brauchen Aufmerksamkeit.",
         "DigiClip can't reach its engine right now. It keeps trying to reconnect.": "DigiClip erreicht seine Engine gerade nicht. Es versucht weiter, sich neu zu verbinden.",
@@ -542,6 +550,10 @@ export default {
 
         // Health
         "Everything DigiClip needs is working.": "Tout ce dont DigiClip a besoin fonctionne.",
+        "Checking that everything DigiClip needs is working…": "Vérification de tout ce dont DigiClip a besoin…",
+        "Check again": "Revérifier",
+        "Checking for a compatible graphics card…": "Recherche d’une carte graphique compatible…",
+        "Couldn't check health: {error}": "Vérification impossible : {error}",
         "One thing needs your attention.": "Une chose demande votre attention.",
         "{n} things need your attention.": "{n} choses demandent votre attention.",
         "DigiClip can't reach its engine right now. It keeps trying to reconnect.": "DigiClip n'arrive pas à joindre son moteur pour le moment. Il continue d'essayer de se reconnecter.",
@@ -754,6 +766,10 @@ export default {
 
         // Health
         "Everything DigiClip needs is working.": "Todo lo que DigiClip necesita funciona.",
+        "Checking that everything DigiClip needs is working…": "Comprobando que todo lo que DigiClip necesita funciona…",
+        "Check again": "Comprobar de nuevo",
+        "Checking for a compatible graphics card…": "Buscando una tarjeta gráfica compatible…",
+        "Couldn't check health: {error}": "No se pudo comprobar: {error}",
         "One thing needs your attention.": "Hay una cosa que necesita tu atención.",
         "{n} things need your attention.": "Hay {n} cosas que necesitan tu atención.",
         "DigiClip can't reach its engine right now. It keeps trying to reconnect.": "DigiClip no puede conectar con su motor ahora mismo. Sigue intentando reconectar.",
@@ -966,6 +982,10 @@ export default {
 
         // Health
         "Everything DigiClip needs is working.": "Tutto ciò che serve a DigiClip funziona.",
+        "Checking that everything DigiClip needs is working…": "Controllo che tutto ciò che serve a DigiClip funzioni…",
+        "Check again": "Controlla di nuovo",
+        "Checking for a compatible graphics card…": "Cerco una scheda grafica compatibile…",
+        "Couldn't check health: {error}": "Controllo non riuscito: {error}",
         "One thing needs your attention.": "Una cosa richiede la tua attenzione.",
         "{n} things need your attention.": "{n} cose richiedono la tua attenzione.",
         "DigiClip can't reach its engine right now. It keeps trying to reconnect.": "DigiClip non riesce a raggiungere il suo motore in questo momento. Continua a provare a riconnettersi.",
@@ -1178,6 +1198,10 @@ export default {
 
         // Health
         "Everything DigiClip needs is working.": "DigiClip’in ihtiyaç duyduğu her şey çalışıyor.",
+        "Checking that everything DigiClip needs is working…": "DigiClip’in ihtiyaç duyduğu her şeyin çalıştığı denetleniyor…",
+        "Check again": "Yeniden denetle",
+        "Checking for a compatible graphics card…": "Uyumlu bir ekran kartı aranıyor…",
+        "Couldn't check health: {error}": "Denetlenemedi: {error}",
         "One thing needs your attention.": "Bir şey dikkatinizi bekliyor.",
         "{n} things need your attention.": "{n} şey dikkatinizi bekliyor.",
         "DigiClip can't reach its engine right now. It keeps trying to reconnect.": "DigiClip şu anda motoruna ulaşamıyor. Yeniden bağlanmayı denemeye devam ediyor.",

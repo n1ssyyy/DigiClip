@@ -310,7 +310,9 @@ function KeyField({ label, isSet, placeholder, onSave, onRemove }) {
 /** GPU transcription copy: the device list comes from the backend
  *  detector (best first); with several GPUs the strongest transcribes. */
 function gpuHint(t, gpu, checked) {
-    if (!gpu?.available) return gpu?.reason ?? t('No compatible GPU detected — CPU transcription only');
+    // No answer yet from the health check: say nothing alarming.
+    if (!gpu) return t('Checking for a compatible graphics card…');
+    if (!gpu.available) return gpu.reason ?? t('No compatible GPU detected — CPU transcription only');
     const best = gpu.best;
     const count = gpu.devices?.length ?? 0;
     const mem = best?.memory_mb ? ` · ${best.memory_mb >= 1024 ? `${(best.memory_mb / 1024).toFixed(0)}GB` : `${best.memory_mb}MB`}` : '';
@@ -704,6 +706,7 @@ export default function Settings() {
             ? t('Detected per video. Pin it when you know it: faster, never guesses wrong.')
             : t('Videos are transcribed as {lang}.', { lang: langName });
 
+    // null while the health check has not answered: neither blocked nor warned.
     const gpu = health ? { available: health.gpu_available, reason: health.gpu_reason } : null;
     const decider = v.decider ?? 'auto';
     const jevMissing = decider === 'jev' && !settings.jev_key_set;
@@ -901,8 +904,8 @@ export default function Settings() {
                                 </Select>
                             </Row>
                             <Row inline title={t('GPU transcription')} desc={gpuHint(t, gpu, !!v.gpu)} search="cuda nvidia graphics speed">
-                                <Tip label={gpu?.available ? null : gpuHint(t, gpu, false)}>
-                                    <GpuToggle checked={!!v.gpu && !!gpu?.available} disabled={!gpu?.available} onChange={(on) => patch({ gpu: on })} label={t('GPU transcription')} />
+                                <Tip label={!gpu || gpu.available ? null : gpuHint(t, gpu, false)}>
+                                    <GpuToggle checked={!!v.gpu && (!gpu || !!gpu.available)} disabled={!!gpu && !gpu.available} onChange={(on) => patch({ gpu: on })} label={t('GPU transcription')} />
                                 </Tip>
                             </Row>
                         </Section>

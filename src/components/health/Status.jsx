@@ -15,7 +15,7 @@ function ago(ms, t) {
 export default function Status({ overall, count, live, updatedAt }) {
     const t = useT();
     const sentence = overall === 'checking'
-        ? t('Checking…')
+        ? t('Checking that everything DigiClip needs is working…')
         : overall === 'ok'
             ? t('Everything DigiClip needs is working.')
             : count === 1

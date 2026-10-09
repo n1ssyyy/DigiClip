@@ -16,13 +16,15 @@ export default function Health() {
     const conn = useStore((s) => s.conn);
     const settings = useStore((s) => s.settings);
     const models = useStore((s) => s.models);
-    const [updatedAt, setUpdatedAt] = useState(Date.now());
+    const healthAt = useStore((s) => s.healthAt);
+    const checking = useStore((s) => s.healthBusy);
     const [, setTick] = useState(0);
     const t = useT();
     const platform = useMemo(() => platformOf(typeof navigator === 'undefined' ? '' : navigator.userAgent), []);
 
+    // Never rejects; one check at a time (asking again shares the one running).
     const refresh = () => {
-        refreshHealth().then(() => setUpdatedAt(Date.now())).catch(() => {});
+        refreshHealth();
     };
 
     // Event-based freshness: re-ask over the same socket when the view
@@ -59,12 +61,12 @@ export default function Health() {
     return (
         <Card className="stagger-1 digi-scroll h-full min-h-0 overflow-y-auto">
             <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6 px-6 py-8">
-                <Status overall={view.overall} count={view.problems.length} live={conn === 'live'} updatedAt={updatedAt} />
+                <Status overall={view.overall} count={view.problems.length} live={conn === 'live'} updatedAt={healthAt} />
                 <Findings problems={view.problems} notes={view.notes} />
                 <Swap ready={view.overall !== 'checking'} skeleton={<DetailsSkeleton />} className="w-full">
                     <Details facts={view.facts} />
                 </Swap>
-                <Footer />
+                <Footer checking={checking} onCheck={refresh} />
             </div>
         </Card>
     );

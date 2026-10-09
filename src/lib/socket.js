@@ -18,7 +18,9 @@ const S = {
     jobs: [],
     settings: null,
     models: {},
-    health: null,
+    health: null, // null until a check has finished (the engine answers hello at once); the Health page reads that as "checking"
+    healthAt: null, // when `health` last arrived (ms), null while unknown
+    healthBusy: false, // a health_get is in flight
     aiModels: {}, // provider id -> last ai_models reply
     toasts: [],
     flash: null,
@@ -152,7 +154,7 @@ function openSocket() {
             S.jobs = data.jobs ?? [];
             S.settings = data.settings ?? null;
             S.models = data.models ?? {};
-            S.health = data.health ?? null;
+            setHealth(data.health ?? null);
             S.mcp = data.mcp ?? null;
             S.caps = Array.isArray(data.caps) ? data.caps.filter((c) => typeof c === 'string') : [];
             markSynced();
@@ -182,6 +184,11 @@ function openSocket() {
             sock.close();
         } catch {
         }
+        if (healthRun?.sock === sock) {
+            // Its answer will never come on this socket.
+            healthRun = null;
+            S.healthBusy = false;
+        }
         if (ws === sock) {
             ws = null;
             S.conn = 'retry';
@@ -201,6 +208,11 @@ function scheduleRetry() {
         retryTimer = null;
         openSocket();
     }, ms);
+}
+
+function setHealth(h) {
+    S.health = h ?? null;
+    S.healthAt = S.health ? Date.now() : null;
 }
 
 /** One command round-trip. `busy` drives PageLine (full actions only). */
@@ -300,7 +312,7 @@ function apply(frame) {
             S.jobs = ev.jobs ?? [];
             S.settings = ev.settings ?? S.settings;
             S.models = ev.models ?? S.models;
-            S.health = ev.health ?? S.health;
+            if (ev.health != null) setHealth(ev.health);
             break;
         case 'job_created':
             upsertJob(ev.job);
@@ -375,7 +387,7 @@ function apply(frame) {
             S.models = ev.models ?? S.models;
             break;
         case 'health':
-            S.health = ev.health;
+            if (ev.health != null) setHealth(ev.health);
             break;
         case 'mcp':
             S.mcp = ev.mcp ?? S.mcp;
@@ -446,7 +458,8 @@ export function startJobUrl(url, options) {
 /** Write a diagnostics report (versions, health, recent logs, no keys)
  *  and resolve its path. */
 export function exportDiagnostics() {
-    return cmd('diagnostics', {}, { busy: true });
+    // The report may run a fresh health check first, which can be slow.
+    return cmd('diagnostics', {}, { busy: true, timeoutMs: HEALTH_TIMEOUT_MS });
 }
 
 export function cancelJob(id) {
@@ -516,14 +529,37 @@ export function deleteModel(id) {
     return cmd('models_delete', { model: id }).catch((e) => flash(t("Couldn't delete {model}: {error}", { model: id, error: e?.message ?? e })));
 }
 
+// A health check (ffmpeg, graphics card) can take over a minute on a cold PC:
+// give the engine two minutes before calling it timed out.
+const HEALTH_TIMEOUT_MS = 120000;
+let healthRun = null; // { sock, promise }: the check in flight
+
+/** Ask for a fresh check. Never rejects: resolves the new health, or null
+ *  when nothing came back (an error is flashed and the last known health
+ *  stays). Asking again while one runs shares that one. */
 export function refreshHealth() {
-    return cmd('health_get', {}, { busy: false }).then((data) => {
-        if (data) {
-            S.health = data;
-            emit();
+    const sock = ws;
+    if (!sock || sock.readyState !== WebSocket.OPEN) return Promise.resolve(null);
+    if (healthRun && healthRun.sock === sock) return healthRun.promise;
+    const run = { sock, promise: null };
+    const current = () => healthRun === run;
+    run.promise = cmd('health_get', {}, { busy: false, timeoutMs: HEALTH_TIMEOUT_MS }).then((data) => {
+        if (data && current()) setHealth(data);
+        return data ?? null;
+    }).catch((e) => {
+        if (current()) flash(t("Couldn't check health: {error}", { error: e?.message ?? e }));
+        return null;
+    }).finally(() => {
+        if (current()) {
+            healthRun = null;
+            S.healthBusy = false;
         }
-        return data;
-    }).catch(() => null);
+        emit();
+    });
+    healthRun = run;
+    S.healthBusy = true;
+    emit();
+    return run.promise;
 }
 
 /** Model list of a Clip AI provider. Reply: `{provider, models, fetched_ms,
