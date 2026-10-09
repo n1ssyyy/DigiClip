@@ -178,7 +178,7 @@ export default function TrayMenu() {
                     <Clapperboard className="size-3.5" aria-hidden />
                     <span className="text-[13px] font-semibold tracking-tight">DigiClip</span>
                     <span className="flex-1" />
-                    <span className={cn('size-1.5 rounded-full', live ? 'bg-emerald-500' : 'animate-pulse bg-orange-500')} aria-hidden />
+                    <span className={cn('size-1.5 rounded-full', live ? 'bg-foreground' : 'animate-pulse bg-orange-500')} aria-hidden />
                     <span className="text-[10px] text-muted-foreground">{live ? t('Engine running') : t('Reconnecting…')}</span>
                 </div>
                 <Divider />

@@ -109,7 +109,7 @@ function SaveState({ status }) {
     }
     if (status.phase === 'saved') {
         return (
-            <span key={status.seq} className="swap-in flex items-center gap-1.5 text-[11px] font-medium text-[var(--viral)]" role="status">
+            <span key={status.seq} className="swap-in flex items-center gap-1.5 text-[11px] font-medium text-foreground" role="status">
                 <Check className="draw size-3.5" aria-hidden />
                 {t('Saved')}
             </span>
@@ -202,8 +202,8 @@ function Select({ value, onChange, label, children }) {
 function KeyBadge({ set, optional = false }) {
     const t = useT();
     return set ? (
-        <span key="on" className="swap-in inline-flex items-center gap-1 rounded-full bg-[var(--viral)]/15 px-2 py-px text-[10px] font-medium text-[var(--viral)]">
-            <span className="size-1.5 rounded-full bg-[var(--viral)]" aria-hidden />
+        <span key="on" className="swap-in inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-px text-[10px] font-medium text-primary">
+            <span className="size-1.5 rounded-full bg-primary" aria-hidden />
             {t('set')}
         </span>
     ) : (
@@ -343,7 +343,7 @@ function LayaCard({ model }) {
             <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-[12px] font-medium">
                     {t('Laya model')}
-                    {state === 'ready' && <Check className="size-3.5 text-[var(--viral)]" aria-hidden />}
+                    {state === 'ready' && <Check className="size-3.5 text-foreground" aria-hidden />}
                 </p>
                 <p className="truncate text-[11px] text-muted-foreground" title={text}>{text}</p>
                 {state === 'downloading' && (
@@ -567,7 +567,7 @@ function AiStatus({ label, needsKey, hasKey, model }) {
             : t('Ready: {provider} · {model}', { provider: label, model });
     return (
         <p key={state + label} className="swap-in flex items-center gap-2 text-[11px] text-muted-foreground" role="status">
-            <span className={cn('size-1.5 shrink-0 rounded-full', state === 'ready' ? 'bg-[var(--viral)]' : 'bg-orange-400')} aria-hidden />
+            <span className={cn('size-1.5 shrink-0 rounded-full', state === 'ready' ? 'bg-foreground' : 'bg-orange-400')} aria-hidden />
             <span className="min-w-0 truncate" title={text}>{text}</span>
         </p>
     );

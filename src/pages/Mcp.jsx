@@ -153,7 +153,7 @@ function ClientRow({ client, state, bridge, busy, onRun, index = 0, dim = false 
         >
             <span className={cn(
                 'flex size-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors duration-300',
-                added && current ? 'border-[var(--viral)]/40 text-[var(--viral)]' : 'text-muted-foreground',
+                added && current ? 'border-primary/40 text-primary' : 'text-muted-foreground',
             )}
             >
                 {added && current ? <Check key="added" className="draw size-3.5" aria-hidden /> : client.name[0]}
@@ -190,7 +190,7 @@ function ActivityRow({ a, now }) {
     const icon = a.state === 'running'
         ? <Loader2 className="size-3.5 animate-spin text-orange-500" aria-label={t('running')} />
         : a.state === 'ok'
-            ? <CheckCircle2 className="size-3.5 text-[var(--viral)]" aria-label={t('ok')} />
+            ? <CheckCircle2 className="size-3.5 text-foreground" aria-label={t('ok')} />
             : <XCircle className="size-3.5 text-destructive" aria-label={t('failed')} />;
     return (
         <li className="rise flex items-center gap-2.5 py-1.5">
@@ -304,11 +304,11 @@ export default function Mcp() {
                         <CardTitle className="text-[13px]">{t('AI apps')}</CardTitle>
                         {status && (
                             <Badge
-                                variant={status === 'on' ? 'success' : 'secondary'}
+                                variant={status === 'on' ? 'default' : 'secondary'}
                                 className={cn('gap-1.5', status === 'error' && 'text-red-500')}
                                 title={mcp?.error ?? undefined}
                             >
-                                {status === 'on' && <span className="size-1.5 animate-pulse rounded-full bg-black/70" aria-hidden />}
+                                {status === 'on' && <span className="size-1.5 animate-pulse rounded-full bg-primary-foreground/70" aria-hidden />}
                                 {status === 'on'
                                     ? t('MCP on :{port}', { port: mcp.port })
                                     : status === 'off' ? t('MCP off') : t('Port {port} is taken', { port: mcp.port })}
@@ -330,7 +330,7 @@ export default function Mcp() {
                     <div className="mx-auto my-auto grid w-full max-w-5xl grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[repeat(2,minmax(0,1fr))]">
                         <div className="space-y-5">
                             <div className="stagger-2 flex gap-3 rounded-md border p-3">
-                                <Sparkles className="mt-0.5 size-4 shrink-0 text-[var(--viral)]" aria-hidden />
+                                <Sparkles className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden />
                                 <div className="space-y-1">
                                     <p className="text-[13px] font-medium">{t('Let Claude make your clips')}</p>
                                     <p className="text-[11px] text-muted-foreground">
@@ -345,7 +345,7 @@ export default function Mcp() {
                             <Section
                                 title={t('Connect an app')}
                                 className="stagger-2"
-                                aside={addedCount > 0 && <span className="pop rounded-full bg-[var(--viral)]/15 px-1.5 py-px text-[10px] text-[var(--viral)] normal-case">{t('{count} added', { count: addedCount })}</span>}
+                                aside={addedCount > 0 && <span className="pop rounded-full bg-primary/15 px-1.5 py-px text-[10px] text-primary normal-case">{t('{count} added', { count: addedCount })}</span>}
                             >
                                 {CLIENTS.length > 8 && (
                                     <label className="relative block">

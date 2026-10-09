@@ -15,7 +15,7 @@ export function Monogram({ label, on = false, className }) {
             aria-hidden
             className={cn(
                 'flex size-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold transition-colors',
-                on ? 'border-[var(--viral)]/40 text-[var(--viral)]' : 'text-muted-foreground',
+                on ? 'border-primary/40 text-primary' : 'text-muted-foreground',
                 className,
             )}
         >
@@ -192,7 +192,7 @@ export default function ProviderPicker({ value, providers, keysSet = [], onChang
                                             <span
                                                 className={cn(
                                                     'shrink-0 text-[10px]',
-                                                    st.tone === 'ok' && 'text-[var(--viral)]',
+                                                    st.tone === 'ok' && 'text-foreground',
                                                     st.tone === 'warn' && 'text-orange-400',
                                                     st.tone === 'muted' && 'text-muted-foreground',
                                                 )}

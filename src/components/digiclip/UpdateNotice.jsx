@@ -66,7 +66,7 @@ export default function UpdateNotice() {
                     className="rise pointer-events-auto w-80 rounded-md border bg-popover p-3 text-popover-foreground shadow-xl"
                 >
                     <div className="flex items-start gap-3">
-                        <ArrowDownToLine className="mt-0.5 size-4 shrink-0 text-[var(--viral)]" aria-hidden />
+                        <ArrowDownToLine className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden />
                         <div className="min-w-0 flex-1">
                             <p className="text-[13px] font-medium">{t('Update available — v{version}', { version: av.version })}</p>
                             <p className="mt-0.5 text-[11px] text-muted-foreground">

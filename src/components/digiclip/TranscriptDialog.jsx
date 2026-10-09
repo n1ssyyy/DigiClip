@@ -145,7 +145,7 @@ export default function TranscriptDialog({ job, onClose, leaving }) {
                                         onMouseEnter={() => setHover(i)}
                                         className={cn(
                                             'rounded px-0.5 hover:bg-white/15',
-                                            sel && (b != null ? 'bg-emerald-500/30 text-foreground' : 'bg-white/15'),
+                                            sel && (b != null ? 'bg-primary/50 text-foreground' : 'bg-white/15'),
                                             hits?.has(i) && 'ring-1 ring-orange-400',
                                         )}
                                     >

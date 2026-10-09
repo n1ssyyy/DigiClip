@@ -72,7 +72,7 @@ function Center({ children }) {
 function Glyph({ children, tone = 'default' }) {
     return (
         <div className="pop flex size-16 items-center justify-center rounded-2xl border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]">
-            <div className={tone === 'viral' ? 'text-[var(--viral)]' : tone === 'danger' ? 'text-destructive' : 'text-foreground'}>
+            <div className={tone === 'danger' ? 'text-destructive' : 'text-foreground'}>
                 {children}
             </div>
         </div>
@@ -267,7 +267,7 @@ function Boot() {
             )}
             {phase === 'update' && (
                 <Center>
-                    <Glyph tone="viral">
+                    <Glyph>
                         <ArrowDownToLine className="size-7" aria-hidden />
                     </Glyph>
                     <div className="rise space-y-1">
@@ -280,7 +280,7 @@ function Boot() {
             )}
             {phase === 'current' && (
                 <Center>
-                    <Glyph tone="viral">
+                    <Glyph>
                         <CheckCircle2 className="size-7" aria-hidden />
                     </Glyph>
                     <div className="rise space-y-1">
@@ -384,7 +384,7 @@ function Boot() {
             )}
             {phase === 'done' && done && (
                 <Center>
-                    <Glyph tone="viral">
+                    <Glyph>
                         <CheckCircle2 className="size-7" aria-hidden />
                     </Glyph>
                     <div className="rise space-y-1">
