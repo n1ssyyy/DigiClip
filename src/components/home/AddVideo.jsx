@@ -14,7 +14,7 @@ export default function AddVideo({ add, roomy = false }) {
     const { link, setLink, linkOk, startFromLink, browse, uploading, dragging, dropHandlers } = add;
 
     return (
-        <Card className={cn('stagger-1 shrink-0', roomy ? 'w-full' : 'overflow-hidden')}>
+        <Card data-tour="add" className={cn('stagger-1 shrink-0', roomy ? 'w-full' : 'overflow-hidden')}>
             <div className={cn('p-2', roomy ? 'flex flex-col gap-2' : 'grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2')}>
                 <div
                     role="button"

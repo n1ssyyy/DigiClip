@@ -1,16 +1,21 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
-import { navigate } from '../../lib/socket';
+import { navigate, useStore } from '../../lib/socket';
 import { useT } from '../../lib/i18n';
+import { placeCard } from '../../lib/tourGeometry';
+import { tourSteps } from '../../lib/tourSteps';
+import useTourTarget from './useTourTarget';
 
-/** Fill `{name}` slots in a translated sentence with JSX (links, bold
- *  words) so the word order stays the translation's own. */
-function rich(text, parts) {
+/** Fill `{name}` slots in a translated sentence with bold words, so the word
+ *  order stays the translation's own. */
+function rich(text, slots) {
     return text.split(/(\{\w+\})/).map((seg, i) => {
         const m = /^\{(\w+)\}$/.exec(seg);
-        return m && m[1] in parts ? <Fragment key={i}>{parts[m[1]]}</Fragment> : seg;
+        return m && m[1] in slots
+            ? <span key={i} className="font-medium text-foreground">{slots[m[1]]}</span>
+            : <Fragment key={i}>{seg}</Fragment>;
     });
 }
 
@@ -44,179 +49,180 @@ function displayName(username) {
     return username.charAt(0).toUpperCase() + username.slice(1);
 }
 
-const STEPS = [
-    {
-        key: 'welcome',
-        title: 'Welcome',
-        body: ({ name, t }) => (
-            <>
-                <p>
-                    {name ? (
-                        rich(t('Hey {name} — welcome to DigiClip.'), { name: <span className="font-semibold text-foreground">{name}</span> })
-                    ) : (
-                        <>{t('Welcome to DigiClip.')}</>
-                    )}
-                </p>
-                <p className="mt-2">
-                    {t('Turn long videos into TikTok-ready vertical clips: offline transcription, AI clip picking, captioned 9:16 renders. This tour takes 30 seconds.')}
-                </p>
-            </>
-        ),
-    },
-    {
-        key: 'upload',
-        title: '1 · Drop a video',
-        body: ({ t }) => (
-            <p>
-                {rich(t('Start on {home} — drop a video into the upload box, top left. MP4, MOV, MKV or WebM, straight off your disk. It lands in the {queue} right below.'), {
-                    home: <span className="font-medium text-foreground">{t('Home')}</span>,
-                    queue: <span className="font-medium text-foreground">{t('Queue')}</span>,
-                })}
-            </p>
-        ),
-    },
-    {
-        key: 'queue',
-        title: '2 · Watch the queue',
-        body: ({ t }) => (
-            <p>
-                {rich(t('Each queue row walks the pipeline: {steps}. Retry or cancel anytime — the row tells you what is happening.'), {
-                    steps: <span className="font-mono text-[11px]">{t('Upload → Audio → Script → Clips')}</span>,
-                })}
-            </p>
-        ),
-    },
-    {
-        key: 'apikey',
-        title: '3 · Clip AI (for smart clips)',
-        body: ({ t }) => (
-            <>
-                <p>
-                    {rich(t('For AI-picked highlights, pick a provider (OpenAI, Anthropic, Gemini, OpenRouter, Ollama…) and paste its key in {where}. Ollama or LM Studio on this PC need no key.'), {
-                        where: <span className="font-medium text-foreground">{t('Settings → Clip AI')}</span>,
-                    })}
-                </p>
-                <p className="mt-2">
-                    {t('No key? Clips fall back to heuristics. Transcription itself is always offline.')}
-                </p>
-            </>
-        ),
-        action: { label: 'Open Settings', href: '/settings' },
-    },
-    {
-        key: 'clips',
-        title: '4 · Play and share',
-        body: ({ t }) => (
-            <>
-                <p>
-                    {t('Finished projects show their clips on the right — click a tile to play it (vertical 9:16), download icon to save the file.')}
-                </p>
-                <p className="mt-2">
-                    {rich(t('{health} shows ffmpeg, whisper and GPU status if anything ever looks off.'), {
-                        health: <span className="font-medium text-foreground">{t('Health')}</span>,
-                    })}
-                </p>
-            </>
-        ),
-    },
-];
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * First-run tour: welcome by device username + 4-step walkthrough
- * (upload, queue, API key, clips). Same overlay language as the app
- * dialogs (fade/pop in, dedicated fade-out/pop-out out; pinned below
- * the window header, centered in the content page). Persists via
- * localStorage; replay from the header Tour button or Health/Settings.
+ * First-run tour: a short welcome, then each step highlights the real thing
+ * it talks about (the rest of the window dimmed, the target left clear and
+ * outlined) with a small card beside it that never covers it. The targets
+ * carry `data-tour` attributes; a step whose target is missing or not on
+ * screen shows its card in the middle instead. It starts on Home so its
+ * targets exist. Same overlay language as the app dialogs; persists via
+ * localStorage; replayed from the header, Health and Settings. Modal for
+ * assistive tech: focus moves into the card, Tab stays in it, Escape closes,
+ * and focus goes back to where it was.
  */
 export default function Onboarding({ username, open, leaving, onClose }) {
-    const [step, setStep] = useState(0);
     const t = useT();
+    const hasVideos = useStore((s) => (s.jobs?.length ?? 0) > 0);
     const name = displayName(username);
-    const last = step === STEPS.length - 1;
+    const steps = useMemo(() => tourSteps(t, { hasVideos, name }), [t, hasVideos, name]);
+    const [step, setStep] = useState(0);
+    const [size, setSize] = useState({ w: 380, h: 200 });
+    const overlay = useRef(null);
+    const card = useRef(null);
+    const primary = useRef(null);
+    const origin = useRef(null);
+    const s = steps[Math.min(step, steps.length - 1)];
+    const last = step === steps.length - 1;
+    const { win, rect } = useTourTarget(overlay, open ? s.target : null, [step, hasVideos, open]);
+    const place = win ? placeCard({ win, rect, card: size }) : null;
 
-    // Fresh tour from the start every time it opens.
+    // A fresh tour from the start every time it opens, on Home where its
+    // targets are; focus is remembered to be given back.
     useEffect(() => {
-        if (open) setStep(0);
-    }, [open ]);
+        if (!open) return;
+        const here = document.activeElement;
+        if (!origin.current && !card.current?.contains(here)) origin.current = here;
+        setStep(0);
+        navigate('home');
+    }, [open]);
 
-    if (!open) return null;
-    const s = STEPS[step];
+    // The card's own size decides which side has room for it.
+    useLayoutEffect(() => {
+        const el = card.current;
+        if (!el) return undefined;
+        const read = () => setSize((p) => (p.w === el.offsetWidth && p.h === el.offsetHeight ? p : { w: el.offsetWidth, h: el.offsetHeight }));
+        read();
+        const ro = new ResizeObserver(read);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
 
+    // Focus lives in the card: on open, and again when a step swaps the button
+    // that had it.
+    useEffect(() => {
+        if (card.current && !card.current.contains(document.activeElement)) primary.current?.focus({ preventScroll: true });
+    }, [step, open]);
+
+    function giveFocusBack() {
+        const el = origin.current;
+        origin.current = null;
+        if (el && el.isConnected && typeof el.focus === 'function') el.focus({ preventScroll: true });
+    }
     function finish() {
         markOnboardingDone();
         onClose();
+        giveFocusBack();
     }
-
-    function goSettings() {
+    function goTo(page) {
         markOnboardingDone();
         onClose();
-        navigate('settings');
+        navigate(page);
     }
+
+    // Escape closes; Tab goes round inside the card, even when focus got out.
+    const finishRef = useRef(finish);
+    finishRef.current = finish;
+    useEffect(() => {
+        if (!open) return undefined;
+        const onKey = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                finishRef.current();
+            } else if (e.key === 'Tab' && card.current) {
+                const items = [...card.current.querySelectorAll(FOCUSABLE)];
+                if (!items.length) return;
+                const i = items.indexOf(document.activeElement);
+                const edge = e.shiftKey ? i <= 0 : i === items.length - 1;
+                if (i === -1 || edge) {
+                    e.preventDefault();
+                    items[e.shiftKey ? items.length - 1 : 0].focus();
+                }
+            }
+        };
+        document.addEventListener('keydown', onKey, true);
+        return () => document.removeEventListener('keydown', onKey, true);
+    }, [open]);
+
+    if (!open) return null;
+    const hole = place?.hole;
 
     return (
         <div
-            className={cn('fixed inset-x-0 bottom-0 top-[var(--chrome)] z-50 flex items-center justify-center bg-black/60 pl-[var(--chrome)] backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
+            ref={overlay}
+            className={cn(
+                'fixed inset-x-0 bottom-0 top-[var(--chrome)] z-50 overflow-hidden motion-safe:transition-colors motion-safe:duration-200',
+                !hole && 'bg-black/60 backdrop-blur-sm',
+                leaving ? 'fade-out' : 'fade',
+            )}
             onMouseDown={(e) => { if (e.target === e.currentTarget) finish(); }}
         >
+            {hole && (
+                <div
+                    key={s.key}
+                    aria-hidden
+                    className="fade pointer-events-none absolute rounded-md border-2 border-foreground/90"
+                    style={{ left: hole.left, top: hole.top, width: hole.width, height: hole.height, boxShadow: '0 0 0 9999px rgb(0 0 0 / 0.6)' }}
+                />
+            )}
             <div
+                ref={card}
                 role="dialog"
                 aria-modal="true"
-                aria-label={t('Onboarding: {title}', { title: t(s.title) })}
-                className={cn('w-[min(440px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl', leaving ? 'pop-out' : 'pop')}
+                aria-label={t('Onboarding: {title}', { title: s.title })}
+                className={cn(
+                    'absolute max-h-[calc(100%-24px)] w-[min(380px,calc(100%-24px))] overflow-y-auto rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl',
+                    leaving ? 'pop-out' : 'pop',
+                )}
+                style={place ? { left: place.left, top: place.top } : { visibility: 'hidden' }}
             >
                 <div className="flex items-center gap-2">
-                    <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-                        {t(s.title)}
-                    </p>
-                    <span className="ml-auto font-mono text-[10px] text-muted-foreground">
-                        {step + 1}/{STEPS.length}
-                    </span>
+                    <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">{s.title}</p>
+                    <span className="ml-auto font-mono text-[10px] text-muted-foreground">{step + 1}/{steps.length}</span>
                     <button
                         type="button" aria-label={t('Skip tour')} onClick={finish}
-                        className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                        className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     >
                         <X className="size-4" aria-hidden />
                     </button>
                 </div>
-                <div className="mt-2 min-h-[96px] text-[13px] text-muted-foreground">
-                    {s.body({ name, t })}
+                <div key={s.key} className="fade mt-2 space-y-2 text-[13px] leading-snug text-muted-foreground" aria-live="polite">
+                    {s.body.map((line, i) => <p key={i}>{rich(line, s.slots)}</p>)}
                 </div>
-                {/* Step dots */}
                 <div className="mt-3 flex items-center gap-1.5" aria-hidden>
-                    {STEPS.map((t, i) => (
+                    {steps.map((x, i) => (
                         <span
-                            key={t.key}
-                            className={cn(
-                                'h-1.5 rounded-full motion-safe:transition-all motion-safe:duration-300',
-                                i === step ? 'w-5 bg-foreground' : 'w-1.5 bg-border',
-                            )}
+                            key={x.key}
+                            className={cn('h-1.5 rounded-full motion-safe:transition-all motion-safe:duration-300', i === step ? 'w-5 bg-foreground' : 'w-1.5 bg-border')}
                         />
                     ))}
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-2">
-                        <button
-                            type="button" onClick={finish}
-                            className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                        >
-                            {t('Skip tour')}
-                        </button>
-                    <div className="flex items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <button
+                        type="button" onClick={finish}
+                        className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                        {t('Skip tour')}
+                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
                         {step > 0 && (
                             <Button variant="outline" size="sm" onClick={() => setStep(step - 1)}>
                                 <ArrowLeft className="size-3.5" aria-hidden /> {t('Back')}
                             </Button>
                         )}
                         {s.action && (
-                            <Button variant="outline" size="sm" onClick={goSettings}>
-                                {t(s.action.label)}
+                            <Button variant="outline" size="sm" onClick={() => goTo(s.action.page)}>
+                                {s.action.label}
                             </Button>
                         )}
                         {!last ? (
-                            <Button size="sm" onClick={() => setStep(step + 1)}>
+                            <Button ref={primary} size="sm" onClick={() => setStep(step + 1)}>
                                 {t('Next')} <ArrowRight className="size-3.5" aria-hidden />
                             </Button>
                         ) : (
-                            <Button size="sm" onClick={finish}>
+                            <Button ref={primary} size="sm" onClick={finish}>
                                 {t('Get started')}
                             </Button>
                         )}

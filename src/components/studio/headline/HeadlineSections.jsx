@@ -24,7 +24,7 @@ export function HeadlineSection({ options, update, onResetAll, anySet }) {
         <>
             <CapNotice cap="look.headline" text={t('This engine is older than Studio. Placement, size and colours apply after the next engine update.')} />
             <CapNotice cap="look.headline.v2" unless="look.headline" text={v2Note(t)} />
-            <SwitchRow checked={options.headline} onChange={(v) => update({ headline: v })} title={t('Headline')} hint={t('Title card pinned at the top.')} />
+            <SwitchRow checked={options.headline} onChange={(v) => update({ headline: v })} title={t('Headline')} hint={t('A title card shown over the clip.')} />
             {options.headline && (
                 <>
                     <Field label={t('Headline text')} hint={t('The stage shows a sample title while this is empty; each clip uses its own title.')}>
