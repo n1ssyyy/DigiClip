@@ -26,7 +26,7 @@ function BarSection({ options, update, edit, onResetAll, anySet }) {
     return (
         <>
             <CapNotice cap="look.bar" text={t('This engine is older than Studio. Placement and thickness apply after the next engine update.')} />
-            <SwitchRow checked={options.progress_bar} onChange={(v) => update({ progress_bar: v })} title={t('Progress bar')} hint={t('Thin bar filling along the bottom.')} />
+            <SwitchRow checked={options.progress_bar} onChange={(v) => update({ progress_bar: v })} title={t('Progress bar')} hint={t('A thin bar that fills as the clip plays.')} />
             {options.progress_bar && (
                 <>
                     <Row label={t('Place')} set={view.isSet('pos')} onReset={() => clear('pos')} hint={t('Drag the bar on the stage past the middle to flip it.')}>

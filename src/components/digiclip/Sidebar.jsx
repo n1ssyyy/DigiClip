@@ -14,6 +14,7 @@ function SideLink({ page, label, active, dot, children }) {
             aria-label={label}
             aria-current={active ? 'page' : undefined}
             data-page={page}
+            data-tour={`rail-${page}`}
             data-tauri-drag-region="false"
             data-no-drag
             style={noDrag}
