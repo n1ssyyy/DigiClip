@@ -200,7 +200,8 @@ export default {
         // Boot
         "Engine failed to start": "Motori nuk u nis",
         "engine failed to boot": "motori nuk u nis",
-        "engine did not answer in 60s": "motori nuk u përgjigj brenda 60 s",
+        "the app did not answer": "aplikacioni nuk u përgjigj",
+        "The first start after an update can take a little longer.": "Nisja e parë pas një përditësimi mund të zgjasë pak më shumë.",
         "Syncing…": "Po sinkronizohet…",
         "Starting engine…": "Po niset motori…",
         "Latest release has no version.": "Versioni i fundit nuk ka numër versioni.",
@@ -411,7 +412,8 @@ export default {
         // Boot
         "Engine failed to start": "Engine konnte nicht starten",
         "engine failed to boot": "Engine ließ sich nicht starten",
-        "engine did not answer in 60s": "Engine hat nicht innerhalb von 60 s geantwortet",
+        "the app did not answer": "die App hat nicht geantwortet",
+        "The first start after an update can take a little longer.": "Der erste Start nach einem Update kann etwas länger dauern.",
         "Syncing…": "Synchronisiere…",
         "Starting engine…": "Engine startet…",
         "Latest release has no version.": "Das neueste Release hat keine Versionsnummer.",
@@ -622,7 +624,8 @@ export default {
         // Boot
         "Engine failed to start": "Le moteur n’a pas démarré",
         "engine failed to boot": "le moteur n’a pas démarré",
-        "engine did not answer in 60s": "le moteur n’a pas répondu en 60 s",
+        "the app did not answer": "l’application n’a pas répondu",
+        "The first start after an update can take a little longer.": "Le premier démarrage après une mise à jour peut prendre un peu plus de temps.",
         "Syncing…": "Synchronisation…",
         "Starting engine…": "Démarrage du moteur…",
         "Latest release has no version.": "La dernière version publiée n’a pas de numéro.",
@@ -833,7 +836,8 @@ export default {
         // Boot
         "Engine failed to start": "El motor no se pudo iniciar",
         "engine failed to boot": "el motor no arrancó",
-        "engine did not answer in 60s": "el motor no respondió en 60 s",
+        "the app did not answer": "la aplicación no respondió",
+        "The first start after an update can take a little longer.": "El primer inicio tras una actualización puede tardar un poco más.",
         "Syncing…": "Sincronizando…",
         "Starting engine…": "Iniciando el motor…",
         "Latest release has no version.": "La última versión publicada no tiene número.",
@@ -1044,7 +1048,8 @@ export default {
         // Boot
         "Engine failed to start": "Impossibile avviare il motore",
         "engine failed to boot": "il motore non si è avviato",
-        "engine did not answer in 60s": "il motore non ha risposto entro 60 s",
+        "the app did not answer": "l’app non ha risposto",
+        "The first start after an update can take a little longer.": "Il primo avvio dopo un aggiornamento può richiedere un po’ più di tempo.",
         "Syncing…": "Sincronizzazione…",
         "Starting engine…": "Avvio del motore…",
         "Latest release has no version.": "L’ultima release non ha un numero di versione.",
@@ -1255,7 +1260,8 @@ export default {
         // Boot
         "Engine failed to start": "Motor başlatılamadı",
         "engine failed to boot": "motor açılamadı",
-        "engine did not answer in 60s": "motor 60 sn içinde yanıt vermedi",
+        "the app did not answer": "uygulama yanıt vermedi",
+        "The first start after an update can take a little longer.": "Bir güncellemeden sonraki ilk açılış biraz daha uzun sürebilir.",
         "Syncing…": "Eşitleniyor…",
         "Starting engine…": "Motor başlatılıyor…",
         "Latest release has no version.": "Son sürümde sürüm numarası yok.",

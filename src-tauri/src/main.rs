@@ -3,9 +3,11 @@
 //! a handful of window/OS commands to the React UI. All pipeline state
 //! flows over the sidecar's WebSocket — this process never polls anything.
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter as _, Manager, State};
 
@@ -17,16 +19,29 @@ struct ServeInfo {
     token: String,
 }
 
+/// Where the engine boot stands (see `begin_boot` / `run_boot`).
+enum Boot {
+    /// Nothing started yet, or the engine was stopped.
+    Idle,
+    /// A boot is running (its attempts included).
+    Booting,
+    Ready(ServeInfo),
+    Failed(String),
+}
+
 struct ShellState {
-    serve: std::sync::Mutex<Option<ServeInfo>>,
-    child: std::sync::Mutex<Option<tokio::process::Child>>,
+    boot: Mutex<Boot>,
+    child: Mutex<Option<tokio::process::Child>>,
+    /// Bumped by `stop_engine`: a boot that started before it gives up.
+    epoch: AtomicU64,
 }
 
 impl Default for ShellState {
     fn default() -> Self {
         Self {
-            serve: std::sync::Mutex::new(None),
-            child: std::sync::Mutex::new(None),
+            boot: Mutex::new(Boot::Idle),
+            child: Mutex::new(None),
+            epoch: AtomicU64::new(0),
         }
     }
 }
@@ -85,8 +100,122 @@ fn engine_binary(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-/// Boot the sidecar, wait for its `DIGICLIP_SERVE` banner, publish info.
-async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
+/// How long one start attempt waits for the `DIGICLIP_SERVE` banner. The
+/// first start after an update is slow (antivirus scanning the new 56 MB
+/// engine, a busy disk) and 30 s was not enough for it; a second start
+/// right after is usually fast because the scan is cached. A minute covers
+/// a slow scan with room to spare without leaving a broken start spinning
+/// for long.
+const BOOT_WAIT: std::time::Duration = std::time::Duration::from_secs(60);
+/// Attempts the shell makes by itself at launch before the user is told
+/// anything (a user-asked retry makes one).
+const AUTO_ATTEMPTS: u32 = 2;
+/// Lines of engine output kept per pipe for the failure message.
+const TAIL_KEEP: usize = 12;
+/// What the failure message quotes from them: at most this many lines, each
+/// cut to `TAIL_LINE` characters, `TAIL_TOTAL` characters overall.
+const TAIL_LINES: usize = 6;
+const TAIL_LINE: usize = 160;
+const TAIL_TOTAL: usize = 600;
+
+/// The last lines the engine wrote while it was starting.
+#[derive(Default)]
+struct Tail {
+    out: VecDeque<String>,
+    err: VecDeque<String>,
+}
+
+fn push_line(q: &mut VecDeque<String>, line: &str) {
+    if q.len() >= TAIL_KEEP {
+        q.pop_front();
+    }
+    q.push_back(line.to_string());
+}
+
+/// A line made readable: terminal colour codes and control characters
+/// dropped, trimmed, cut to `TAIL_LINE` characters.
+fn clean_line(line: &str) -> String {
+    let mut s = String::new();
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            for n in chars.by_ref() {
+                if n.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else if !c.is_control() {
+            s.push(c);
+        }
+    }
+    let s = s.trim();
+    if s.chars().count() > TAIL_LINE {
+        let cut: String = s.chars().take(TAIL_LINE).collect();
+        format!("{cut}…")
+    } else {
+        s.to_string()
+    }
+}
+
+/// What to show after a failure: the engine's stderr when it wrote any,
+/// else its last stdout lines; short enough for the error card.
+fn tail_text(tail: &Tail) -> String {
+    let pick = |q: &VecDeque<String>| -> Vec<String> {
+        let all: Vec<String> = q
+            .iter()
+            .map(|l| clean_line(l))
+            .filter(|l| !l.is_empty())
+            .collect();
+        all[all.len().saturating_sub(TAIL_LINES)..].to_vec()
+    };
+    let mut lines = pick(&tail.err);
+    if lines.is_empty() {
+        lines = pick(&tail.out);
+    }
+    while lines.len() > 1 && lines.iter().map(|l| l.chars().count() + 1).sum::<usize>() > TAIL_TOTAL
+    {
+        lines.remove(0);
+    }
+    lines.join("\n")
+}
+
+fn with_tail(base: &str, tail: &Arc<Mutex<Tail>>) -> String {
+    let text = tail.lock().map(|t| tail_text(&t)).unwrap_or_default();
+    if text.is_empty() {
+        base.to_string()
+    } else {
+        format!("{base}:\n{text}")
+    }
+}
+
+/// Kill the sidecar (if any) and wait for it to be gone, so the next start
+/// never runs beside a leftover and the engine file is released.
+async fn reap_child(app: &AppHandle) {
+    let child = {
+        let state: State<ShellState> = app.state();
+        state.child.lock().ok().and_then(|mut slot| slot.take())
+    };
+    if let Some(mut child) = child {
+        let _ = child.start_kill();
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(3), child.wait()).await;
+    }
+}
+
+fn stopped_since(app: &AppHandle, epoch: u64) -> bool {
+    let state: State<ShellState> = app.state();
+    state.epoch.load(Ordering::SeqCst) != epoch
+}
+
+enum Ev {
+    Banner,
+    Eof,
+}
+
+/// One start of the sidecar: spawn it, wait up to `BOOT_WAIT` for its
+/// `DIGICLIP_SERVE` banner. A failure leaves no child behind.
+async fn boot_once(app: &AppHandle, epoch: u64) -> anyhow::Result<ServeInfo> {
+    // Never two engines: whatever is left of an earlier start goes first.
+    reap_child(app).await;
     let bin = engine_binary(app).ok_or_else(|| anyhow::anyhow!("engine binary not found"))?;
     eprintln!("[shell] engine: {}", bin.display());
     // Fixed port when free, else the next open one: a stale sidecar from
@@ -130,8 +259,6 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
     }
     std_cmd
         .stdout(Stdio::piped())
-        // Piped (not null): on a pre-banner exit the tail below becomes
-        // the boot error instead of silence.
         .stderr(Stdio::piped())
         .stdin(Stdio::null());
     #[cfg(target_os = "windows")]
@@ -143,95 +270,211 @@ async fn boot_sidecar(app: &AppHandle) -> anyhow::Result<ServeInfo> {
     let mut child = tokio::process::Command::from(std_cmd)
         .kill_on_drop(true)
         .spawn()?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("no sidecar stdout"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("no sidecar stderr"))?;
+    // Held in the shell state from the start, so `stop_engine` can kill an
+    // engine that is still starting.
+    {
+        let state: State<ShellState> = app.state();
+        *state.child.lock().unwrap() = Some(child);
+    }
 
-    // Wait for the banner (bounded — a missing banner means boot failure).
-    // Both pipes stay drained for the child's whole life afterwards: a
-    // piped child whose reader goes away dies on its next write
-    // (Windows: os error 232), which both kills jobs and eats their real
-    // error output. Draining also surfaces sidecar logs in this shell.
-    let mut stderr = child.stderr.take();
-    let (info, stdout) = {
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("no sidecar stdout"))?;
-        let mut lines = BufReader::new(stdout).lines();
-        let deadline = tokio::time::sleep(std::time::Duration::from_secs(30));
-        tokio::pin!(deadline);
-        loop {
-            tokio::select! {
-                _ = &mut deadline => anyhow::bail!("sidecar did not print DIGICLIP_SERVE in 30s"),
-                line = lines.next_line() => {
-                    match line? {
-                        Some(l) if l.starts_with("DIGICLIP_SERVE") => {
-                            break (ServeInfo { port, token: token.clone() }, lines.into_inner());
-                        }
-                        Some(_) => continue,
-                        None => {
-                            let mut tail = String::new();
-                            if let Some(e) = stderr.as_mut() {
-                                use tokio::io::AsyncReadExt;
-                                let mut buf = vec![0u8; 2048];
-                                if let Ok(n) = e.read(&mut buf).await {
-                                    tail = String::from_utf8_lossy(&buf[..n]).into_owned();
-                                }
-                            }
-                            anyhow::bail!("sidecar exited before banner{}", if tail.trim().is_empty() { String::new() } else { format!(": {tail}") });
-                        }
-                    }
+    // Both pipes are drained for the child's whole life, from the moment it
+    // starts: a piped child that fills a pipe nobody reads blocks forever,
+    // and one whose reader goes away dies on its next write (Windows: os
+    // error 232), which kills jobs and eats their real error output. The
+    // last lines of each are kept for the failure message, and shown in
+    // this shell's log.
+    let tail = Arc::new(Mutex::new(Tail::default()));
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Ev>();
+    {
+        let tail = tail.clone();
+        tokio::spawn(async move {
+            use tokio::io::{AsyncBufReadExt, BufReader};
+            let mut lines = BufReader::new(stdout).lines();
+            let mut seen = false;
+            while let Ok(Some(l)) = lines.next_line().await {
+                if !seen && l.starts_with("DIGICLIP_SERVE") {
+                    // The banner carries the token: not logged, not kept.
+                    seen = true;
+                    let _ = tx.send(Ev::Banner);
+                    continue;
+                }
+                eprintln!("[sidecar] {l}");
+                if let Ok(mut t) = tail.lock() {
+                    push_line(&mut t.out, &l);
                 }
             }
-        }
-    };
-    tokio::spawn(async move {
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        let mut lines = BufReader::new(stdout).lines();
-        while let Ok(Some(l)) = lines.next_line().await {
-            eprintln!("[sidecar] {l}");
-        }
-    });
-    if let Some(stderr) = stderr {
+            let _ = tx.send(Ev::Eof);
+        });
+    }
+    let err_task = {
+        let tail = tail.clone();
         tokio::spawn(async move {
             use tokio::io::{AsyncBufReadExt, BufReader};
             let mut lines = BufReader::new(stderr).lines();
             while let Ok(Some(l)) = lines.next_line().await {
                 eprintln!("[sidecar] {l}");
+                if let Ok(mut t) = tail.lock() {
+                    push_line(&mut t.err, &l);
+                }
             }
-        });
-    }
+        })
+    };
 
+    // Wait for the banner (bounded: a missing banner means a failed start).
+    let failure = match tokio::time::timeout(BOOT_WAIT, rx.recv()).await {
+        Ok(Some(Ev::Banner)) => None,
+        Ok(Some(Ev::Eof)) | Ok(None) => {
+            // Let stderr finish: its last lines are the explanation.
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(1), err_task).await;
+            Some(with_tail("the engine exited before it was ready", &tail))
+        }
+        Err(_) => Some(with_tail(
+            &format!(
+                "the engine did not report ready within {} seconds",
+                BOOT_WAIT.as_secs()
+            ),
+            &tail,
+        )),
+    };
+    if let Some(msg) = failure {
+        if !stopped_since(app, epoch) {
+            reap_child(app).await;
+        }
+        anyhow::bail!(msg);
+    }
+    if stopped_since(app, epoch) {
+        anyhow::bail!("the engine was stopped");
+    }
+    eprintln!("[shell] serve ready on port {port}");
+    Ok(ServeInfo { port, token })
+}
+
+/// Claim the right to start a boot. False when one is already running
+/// (the caller joins it: the page follows `boot_status`) or the engine is
+/// already up. Never two boots at once, so never two engines.
+fn begin_boot(app: &AppHandle) -> bool {
     let state: State<ShellState> = app.state();
-    *state.serve.lock().unwrap() = Some(info.clone());
-    *state.child.lock().unwrap() = Some(child);
-    eprintln!("[shell] serve ready on port {}", info.port);
-    Ok(info)
+    let mut boot = state.boot.lock().unwrap();
+    match *boot {
+        Boot::Booting | Boot::Ready(_) => false,
+        Boot::Idle | Boot::Failed(_) => {
+            *boot = Boot::Booting;
+            true
+        }
+    }
+}
+
+/// Run a boot that `begin_boot` granted: up to `attempts` starts, then
+/// publish the outcome (state first, event second) and return it. A failed
+/// start leaves no child and no serve info behind.
+async fn run_boot(app: &AppHandle, attempts: u32) -> Result<ServeInfo, String> {
+    let epoch = {
+        let state: State<ShellState> = app.state();
+        state.epoch.load(Ordering::SeqCst)
+    };
+    let mut result: Result<ServeInfo, String> = Err("engine not started".into());
+    for attempt in 1..=attempts.max(1) {
+        result = boot_once(app, epoch).await.map_err(|e| e.to_string());
+        match &result {
+            Ok(_) => break,
+            Err(e) => eprintln!("[shell] boot attempt {attempt} failed: {e}"),
+        }
+        if stopped_since(app, epoch) {
+            break;
+        }
+    }
+    if stopped_since(app, epoch) {
+        // The app is shutting down: nothing left to publish.
+        return Err("the engine was stopped".into());
+    }
+    let state: State<ShellState> = app.state();
+    match &result {
+        Ok(info) => {
+            *state.boot.lock().unwrap() = Boot::Ready(info.clone());
+            eprintln!("[shell] emitting serve-ready");
+            let _ = app.emit("digiclip:serve-ready", info);
+        }
+        Err(e) => {
+            *state.boot.lock().unwrap() = Boot::Failed(e.clone());
+            eprintln!("[shell] boot failed: {e}");
+            let _ = app.emit("digiclip:serve-failed", e.clone());
+        }
+    }
+    result
 }
 
 /// Kill the sidecar now. `kill_on_drop` only fires if the whole runtime
 /// unwinds cleanly — a window close short-circuits that, which is how the
 /// engine used to survive as an orphan holding `resources\digiclip.exe`
 /// and breaking the next install ("Error opening file for writing").
+/// Also ends a boot that is still running (it publishes nothing).
 pub(crate) fn stop_engine(app: &AppHandle) {
     if let Some(state) = app.try_state::<ShellState>() {
+        state.epoch.fetch_add(1, Ordering::SeqCst);
         if let Ok(mut slot) = state.child.lock() {
             if let Some(child) = slot.as_mut() {
                 let _ = child.start_kill();
             }
             *slot = None;
         }
-        let _ = state.serve.lock().map(|mut s| *s = None);
+        let _ = state.boot.lock().map(|mut b| *b = Boot::Idle);
     }
 }
 
+#[derive(serde::Serialize)]
+struct BootStatus {
+    /// `booting`, `ready` or `failed`.
+    state: &'static str,
+    /// Why it failed (what the engine wrote), when it did.
+    message: Option<String>,
+    port: Option<u16>,
+    token: Option<String>,
+}
+
+/// Where the engine boot stands. The page asks this instead of guessing:
+/// it stays on its boot screen while this says `booting` and shows the
+/// failure as soon as it says `failed`.
 #[tauri::command]
-fn get_serve(state: State<ShellState>) -> Result<ServeInfo, String> {
-    state
-        .serve
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or_else(|| "engine not booted".into())
+fn boot_status(state: State<ShellState>) -> BootStatus {
+    match &*state.boot.lock().unwrap() {
+        Boot::Idle | Boot::Booting => BootStatus {
+            state: "booting",
+            message: None,
+            port: None,
+            token: None,
+        },
+        Boot::Ready(info) => BootStatus {
+            state: "ready",
+            message: None,
+            port: Some(info.port),
+            token: Some(info.token.clone()),
+        },
+        Boot::Failed(msg) => BootStatus {
+            state: "failed",
+            message: Some(msg.clone()),
+            port: None,
+            token: None,
+        },
+    }
+}
+
+/// The error card's Retry: start a new boot after a failed one. A boot
+/// already running is joined, an engine already up is left alone.
+#[tauri::command]
+fn retry_boot(app: AppHandle) {
+    if begin_boot(&app) {
+        tauri::async_runtime::spawn(async move {
+            let _ = run_boot(&app, 1).await;
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -591,7 +834,10 @@ pub(crate) fn place_main_once(win: &tauri::WebviewWindow) {
     let scale = m.scale_factor();
     let (aw, ah) = (area.size.width as f64, area.size.height as f64);
     let fit = |want: f64, min: f64, avail: f64| {
-        (want * scale).min(avail * 0.92).max((min * scale).min(avail)).round()
+        (want * scale)
+            .min(avail * 0.92)
+            .max((min * scale).min(avail))
+            .round()
     };
     let (w, h) = (fit(1280.0, 1024.0, aw), fit(800.0, 640.0, ah));
     let x = area.position.x + ((aw - w) / 2.0).round() as i32;
@@ -660,17 +906,13 @@ fn main() {
             }
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let booted = boot_sidecar(&handle).await;
-                match &booted {
-                    Ok(info) => {
-                        eprintln!("[shell] emitting serve-ready");
-                        let _ = handle.emit("digiclip:serve-ready", info);
-                    }
-                    Err(e) => {
-                        eprintln!("[shell] boot failed: {e}");
-                        let _ = handle.emit("digiclip:serve-failed", e.to_string());
-                    }
-                }
+                // Up to two starts before the page is told anything; the
+                // outcome (state + event) is published by `run_boot`.
+                let booted = if begin_boot(&handle) {
+                    run_boot(&handle, AUTO_ATTEMPTS).await
+                } else {
+                    Err("the engine is already starting".to_string())
+                };
                 // Install smoke test (CI): report whether the installed app
                 // found and booted its bundled engine, then quit.
                 if let Some(report) = std::env::var_os("DIGICLIP_SMOKE_TEST") {
@@ -724,7 +966,8 @@ fn main() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            get_serve,
+            boot_status,
+            retry_boot,
             check_update,
             download_setup,
             run_setup,
