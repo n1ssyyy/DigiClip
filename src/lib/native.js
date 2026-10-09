@@ -15,9 +15,16 @@ export function isTauri() {
     return '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
 }
 
-/** Sidecar address, published by the shell once the daemon prints its banner. */
-export function getServe() {
-    return invoke('get_serve');
+/** Where the shell's engine boot stands: `{ state: 'booting' | 'ready' | 'failed',
+ *  message, port, token }` (address and token once ready, the reason when failed). */
+export function bootStatus() {
+    return invoke('boot_status');
+}
+
+/** Ask the shell to start the engine again after a failed boot. A boot that
+ *  is already running is joined, not doubled. */
+export function retryBoot() {
+    return invoke('retry_boot');
 }
 
 export function onServeReady(fn) {
