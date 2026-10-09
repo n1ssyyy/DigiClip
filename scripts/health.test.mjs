@@ -86,6 +86,35 @@ test('health: before the first answer it is checking, with nothing to show', () 
     }
 });
 
+test('health: unknown (null, undefined) is checking even when settings and models are known, and invents nothing', () => {
+    const models = { 'base.en': { downloaded: false }, 'large-v3': { downloaded: false } };
+    for (const health of [null, undefined]) {
+        for (const platform of ['windows', 'macos', 'linux', '']) {
+            const v = healthView(state({ health, conn: 'live', platform, models }));
+            assert.equal(v.overall, 'checking');
+            assert.deepEqual([v.problems, v.notes, v.facts], [[], [], []]);
+        }
+    }
+    assert.equal(healthView({ health: null }).overall, 'checking');
+    assert.equal(healthView().overall, 'checking');
+});
+
+test('health: the same state fills in when the answer arrives (null then object)', () => {
+    const before = healthView(state({ health: null }));
+    const after = healthView(state({ health: GOOD }));
+    assert.equal(before.overall, 'checking');
+    assert.equal(after.overall, 'ok');
+    assert.ok(after.facts.length > 0);
+    // A late answer that finds a problem is a problem, not "checking".
+    assert.equal(healthView(state({ health: { ...GOOD, ffmpeg_ok: false } })).overall, 'problem');
+});
+
+test('health: unknown while the engine is down is the connection problem only', () => {
+    const v = healthView(state({ health: null, conn: 'retry' }));
+    assert.equal(v.overall, 'problem');
+    assert.deepEqual(ids(v.problems), ['connection']);
+});
+
 test('health: engine not connected is the first problem, even with an older answer', () => {
     for (const conn of ['retry', 'failed']) {
         const bare = healthView(state({ health: null, conn }));
@@ -165,6 +194,16 @@ test('health: it speaks through the given translator', () => {
     healthView(state({ health: { ...GOOD, gpu_available: false, ffmpeg_ok: false } }), (s, vars) => { seen.push(s); return s.replace(/\{(\w+)\}/g, (_, k) => vars?.[k]); });
     assert.ok(seen.includes('Engine'));
     assert.ok(seen.some((s) => s.startsWith("ffmpeg wasn't found")));
+});
+
+// The checking sentence, the re-check link and the graphics-card line while unknown.
+test('health: the unknown-state strings are translated', () => {
+    const merged = (l) => Object.assign({}, ...[clips, home, mcp, options, settings, shell, studio, tray].map((d) => d[l]));
+    for (const l of ['sq', 'de', 'fr', 'es', 'it', 'tr']) {
+        for (const s of ['Checking that everything DigiClip needs is working…', 'Check again', 'Checking…', 'Checking for a compatible graphics card…', "Couldn't check health: {error}"]) {
+            assert.ok(merged(l)[s], `${l}: ${s}`);
+        }
+    }
 });
 
 // Every sentence the page can show has a line in all six languages.

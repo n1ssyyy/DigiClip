@@ -4,8 +4,10 @@
 //             each with what to do, some with a button: `action`)
 //   notes     it works, with a caveat worth knowing (no GPU: slower)
 //   facts     what is installed and where, plain name / value pairs
-// `overall` is 'checking' until the engine has answered, 'problem' when any
-// problem stands, else 'ok' (notes do not change it).
+// `overall` is 'checking' while `health` is null (the engine answers hello at
+// once and the first check lands a few seconds later), 'problem' when any
+// problem stands, else 'ok' (notes do not change it). Unknown judges nothing:
+// no problems, no notes, no facts, whatever settings and models say.
 
 const fill = (s, vars) => (vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : s);
 const plain = (s, vars) => fill(s, vars);

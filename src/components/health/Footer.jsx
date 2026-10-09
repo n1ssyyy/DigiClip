@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileDown, Loader2 } from 'lucide-react';
+import { FileDown, Loader2, RefreshCw } from 'lucide-react';
 import Tip from '../digiclip/Tooltip';
 import { exportDiagnostics, flashMessage } from '../../lib/socket';
 import { isTauri, reveal } from '../../lib/native';
@@ -35,11 +35,16 @@ function DiagnosticsButton() {
     );
 }
 
-/** The two quiet links at the foot of the page. */
-export default function Footer() {
+/** The quiet links at the foot of the page. A fresh check can take several
+ *  seconds: its link shows it is working and cannot be pressed twice. */
+export default function Footer({ checking = false, onCheck }) {
     const t = useT();
     return (
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border pt-4">
+            <button type="button" onClick={() => !checking && onCheck?.()} disabled={checking} aria-busy={checking} className={LINK}>
+                {checking ? <Loader2 className="size-3 animate-spin" aria-hidden /> : <RefreshCw className="size-3" aria-hidden />}
+                {checking ? t('Checking…') : t('Check again')}
+            </button>
             <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('digiclip:tour'))} className={LINK}>
                 {t('Take the tour again')}
             </button>
