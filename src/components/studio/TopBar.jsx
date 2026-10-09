@@ -118,7 +118,7 @@ export default function TopBar({ options, update, sample, history, looks, lookUi
     // One shape is on the stage: the first of the list. Picking another
     // replaces it and keeps any extra shapes the run will also make.
     function pick(a) {
-        update({ aspect: [a, ...shapes.filter((x) => x !== a)].join(',') });
+        update({ aspect: [a, ...shapes.slice(1).filter((x) => x !== a)].join(',') });
     }
     return (
         <Card className="stagger-1 relative shrink-0">
