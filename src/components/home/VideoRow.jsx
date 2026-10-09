@@ -3,32 +3,35 @@ import Tip from '../digiclip/Tooltip';
 import { FadeImg } from '../digiclip/Skeleton';
 import { artUrl } from '../../lib/socket';
 import { fitName } from '../../lib/clipGrid';
-import { rowStatus } from '../../lib/homeList';
+import { rowMeta } from '../../lib/homeList';
 import { cn } from '../../lib/utils';
-import { useT } from '../../lib/i18n';
+import { getLang, useT } from '../../lib/i18n';
 
 const TONE = { work: 'text-orange-500', bad: 'text-red-500', ok: 'text-muted-foreground' };
-const DOT = { work: 'animate-pulse bg-orange-500', bad: 'bg-red-500', ok: 'bg-muted-foreground/50' };
+const DOT = { work: 'animate-pulse bg-orange-500', bad: 'bg-red-500', new: 'bg-foreground' };
 
-/** One video in the list: its thumbnail, its name (two lines at most, shortened
- *  at a word with an ellipsis; the full name is the row's tooltip and
- *  accessible name) and one line of where it stands - "6 clips",
- *  "Transcribing…", "Failed" - which wraps only at word gaps, with a thin bar
- *  under it while it is being worked on. A video that is running, failed or
- *  cancelled carries its own cancel / retry / remove buttons, set beside the
- *  name so the status line keeps the full width. The current one is marked; a
- *  finished one not opened yet carries a green dot. `listW` is the list's
- *  width, for shortening the name. */
+/** One video in the list: a 64x36 thumbnail (its poster; a quiet film icon
+ *  until there is one), its name (two lines at most, shortened at a word with
+ *  an ellipsis; the full name is the row's tooltip and accessible name) and ONE
+ *  meta line - "6 clips · 3 Oct" for a finished video, the stage word for one
+ *  being worked on, "Failed" / "Cancelled" - which wraps only at word gaps,
+ *  with a thin bar under it while it is being worked on. The dot sits in the
+ *  meta line: white = finished and not opened yet (none once it has been),
+ *  orange pulsing = being worked on, red = failed or cancelled. A video that is
+ *  running, failed or cancelled carries its own cancel / retry / remove
+ *  buttons, set beside the name so the meta line keeps the full width. The
+ *  current row wears the accent background and a 2px bar on its left edge.
+ *  `listW` is the list's width, for shortening the name. */
 export default function VideoRow({ job, current, fresh, listW, onPick, onRetry, onRemove }) {
     const t = useT();
-    const st = rowStatus(job, t);
+    const st = rowMeta(job, { tr: t, locale: getLang(), fresh });
     const retryable = st.phase === 'failed' || st.phase === 'cancelled';
     const actions = st.phase === 'working' || retryable;
     const buttons = retryable ? 2 : actions ? 1 : 0;
-    const dot = st.phase === 'ready' && fresh ? 'bg-emerald-500' : DOT[st.tone];
 
     return (
         <li className={cn('queue-in relative rounded-md transition-colors', current ? 'bg-accent' : 'hover:bg-accent/50')}>
+            {current && <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-foreground" />}
             <button
                 type="button"
                 data-video={job.id}
@@ -36,10 +39,10 @@ export default function VideoRow({ job, current, fresh, listW, onPick, onRetry, 
                 onClick={onPick}
                 title={job.name}
                 aria-label={`${job.name}, ${st.text}`}
-                className="flex w-full min-w-0 items-center gap-2 rounded-md p-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex w-full min-w-0 items-start gap-2 rounded-md p-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-                <span className="relative h-8 w-14 shrink-0 overflow-hidden rounded bg-muted">
-                    <FileVideo className="absolute inset-0 m-auto size-4 text-muted-foreground" aria-hidden />
+                <span className="relative mt-px block h-9 w-16 shrink-0 overflow-hidden rounded bg-muted">
+                    <FileVideo className="absolute inset-0 m-auto size-4 text-muted-foreground/60" aria-hidden />
                     <FadeImg src={artUrl(job.id, 'poster.jpg')} />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -53,8 +56,8 @@ export default function VideoRow({ job, current, fresh, listW, onPick, onRetry, 
                     >
                         {fitName(job.name, listW, buttons)}
                     </span>
-                    <span className={cn('mt-0.5 flex items-center gap-1.5 font-mono text-[10px] leading-snug', TONE[st.tone])}>
-                        <span className={cn('size-1.5 shrink-0 rounded-full motion-safe:transition-colors motion-safe:duration-500', dot)} aria-hidden />
+                    <span className={cn('mt-0.5 flex items-baseline gap-1.5 font-mono text-[10px] leading-snug', TONE[st.tone])}>
+                        {st.dot && <span className={cn('size-1.5 shrink-0 translate-y-px self-center rounded-full motion-safe:transition-colors motion-safe:duration-500', DOT[st.dot])} aria-hidden />}
                         <span className="min-w-0 break-normal">{st.text}</span>
                     </span>
                     {st.progress != null && (

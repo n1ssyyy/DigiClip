@@ -1,20 +1,23 @@
-import { CircleAlert, Download, Film, Loader2 } from 'lucide-react';
+import { CircleAlert, Download, Film, Loader2, Play } from 'lucide-react';
 import Tip from '../digiclip/Tooltip';
 import { FadeImg } from '../digiclip/Skeleton';
-import { overall, scoreTone } from '../digiclip/ClipInsights';
+import { overall } from '../digiclip/ClipInsights';
 import { artUrl, downloadArt, flashMessage } from '../../lib/socket';
 import { charsPerLine, clipShape, fitTitle } from '../../lib/clipGrid';
-import { fmtRange } from '../../lib/homeList';
+import { clipLength, clipStart, scoreLevel } from '../../lib/homeList';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
-/** One generated clip, whole: the poster in the clip's own shape (nothing is
- *  drawn over it, the burned-in caption is never cropped), the score on a strip
- *  above it, under it the title (two lines, shortened at a word when longer)
- *  and one line with the number, the time range and the download. A clip still
- *  being made, or failed, says so in the picture's place. Every part has a
- *  fixed height (see TILE_CHROME), so tiles in a row end together. Opens the
- *  player on click or Enter. */
+/** One generated clip. The poster IS the tile: the clip's own shape (nothing
+ *  is drawn over it, the burned-in caption is never cropped), rounded, with a
+ *  1px ring that brightens, and the play mark, on hover and focus. Under it the
+ *  title (two lines, shortened at a word when longer) and one quiet line: the
+ *  score chip (just the number; muted under 70, the accent from 70 up, never a
+ *  warning colour), the length, where it starts in the source, and the
+ *  download at the end. A clip still being made, or failed, says so in the
+ *  picture's place and keeps its ring (red for failed). Every part has a fixed
+ *  height (see TILE_CHROME: gap 6, title 30, gap 2, line 24), so tiles in a row
+ *  end together. Opens the player on click or Enter. */
 export default function ClipTile({ job, clip, width, onPlay }) {
     const t = useT();
     const playable = clip.render_status === 'done' && clip.mp4;
@@ -27,7 +30,8 @@ export default function ClipTile({ job, clip, width, onPlay }) {
     const fileName = `digiclip-clip${clip.rank}-${shape.tag}.mp4`;
     const score = overall(clip);
     const title = clip.title || t('Clip #{n}', { n: clip.rank });
-    const range = fmtRange(clip.start_s, clip.end_s);
+    const length = clipLength(clip);
+    const start = clipStart(clip);
     const play = () => onPlay({
         title,
         sub: job.name,
@@ -55,29 +59,27 @@ export default function ClipTile({ job, clip, width, onPlay }) {
                     play();
                 }
             } : undefined}
-            className={cn(
-                'tile-in flex w-full min-w-0 flex-col gap-1 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-card p-1.5 outline-none',
-                'focus-visible:ring-2 focus-visible:ring-ring',
-                playable && 'cursor-pointer transition-colors hover:border-t-white/30 hover:border-x-white/[0.16]',
-            )}
+            className={cn('tile-in group flex w-full min-w-0 flex-col gap-1.5 outline-none', playable && 'cursor-pointer')}
         >
-            <span className="flex h-4 shrink-0 items-center">
-                {score != null && (
-                    <Tip label={t('Virality score (open the clip for why)')} side="top">
-                        <span className="flex items-center gap-1 rounded bg-black/40 px-1.5 font-mono text-[10px] leading-4 text-foreground tabular-nums">
-                            <span className={cn('size-1.5 rounded-full', scoreTone(score))} aria-hidden />
-                            {score}
-                        </span>
-                    </Tip>
+            <span
+                className={cn(
+                    'relative block w-full shrink-0 overflow-hidden rounded-md bg-muted/50 ring-1 transition-shadow',
+                    failed ? 'ring-red-500/40' : 'ring-white/10',
+                    playable && 'group-hover:ring-white/35 group-focus-visible:ring-2 group-focus-visible:ring-ring',
                 )}
-            </span>
-            <span className="relative block w-full shrink-0 overflow-hidden rounded bg-muted/50" style={{ aspectRatio: `${shape.w} / ${shape.h}` }}>
+                style={{ aspectRatio: `${shape.w} / ${shape.h}` }}
+            >
                 {playable ? (
                     <>
                         <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
                         {clip.poster && (
                             <FadeImg key={clip.rev ?? 0} src={artUrl(job.id, clip.poster, clip.rev)} imgClassName="h-full w-full object-contain" />
                         )}
+                        <span aria-hidden className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none">
+                            <span className="flex size-10 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-[2px]">
+                                <Play className="size-4 translate-x-px fill-current" />
+                            </span>
+                        </span>
                     </>
                 ) : (
                     <span
@@ -108,19 +110,42 @@ export default function ClipTile({ job, clip, width, onPlay }) {
                     />
                 )}
             </span>
-            <span className="mt-auto flex flex-col gap-1">
+            <span className="mt-auto flex flex-col gap-0.5">
                 <span className="block h-[30px] overflow-hidden text-[11px] leading-[15px] font-medium [overflow-wrap:anywhere]" title={title}>
                     {fitTitle(title, charsPerLine(width))}
                 </span>
-                <span className="flex h-6 items-center justify-between gap-1 font-mono text-[10px] text-muted-foreground">
-                    <span className="min-w-0 truncate whitespace-nowrap">#{clip.rank}{range ? ` · ${range}` : ''}</span>
+                <span className="flex h-6 items-center gap-1.5 font-mono text-[10px] text-muted-foreground tabular-nums">
+                    {score != null && (
+                        <Tip label={t('Virality score (open the clip for why)')} side="top" className="shrink-0">
+                            <span
+                                role="img"
+                                aria-label={`${t('Virality score (open the clip for why)')}: ${score}`}
+                                className={cn(
+                                    'rounded border px-1.5 leading-4 font-medium',
+                                    scoreLevel(score) === 'high' ? 'border-[var(--viral)]/40 text-[var(--viral)]' : 'border-white/10 text-muted-foreground',
+                                )}
+                            >
+                                {score}
+                            </span>
+                        </Tip>
+                    )}
+                    {length && (
+                        <Tip label={t('Length')} side="top" className="shrink-0">
+                            <span className="whitespace-nowrap text-foreground/80">{length}</span>
+                        </Tip>
+                    )}
+                    {start && (
+                        <Tip label={t('Starts at {time} in the video', { time: start })} side="top" className="min-w-0">
+                            <span className="min-w-0 truncate whitespace-nowrap">{start}</span>
+                        </Tip>
+                    )}
                     {playable && (
-                        <Tip label={t('Download clip #{n}', { n: clip.rank })} side="top" className="shrink-0">
+                        <Tip label={t('Download clip #{n}', { n: clip.rank })} side="top" className="ml-auto shrink-0">
                             <button
                                 type="button"
                                 aria-label={t('Download clip #{n}', { n: clip.rank })}
                                 onClick={save}
-                                className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
+                                className="shrink-0 rounded-md p-1 text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                             >
                                 <Download className="size-3.5" aria-hidden />
                             </button>

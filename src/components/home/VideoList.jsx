@@ -26,7 +26,7 @@ export default function VideoList({ rows, activeId, seen, finishedCount, onPick,
     }
 
     return (
-        <div ref={box} data-tour="videos" className="flex min-h-0 w-[clamp(216px,26%,300px)] shrink-0 flex-col border-r border-border">
+        <div ref={box} data-tour="videos" className="flex min-h-0 w-[clamp(232px,22%,264px)] shrink-0 flex-col border-r border-border">
             <div className="flex h-10 shrink-0 items-center px-3">
                 <h2 className="flex items-baseline gap-2 text-[13px] font-semibold">
                     {t('Your videos')}

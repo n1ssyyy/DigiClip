@@ -7,16 +7,16 @@ import { useT } from '../../lib/i18n';
 const GAP = 8;
 const PAD = 10; // the grid's p-2.5
 
-/** A video's clips, each tile in its clip's own shape. The grid takes as many
- *  columns as fit for that shape (many narrow tall tiles, few wide ones), sizes
- *  its tiles so one whole row fits the visible height, and scrolls; there are
- *  no pages. */
+/** A video's clips, each tile in its clip's own shape. The grid takes the
+ *  column count that gives the largest tile with every clip in view; when the
+ *  clips cannot all fit at a readable size, tiles take a comfortable width and
+ *  the grid scrolls (a partly visible row is fine then). There are no pages. */
 export default function ClipGrid({ job, onPlay }) {
     const t = useT();
     const box = useRef(null);
     const area = useBox(box);
     const clips = job.clips ?? [];
-    const { cols, tileW } = gridPlan(area, clipShape(clips[0], job), GAP, PAD);
+    const { cols, tileW } = gridPlan(area, clipShape(clips[0], job), clips.length, GAP, PAD);
 
     return (
         <div ref={box} className="digi-scroll min-h-0 flex-1 overflow-y-auto p-2.5 [scrollbar-gutter:stable]">
