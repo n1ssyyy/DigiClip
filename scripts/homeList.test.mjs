@@ -8,7 +8,7 @@ import {
     phaseOf, rowStatus, sortJobs, stageText, stepOf,
 } from '../src/lib/homeList.js';
 import {
-    charsPerLine, clipShape, fitTitle, gridPlan, minTileWidth, shapeFromFile, wrapRows,
+    TILE_CHROME, charsPerLine, clipShape, fitName, fitTitle, gridPlan, minTileWidth, rowNameChars, shapeFromFile, tileHeight, wrapRows,
 } from '../src/lib/clipGrid.js';
 import clips from '../src/i18n/clips.js';
 import home from '../src/i18n/home.js';
@@ -176,29 +176,74 @@ test('grid: tall tiles can be slim, wide ones need room', () => {
     assert.ok(w(1, 1) < w(16, 9));
 });
 
-test('grid: columns for each shape at the two window sizes', () => {
-    // the grid is ~950px wide in a 1280 window and ~640px in a 960 one
-    const cols = (a, b, width) => gridPlan(width, { w: a, h: b }).cols;
-    assert.deepEqual([[9, 16], [4, 5], [1, 1], [16, 9]].map(([a, b]) => cols(a, b, 950)), [5, 5, 4, 3]);
-    assert.deepEqual([[9, 16], [4, 5], [1, 1], [16, 9]].map(([a, b]) => cols(a, b, 640)), [3, 3, 3, 2]);
+const SHAPES = [{ w: 9, h: 16 }, { w: 4, h: 5 }, { w: 1, h: 1 }, { w: 16, h: 9 }];
+// The visible grid area (its client box) in a 1280x800 and a 960x640 window.
+const BIG = { w: 950, h: 540 };
+const SMALL = { w: 640, h: 390 };
+const PAD = 10;
+
+test('grid: columns and tile size for each shape at the two window sizes', () => {
+    const plan = (area) => SHAPES.map((sh) => { const p = gridPlan(area, sh); return [p.cols, p.tileW, p.tileH]; });
+    assert.deepEqual(plan(BIG), [[5, 179, 390], [5, 179, 303], [4, 226, 308], [3, 304, 260]]);
+    assert.deepEqual(plan(SMALL), [[3, 168, 370], [3, 201, 330], [3, 201, 283], [2, 306, 261]]);
 });
 
-test('grid: tiles share the width, never narrower than the minimum, never a column wider than needed', () => {
-    for (const shape of [{ w: 9, h: 16 }, { w: 4, h: 5 }, { w: 1, h: 1 }, { w: 16, h: 9 }]) {
-        for (let width = 300; width <= 1400; width += 37) {
-            const { cols, tileW } = gridPlan(width, shape);
-            assert.ok(cols >= 1);
-            assert.ok(tileW * cols + 8 * (cols - 1) <= width, `fits ${width}`);
-            if (width >= minTileWidth(shape)) assert.ok(tileW >= minTileWidth(shape), `min at ${width}`);
-            assert.ok(tileW < minTileWidth(shape) * 2, `not huge at ${width}`);
+test('grid: at both window sizes one whole row (picture, title, footer) is in view for every shape', () => {
+    for (const area of [BIG, SMALL]) {
+        for (const shape of SHAPES) {
+            const { cols, tileW, tileH } = gridPlan(area, shape);
+            assert.equal(tileH, tileHeight(tileW, shape));
+            assert.ok(tileH + PAD * 2 <= area.h, `${shape.w}:${shape.h} in ${area.w}x${area.h}: ${tileH} high`);
+            assert.ok(tileW * cols + 8 * (cols - 1) + PAD * 2 <= area.w, 'a row fits the width');
+        }
+    }
+});
+
+test('grid: a short window makes tiles smaller, not stretched; a tall one leaves them be', () => {
+    const tall = gridPlan({ w: 640, h: 900 }, SHAPES[0]);
+    const short = gridPlan(SMALL, SHAPES[0]);
+    assert.equal(tall.tileW, 201);
+    assert.ok(short.tileW < tall.tileW);
+    assert.ok(short.tileW >= minTileWidth(SHAPES[0]));
+});
+
+test('grid: sweeping window sizes, a row always fits the height unless the floor is hit, and the width always', () => {
+    for (const shape of SHAPES) {
+        for (let h = 300; h <= 1000; h += 41) {
+            for (let w = 320; w <= 1400; w += 53) {
+                const { cols, tileW, tileH } = gridPlan({ w, h }, shape);
+                assert.ok(cols >= 1 && tileW >= 1);
+                if (tileW > 148) assert.ok(tileH + PAD * 2 <= h, `height ${w}x${h}`);
+                if (w - PAD * 2 >= tileW) assert.ok(tileW * cols + 8 * (cols - 1) <= w - PAD * 2, `width ${w}x${h}`);
+                if (tileW > minTileWidth(shape)) assert.ok(tileW < minTileWidth(shape) * 2 + 8, 'not huge');
+            }
+        }
+    }
+});
+
+test('grid: the chrome is what the tile is built from (frame 14, strip 16, title 30, footer 24, gaps 12)', () => {
+    assert.equal(TILE_CHROME, 14 + 16 + 30 + 24 + 12);
+    assert.equal(tileHeight(14, { w: 9, h: 16 }), TILE_CHROME);
+    assert.equal(tileHeight(158, { w: 9, h: 16 }), 256 + TILE_CHROME);
+});
+
+test('grid: the number and time range stay on one line, with the download, at the narrowest tile', () => {
+    const char = 6; // 10px mono
+    const room = (tileW) => tileW - 14 - 22 - 4; // inside the frame, less the download and the gap
+    const text = '#14 · 7:03 → 7:27';
+    for (const area of [BIG, SMALL, { w: 400, h: 300 }]) {
+        for (const shape of SHAPES) {
+            const { tileW } = gridPlan(area, shape);
+            assert.ok(room(tileW) >= text.length * char, `${shape.w}:${shape.h} ${tileW}`);
         }
     }
 });
 
 test('grid: before the width is known, or when it is tiny, there is one column', () => {
-    assert.equal(gridPlan(0, { w: 9, h: 16 }).cols, 1);
-    assert.equal(gridPlan(NaN, { w: 9, h: 16 }).cols, 1);
-    assert.equal(gridPlan(100, { w: 16, h: 9 }).cols, 1);
+    assert.equal(gridPlan({ w: 0, h: 0 }, { w: 9, h: 16 }).cols, 1);
+    assert.equal(gridPlan(undefined, { w: 9, h: 16 }).cols, 1);
+    assert.equal(gridPlan({ w: NaN, h: NaN }, { w: 9, h: 16 }).cols, 1);
+    assert.equal(gridPlan({ w: 100, h: 500 }, { w: 16, h: 9 }).cols, 1);
 });
 
 test('wrap: words fill a line, a word longer than a line breaks over lines', () => {
@@ -238,6 +283,51 @@ test('title: characters per line follow the tile width (mono type, 0.6 em)', () 
     assert.equal(charsPerLine(156), Math.floor((156 - 15) / 6.6));
     assert.ok(charsPerLine(300) > charsPerLine(156));
     assert.equal(charsPerLine(10), 4);
+});
+
+test('name: a video name in the list takes two lines at most, shortened at a word gap', () => {
+    const long = 'Interview with the founder about how the agency grew from nothing to seven figures in one year';
+    for (const listW of [215, 240, 260, 299]) {
+        for (const actions of [0, 1, 2]) {
+            const out = fitName(long, listW, actions);
+            const per = rowNameChars(listW, actions);
+            assert.ok(wrapRows(out, per).length <= 2, `${listW}/${actions}: ${out}`);
+            assert.ok(out.endsWith('…'));
+            assert.ok(long.startsWith(out.slice(0, -1)) && long[out.length - 1] === ' ', `cut at a gap: ${out}`);
+        }
+    }
+    assert.equal(fitName('Short one', 215, 0), 'Short one');
+    assert.equal(fitName('Short one', 215, 2), 'Short one');
+});
+
+test('name: one without gaps is cut inside the word; an unknown width leaves it whole', () => {
+    const out = fitName('a'.repeat(120), 215, 2);
+    assert.ok(out.endsWith('…') && out.length <= rowNameChars(215, 2) * 2);
+    assert.equal(fitName('  two   words ', 0), 'two words');
+});
+
+test('name: the buttons beside a name take room from it, a wider list gives it back', () => {
+    assert.ok(rowNameChars(215, 2) < rowNameChars(215, 1));
+    assert.ok(rowNameChars(215, 1) < rowNameChars(215, 0));
+    assert.ok(rowNameChars(299, 2) > rowNameChars(215, 2));
+});
+
+test('status: no word of a list status is wider than the narrowest list leaves it, in any language', () => {
+    // 216px list: 215 inside, less ul padding 12, scrollbar 11, button padding 12, thumbnail 56, gap 8 = 116;
+    // the status line's dot and its gap take 12; 10px mono is 6px a character
+    const room = 116 - 12;
+    const jobs = [
+        job('a', 'failed'), job('a', 'cancelled'), job('a', 'queued'), job('a', 'extracting'), job('a', 'transcribing'),
+        job('a', 'analyzing'), job('a', 'downloading'),
+        job('a', 'clips_ready', { clips: [clip(1, 'rendering'), ...Array.from({ length: 19 }, (_, i) => clip(i + 2))] }),
+        job('a', 'done'), job('a', 'done', { clips: [clip(1)] }), job('a', 'done', { clips: [clip(1), clip(2)] }),
+    ];
+    for (const l of LANGS) {
+        for (const j of jobs) {
+            const text = rowStatus(j, inLang(l)).text;
+            for (const word of text.split(/\s+/)) assert.ok(word.length * 6 <= room, `${l}: "${word}" in "${text}"`);
+        }
+    }
 });
 
 // ---------------------------------------------------------------------------

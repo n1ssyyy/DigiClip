@@ -1,4 +1,4 @@
-import { Download, Film, Loader2 } from 'lucide-react';
+import { CircleAlert, Download, Film, Loader2 } from 'lucide-react';
 import Tip from '../digiclip/Tooltip';
 import { FadeImg } from '../digiclip/Skeleton';
 import { overall, scoreTone } from '../digiclip/ClipInsights';
@@ -8,10 +8,13 @@ import { fmtRange } from '../../lib/homeList';
 import { cn } from '../../lib/utils';
 import { useT } from '../../lib/i18n';
 
-/** One generated clip, whole: the poster in the clip's own shape (the burned-in
- *  caption is never cropped), with its score on it; under it the title (two
- *  lines, shortened at a word when longer), the number and time range, and the
- *  download the moment the file exists. Opens the player on click or Enter. */
+/** One generated clip, whole: the poster in the clip's own shape (nothing is
+ *  drawn over it, the burned-in caption is never cropped), the score on a strip
+ *  above it, under it the title (two lines, shortened at a word when longer)
+ *  and one line with the number, the time range and the download. A clip still
+ *  being made, or failed, says so in the picture's place. Every part has a
+ *  fixed height (see TILE_CHROME), so tiles in a row end together. Opens the
+ *  player on click or Enter. */
 export default function ClipTile({ job, clip, width, onPlay }) {
     const t = useT();
     const playable = clip.render_status === 'done' && clip.mp4;
@@ -53,23 +56,49 @@ export default function ClipTile({ job, clip, width, onPlay }) {
                 }
             } : undefined}
             className={cn(
-                'tile-in flex min-w-0 flex-col gap-1.5 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-card p-1.5 outline-none',
+                'tile-in flex w-full min-w-0 flex-col gap-1 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-card p-1.5 outline-none',
                 'focus-visible:ring-2 focus-visible:ring-ring',
                 playable && 'cursor-pointer transition-colors hover:border-t-white/30 hover:border-x-white/[0.16]',
             )}
         >
-            <span className="relative block w-full overflow-hidden rounded bg-muted/50" style={{ aspectRatio: `${shape.w} / ${shape.h}` }}>
-                <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
-                {playable && clip.poster && (
-                    <FadeImg key={clip.rev ?? 0} src={artUrl(job.id, clip.poster, clip.rev)} imgClassName="h-full w-full object-contain" />
-                )}
+            <span className="flex h-4 shrink-0 items-center">
                 {score != null && (
-                    <Tip label={t('Virality score (open the clip for why)')} side="top" className="absolute top-1 left-1">
-                        <span className="flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white tabular-nums">
+                    <Tip label={t('Virality score (open the clip for why)')} side="top">
+                        <span className="flex items-center gap-1 rounded bg-black/40 px-1.5 font-mono text-[10px] leading-4 text-foreground tabular-nums">
                             <span className={cn('size-1.5 rounded-full', scoreTone(score))} aria-hidden />
                             {score}
                         </span>
                     </Tip>
+                )}
+            </span>
+            <span className="relative block w-full shrink-0 overflow-hidden rounded bg-muted/50" style={{ aspectRatio: `${shape.w} / ${shape.h}` }}>
+                {playable ? (
+                    <>
+                        <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
+                        {clip.poster && (
+                            <FadeImg key={clip.rev ?? 0} src={artUrl(job.id, clip.poster, clip.rev)} imgClassName="h-full w-full object-contain" />
+                        )}
+                    </>
+                ) : (
+                    <span
+                        key={failed ? 'failed' : 'making'}
+                        role="status"
+                        aria-label={failed ? t('failed') : t('Clip is being made')}
+                        className="fade absolute inset-0 flex flex-col items-center justify-center gap-1.5 p-2 text-center font-mono text-[11px]"
+                    >
+                        {failed ? (
+                            <>
+                                <CircleAlert className="size-5 text-red-500" aria-hidden />
+                                <span className="text-red-500">{t('failed')}</span>
+                            </>
+                        ) : (
+                            <>
+                                <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
+                                <span className="text-muted-foreground">{t('making')}</span>
+                                {rendering && <span className="text-[15px] font-semibold text-foreground tabular-nums">{progress}%</span>}
+                            </>
+                        )}
+                    </span>
                 )}
                 {rendering && (
                     <span
@@ -79,14 +108,14 @@ export default function ClipTile({ job, clip, width, onPlay }) {
                     />
                 )}
             </span>
-            <span className="block text-[11px] leading-snug font-medium [overflow-wrap:anywhere]" title={title}>
-                {fitTitle(title, charsPerLine(width))}
-            </span>
-            <span className="flex min-h-6 items-center justify-between gap-1 font-mono text-[10px] text-muted-foreground">
-                <span className="min-w-0 [overflow-wrap:anywhere]">#{clip.rank}{range ? ` · ${range}` : ''}</span>
-                <span key={playable ? 'done' : failed ? 'failed' : 'making'} className="fade inline-flex shrink-0">
-                    {playable ? (
-                        <Tip label={t('Download clip #{n}', { n: clip.rank })} side="top">
+            <span className="mt-auto flex flex-col gap-1">
+                <span className="block h-[30px] overflow-hidden text-[11px] leading-[15px] font-medium [overflow-wrap:anywhere]" title={title}>
+                    {fitTitle(title, charsPerLine(width))}
+                </span>
+                <span className="flex h-6 items-center justify-between gap-1 font-mono text-[10px] text-muted-foreground">
+                    <span className="min-w-0 truncate whitespace-nowrap">#{clip.rank}{range ? ` · ${range}` : ''}</span>
+                    {playable && (
+                        <Tip label={t('Download clip #{n}', { n: clip.rank })} side="top" className="shrink-0">
                             <button
                                 type="button"
                                 aria-label={t('Download clip #{n}', { n: clip.rank })}
@@ -95,15 +124,6 @@ export default function ClipTile({ job, clip, width, onPlay }) {
                             >
                                 <Download className="size-3.5" aria-hidden />
                             </button>
-                        </Tip>
-                    ) : failed ? (
-                        <span className="text-red-500">{t('failed')}</span>
-                    ) : (
-                        <Tip label={t('Clip is being made')} side="top">
-                            <span className="flex items-center gap-1">
-                                {t('making')}{rendering ? ` ${progress}%` : ''}
-                                <Loader2 className="size-3 animate-spin" aria-hidden />
-                            </span>
                         </Tip>
                     )}
                 </span>

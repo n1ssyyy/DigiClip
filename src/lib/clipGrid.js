@@ -1,6 +1,7 @@
 // How Home lays out a video's clips: each tile takes its clip's own shape, the
 // grid takes as many columns as the width allows for that shape, and a title
-// that is too long for its two lines is shortened at a word. Pure: no React.
+// that is too long for its two lines is shortened at a word (as is a video's
+// name in the list). Pure: no React.
 import { mainShape } from './shapes.js';
 
 /** A clip's shape from its file name (`clip-01-4x5.mp4` -> 4:5). */
@@ -28,14 +29,36 @@ export function minTileWidth(shape) {
     return 256; // 16:9 and wider
 }
 
-/** Columns and tile width for a grid `width` px wide: as many columns as fit
- *  at the minimum, then the tiles share what is left (so they never grow past
- *  a column's worth over the minimum). */
-export function gridPlan(width, shape, gap = 8) {
+/** What a tile costs besides its poster, in px: frame (border 2 + padding 12),
+ *  score strip 16, title 2 x 15, footer 24 and three 4px gaps. ClipTile's
+ *  classes are built to these numbers, so a plan can know a tile's height. */
+export const TILE_FRAME = 14;
+export const TILE_CHROME = 96;
+/** The least a tile is squeezed to when the window is very short (its footer
+ *  line, "#14 · 7:03 → 7:27" and the download, still fits). */
+const FLOOR_W = 148;
+
+/** A tile's height at width `tileW`: its poster (in the clip's shape) plus the chrome. */
+export function tileHeight(tileW, shape) {
+    return Math.ceil(((tileW - TILE_FRAME) * shape.h) / shape.w) + TILE_CHROME;
+}
+
+/** Columns and tile size for the visible box `area` ({ w, h }, px) of the clip
+ *  grid. Width decides the columns (as many as fit at the shape's minimum, the
+ *  tiles share what is left); height caps the tile so one whole row, picture to
+ *  footer, fits in view without scrolling - tiles get smaller, not stretched,
+ *  and need not fill the row. `pad` is the grid's padding on every side. */
+export function gridPlan(area, shape, gap = 8, pad = 10) {
     const min = minTileWidth(shape);
-    const w = Number.isFinite(width) && width > 0 ? width : min;
-    const cols = Math.max(1, Math.floor((w + gap) / (min + gap)));
-    return { cols, tileW: Math.floor((w - gap * (cols - 1)) / cols) };
+    const W = Number.isFinite(area?.w) && area.w > 0 ? Math.max(0, area.w - pad * 2) : min;
+    const H = Number.isFinite(area?.h) && area.h > 0 ? area.h - pad * 2 : Infinity;
+    const cap = Number.isFinite(H)
+        ? Math.max(FLOOR_W, Math.floor(((H - TILE_CHROME) * shape.w) / shape.h) + TILE_FRAME)
+        : Infinity;
+    const m = Math.min(min, cap);
+    const cols = Math.max(1, Math.floor((W + gap) / (m + gap)));
+    const tileW = Math.min(Math.floor((W - gap * (cols - 1)) / cols), cap);
+    return { cols, tileW, tileH: tileHeight(tileW, shape) };
 }
 
 /** Rows a text takes at `per` characters a line when it is wrapped at word
@@ -83,4 +106,21 @@ export function fitTitle(title, per, lines = 2) {
         if (head && wrapRows(`${head}…`, per).length <= lines) return `${head}…`;
     }
     return `${words[0].slice(0, Math.max(1, per * lines - 1))}…`;
+}
+
+/** Characters one line of a video's name in the list holds: the list's width
+ *  less its padding and scrollbar, the row's padding, the thumbnail and gap,
+ *  and the buttons that sit beside the name (`actions` of them, 22px each).
+ *  The type is 12px mono. */
+export function rowNameChars(listW, actions = 0) {
+    const reserve = actions > 0 ? actions * 22 + 6 : 0;
+    return Math.max(4, Math.floor((listW - 96 - reserve - 1) / 7.2));
+}
+
+/** A video's name as the list shows it: two lines at most, shortened at a
+ *  word gap with an ellipsis (a name with no gaps is cut in the word). The
+ *  full name stays in the row's tooltip and in the video's header. */
+export function fitName(name, listW, actions = 0) {
+    if (!(listW > 0)) return String(name ?? '').replace(/\s+/g, ' ').trim();
+    return fitTitle(name, rowNameChars(listW, actions), 2);
 }
