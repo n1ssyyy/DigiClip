@@ -7,6 +7,7 @@
 import { useSyncExternalStore } from 'react';
 import { cleanCaptions } from './captionStyles.js';
 import { cleanBar, cleanHeadline, cleanLogo } from './layers.js';
+import { SCENE_CLEANERS } from './sceneFields.js';
 
 export const STORE_KEY = 'digiclip.jobOptions';
 
@@ -109,8 +110,7 @@ function durRange(o) {
 // the Look object
 // ---------------------------------------------------------------------------
 
-/** Sections of `options.look` (look.rs). Captions, headline, bar and logo
- *  are live; the rest wait for the engine. */
+/** Sections of `options.look` (look.rs): all seven are live. */
 export const LOOK_SECTIONS = ['captions', 'headline', 'bar', 'logo', 'camera', 'effects', 'layout'];
 
 const isPlain = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -151,7 +151,7 @@ export function lookToEngine(look) {
     return Object.keys(out).length ? { v: 1, ...out } : null;
 }
 
-const CLEANERS = { captions: cleanCaptions, headline: cleanHeadline, bar: cleanBar, logo: cleanLogo };
+const CLEANERS = { captions: cleanCaptions, headline: cleanHeadline, bar: cleanBar, logo: cleanLogo, ...SCENE_CLEANERS };
 
 /** A Look read back from anywhere (a preset, local storage): deep copy,
  *  junk dropped, captions cleaned the way the engine reads them. */
@@ -315,6 +315,12 @@ export function applyEdit(prev, flat, sections) {
 // the store
 // ---------------------------------------------------------------------------
 
+/** The store's writer for each section, and the prefix of its coalescing key. */
+const SETTERS = {
+    setCaptions: 'captions', setHeadline: 'headline', setBar: 'bar', setLogo: 'logo', setCamera: 'camera', setEffects: 'effects', setLayout: 'layout',
+};
+const SECTION_KEY = { captions: 'c', headline: 'h', bar: 'b', logo: 'l', camera: 'm', effects: 'x', layout: 'y' };
+
 export const HISTORY_CAP = 100;
 export const COLLAPSE_MS = 400;
 
@@ -405,6 +411,13 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
         build();
     }
 
+    /** The writer of one section of the Look: a patch is one history step,
+     *  and rapid patches to the same fields fold into it. */
+    const setter = (sec) => (patch) => {
+        if (!state) seed(null);
+        commit(applySection(state, sec, patch), `${SECTION_KEY[sec]}:${leafPaths(patch).sort().join(',')}`);
+    };
+
     const api = {
         seed,
         subscribe(f) {
@@ -419,22 +432,7 @@ export function createLookStore({ storage = browserStorage(), now = () => Date.n
             if (!state) seed(null);
             commit(applyPatch(state, patch), `f:${Object.keys(patch).sort().join(',')}`);
         },
-        setCaptions(patch) {
-            if (!state) seed(null);
-            commit(applySection(state, 'captions', patch), `c:${leafPaths(patch).sort().join(',')}`);
-        },
-        setHeadline(patch) {
-            if (!state) seed(null);
-            commit(applySection(state, 'headline', patch), `h:${leafPaths(patch).sort().join(',')}`);
-        },
-        setBar(patch) {
-            if (!state) seed(null);
-            commit(applySection(state, 'bar', patch), `b:${leafPaths(patch).sort().join(',')}`);
-        },
-        setLogo(patch) {
-            if (!state) seed(null);
-            commit(applySection(state, 'logo', patch), `l:${leafPaths(patch).sort().join(',')}`);
-        },
+        ...Object.fromEntries(Object.entries(SETTERS).map(([name, sec]) => [name, setter(sec)])),
         /** Flat options and sections together, as one history step. */
         edit(flat, sections) {
             if (!state) seed(null);
@@ -517,6 +515,9 @@ export function useLook(settings) {
         setHeadline: lookStore.setHeadline,
         setBar: lookStore.setBar,
         setLogo: lookStore.setLogo,
+        setCamera: lookStore.setCamera,
+        setEffects: lookStore.setEffects,
+        setLayout: lookStore.setLayout,
         edit: lookStore.edit,
         beginGesture: lookStore.beginGesture,
         endGesture: lookStore.endGesture,

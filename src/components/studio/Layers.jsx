@@ -2,11 +2,11 @@ import { Camera, Captions, Columns2, Eye, EyeOff, Gauge, Heading, ImagePlus, Mus
 import { Card } from '../ui/card';
 import Tip from '../digiclip/Tooltip';
 import { Kicker, baseName } from '../digiclip/JobOptions';
+import { sceneSummary } from '../../lib/sceneSummary';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 
 const KIND_LABEL = { smart: 'Smart', complete: 'Complete', moments: 'Moments', timecut: 'Timecut' };
-const LAYOUT_LABEL = { single: 'Single', split: 'Split', auto: 'Auto' };
 
 /** The rows of the Layers pane, grouped. `eye` rows have an on/off
  *  state of their own; `file` rows are on once a file is chosen. */
@@ -62,9 +62,9 @@ function summary(id, o, t) {
             return `${baseName(o.logo)}${size !== undefined ? ` · ${Math.round(size * 100)}%` : ''}`;
         }
         case 'music': return o.music ? baseName(o.music) : t('No file');
-        case 'layout': return t(LAYOUT_LABEL[o.layout] ?? 'Single');
+        case 'camera': case 'layout': case 'effects': return sceneSummary(id, o, t);
         case 'clips': return `${o.count > 0 ? t('{n} clips', { n: o.count }) : t('Auto')} · ${t(KIND_LABEL[o.kind] ?? 'Smart')}`;
-        default: return t('Next engine update');
+        default: return '';
     }
 }
 

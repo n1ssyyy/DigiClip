@@ -222,7 +222,9 @@ const round2 = (v) => Math.round(v * 100) / 100;
  * @param {string} styleId   one of CAPTION_STYLES
  * @param {string|{w,h}} canvas  '9:16' | '4:5' | '1:1' | '16:9' (or a size)
  * @param {object} look  the Look's `captions` section (may be empty)
- * @param {{anim?: string}} [flat]  the flat `caption_anim` option
+ * @param {{anim?: string, seam?: number}} [flat]  the flat `caption_anim` option, and
+ *        `seam`: the split-screen seam as a fraction of the height (the
+ *        captions sit on it unless the Look placed them)
  */
 export function resolveCaptions(styleId, canvas, look, flat = {}) {
     const id = validStyle(styleId);
@@ -262,6 +264,10 @@ export function resolveCaptions(styleId, canvas, look, flat = {}) {
         const margin = Math.max(Math.round(pw / 2 - half), 0);
         anchor = { mode: 'middle', x: Math.round(cx), y: Math.round((c.y ?? 0.5) * ph) };
         wrapW = pw - 2 * margin;
+    } else if (flat.seam !== undefined) {
+        // Split screen: centred on the seam (the style's alignment steps aside).
+        anchor = { mode: 'middle', x: pw / 2, y: Math.round(flat.seam * ph) };
+        wrapW = pw - 2 * side;
     } else if (alignment === 2) {
         anchor = { mode: 'bottom', x: pw / 2, y: ph - marginV };
         wrapW = pw - 2 * side;

@@ -2367,3 +2367,6 @@ test('the preview strip loops the real timing: three words, the middle a keyword
 import './layerfx.test.mjs';
 import './layermap.test.mjs';
 import './layergeom.test.mjs';
+import './scene.test.mjs';
+import './sceneFx.test.mjs';
+import './sceneStage.test.mjs';

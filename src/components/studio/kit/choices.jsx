@@ -75,7 +75,7 @@ export function Choice({ label, value, options, set = true, onChange, cols, disa
                             'flex min-w-0 items-center justify-center rounded-md border px-1.5 transition-[background-color,border-color,color] duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
                             o.tip && 'w-full',
                             wrap ? 'text-center leading-[1.1] break-words' : 'truncate',
-                            size === 'lg' ? 'h-9 text-[14px]' : size === 'sm' ? 'h-7 text-[11px]' : wrap ? 'h-8 text-[10.5px]' : 'h-8 text-[11px]',
+                            size === 'lg' ? 'h-9 text-[14px]' : size === 'sm' ? 'h-7 text-[11px]' : size === 'tall' ? 'h-14 flex-col gap-1 px-0.5 py-1 text-[10.5px]' : wrap ? 'h-8 text-[10.5px]' : 'h-8 text-[11px]',
                             on ? (set ? TONE.on : TONE.soft) : TONE.off,
                         )}
                     >

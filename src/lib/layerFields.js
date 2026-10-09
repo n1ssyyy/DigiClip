@@ -104,7 +104,7 @@ export const LAYER_SPECS = { headline: HEADLINE_SPECS, bar: BAR_SPECS, logo: LOG
 
 /** The top-level fields of a spec table (a `card` and the dotted objects are
  *  read on their own), read from `o` and clamped; absent where unusable. */
-function readFlat(specs, o) {
+export function readFlat(specs, o) {
     const out = {};
     for (const [k, s] of Object.entries(specs)) {
         if (k.includes('.')) continue;

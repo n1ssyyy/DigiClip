@@ -5,7 +5,10 @@ import CaptionsPanel from './CaptionsPanel';
 import BarPanel from './bar/BarPanel';
 import HeadlinePanel from './headline/HeadlinePanel';
 import LogoPanel from './logo/LogoPanel';
-import { ClipsPanel, LayoutPanel, MusicPanel, SoonPanel } from './LayerPanels';
+import CameraPanel from './camera/CameraPanel';
+import EffectsPanel from './effects/EffectsPanel';
+import LayoutPanel from './layout/LayoutPanel';
+import { ClipsPanel, MusicPanel } from './LayerPanels';
 
 const NAMES = Object.fromEntries(LAYER_GROUPS.flatMap((g) => g.rows.map((r) => [r.id, r.name])));
 
@@ -30,9 +33,10 @@ export default function Inspector({ selected, look, job, measure, len }) {
                     {selected === 'bar' && <BarPanel look={look} />}
                     {selected === 'logo' && <LogoPanel look={look} />}
                     {selected === 'music' && <MusicPanel options={options} update={update} />}
-                    {selected === 'layout' && <LayoutPanel options={options} update={update} />}
+                    {selected === 'camera' && <CameraPanel look={look} />}
+                    {selected === 'layout' && <LayoutPanel look={look} />}
+                    {selected === 'effects' && <EffectsPanel look={look} />}
                     {selected === 'clips' && <ClipsPanel options={options} update={update} />}
-                    {(selected === 'camera' || selected === 'effects') && <SoonPanel />}
                 </div>
             </div>
         </Card>

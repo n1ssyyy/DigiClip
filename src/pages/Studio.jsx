@@ -3,6 +3,8 @@ import { aspectList, useLook } from '../lib/look';
 import { CANVASES, captionLines, clamp, resolveCaptions } from '../lib/captionStyles';
 import { captionBlocks } from '../lib/captionMotion';
 import { parkTime } from '../lib/stageTime';
+import { stageScene } from '../lib/stageScene';
+import { splitPatch } from '../lib/sceneEffective';
 import { logoClear, resolveBar, resolveHeadline, resolveLogo, stageHeadline } from '../lib/layers';
 import { useStore } from '../lib/socket';
 import { useT } from '../lib/i18n';
@@ -18,7 +20,7 @@ import { usePlayer } from '../components/studio/usePlayer';
 
 // Below this page width the Layers pane shrinks to icons.
 const NARROW = 1000;
-/** The layers that live on the stage and can be picked there. */
+/** The layers that live on the stage and can be picked there (the Layout too, while the stage draws a split). */
 const STAGE_LAYERS = ['captions', 'headline', 'bar', 'logo'];
 
 /** Typing somewhere: the page's own keys stay out of the way. */
@@ -42,6 +44,7 @@ function ownsArrows(el) {
 }
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
+const r2 = (v) => Math.round(v * 100) / 100;
 
 /**
  * Studio: an interactive stage for designing how clips look. It edits the
@@ -55,7 +58,7 @@ export default function Studio() {
     const settings = useStore((s) => s.settings);
     const jobs = useStore((s) => s.jobs);
     const look = useLook(settings);
-    const { options, update, setCaptions, setHeadline, setBar, setLogo, undo, redo, canUndo, canRedo, reset, beginGesture, endGesture } = look;
+    const { options, update, setCaptions, setHeadline, setBar, setLogo, setLayout, undo, redo, canUndo, canRedo, reset, beginGesture, endGesture } = look;
 
     const [selected, setSelected] = useState('captions');
     const [loop, setLoop] = useState(true);
@@ -89,10 +92,16 @@ export default function Studio() {
     const shape = aspectList(options.aspect)[0];
     const canvas = CANVASES[shape] ?? CANVASES['9:16'];
     const L = options.look ?? {};
-    const resolved = useMemo(
-        () => resolveCaptions(options.style, shape, L.captions, { anim: options.caption_anim }),
+    // What the Look does to the picture, and where a split puts the seam.
+    const scene = useMemo(
+        () => stageScene(options, canvas),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [options.style, shape, L.captions, options.caption_anim],
+        [options.layout, L.camera, L.effects, L.layout, canvas],
+    );
+    const resolved = useMemo(
+        () => resolveCaptions(options.style, shape, L.captions, { anim: options.caption_anim, seam: scene.seam }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [options.style, shape, L.captions, options.caption_anim, scene.seam],
     );
     // Grouping depends on words, the words-per-line budget and whether the
     // motion is a moving one, not on colours or position.
@@ -160,12 +169,14 @@ export default function Studio() {
                 else if (id === 'logo') setLogo({ size: v });
             },
             flipBar: (pos) => setBar({ pos: pos === 'top' ? 'top' : undefined }),
+            seam: (v) => setLayout(splitPatch(v)),
             reset(id) {
                 const none = { x: undefined, y: undefined };
                 if (id === 'captions') setCaptions(none);
                 else if (id === 'headline') setHeadline(none);
                 else if (id === 'logo') setLogo(none);
                 else if (id === 'bar') setBar({ pos: undefined });
+                else if (id === 'layout') setLayout({ split: undefined });
             },
             // Same as the layer's eye; the logo has none, so its file goes.
             off(id) {
@@ -178,9 +189,9 @@ export default function Studio() {
             begin: beginGesture,
             end: endGesture,
         };
-    }, [setCaptions, setHeadline, setBar, setLogo, update, beginGesture, endGesture]);
+    }, [setCaptions, setHeadline, setBar, setLogo, setLayout, update, beginGesture, endGesture]);
 
-    const onStage = STAGE_LAYERS.includes(selected) ? selected : null;
+    const onStage = STAGE_LAYERS.includes(selected) || (selected === 'layout' && scene.splitOn) ? selected : null;
     const centres = {
         captions: resolved.show ? resolved.center : null,
         headline: headline?.center ?? null,
@@ -189,7 +200,7 @@ export default function Studio() {
     };
     // The key handler reads the latest of these without re-binding.
     const liveRef = useRef({});
-    liveRef.current = { onStage, centres, edit };
+    liveRef.current = { onStage, centres, edit, split: L.layout?.split ?? 0.5 };
 
     const notice = sample.status === 'loading' ? t('Loading the transcript…')
         : sample.status === 'failed' ? t("Couldn't load this transcript; showing stand-in words.")
@@ -208,13 +219,15 @@ export default function Studio() {
         }
         if (e.ctrlKey || e.metaKey) return;
         // Keys for the layer picked on the stage.
-        const { onStage: id, centres: c, edit: act } = liveRef.current;
+        const { onStage: id, centres: c, edit: act, split } = liveRef.current;
         if (id && !inTextField(el) && !ownsArrows(el)) {
             const step = e.shiftKey ? 0.05 : 0.01;
             const arrow = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
             if (arrow) {
                 e.preventDefault();
-                if (id === 'bar') {
+                if (id === 'layout') {
+                    if (arrow[1]) act.seam(r2(clamp(split + arrow[1], 0.3, 0.7)));
+                } else if (id === 'bar') {
                     if (arrow[1]) act.flipBar(arrow[1] < 0 ? 'top' : 'bottom');
                 } else if (c[id]) {
                     act.place(id, r3(clamp(c[id].x + arrow[0], 0, 1)), r3(clamp(c[id].y + arrow[1], 0, 1)));
@@ -226,7 +239,7 @@ export default function Studio() {
                 setSelected(null);
                 return;
             }
-            if (e.key === 'Delete' || e.key === 'Backspace') {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && id !== 'layout') {
                 e.preventDefault();
                 act.off(id);
                 return;
@@ -249,6 +262,7 @@ export default function Studio() {
                 <Layers options={options} selected={selected} onSelect={setSelected} update={update} setCaptions={setCaptions} narrow={narrow} />
                 <Stage
                     canvas={canvas}
+                    scene={scene}
                     resolved={resolved}
                     lines={lines}
                     measure={measure}

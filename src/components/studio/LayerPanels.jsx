@@ -1,12 +1,12 @@
-import { GpuToggle, Stepper, TightenSeg } from '../digiclip/controls';
-import { DurSeg, KindSeg, LAYOUT_OPTS, LEVEL_OPTS, MusicSlot, Seg, inputCls } from '../digiclip/JobOptions';
+import { Stepper, TightenSeg } from '../digiclip/controls';
+import { DurSeg, KindSeg, LEVEL_OPTS, MusicSlot, Seg, inputCls } from '../digiclip/JobOptions';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 import Field from './Field';
 
 /** The controls the Home popover already has for these topics, moved
- *  into the inspector and bound to the same state. (Headline, Progress bar
- *  and Logo have panels of their own in headline/, bar/ and logo/.) */
+ *  into the inspector and bound to the same state. (The other layers have
+ *  panels of their own in headline/, bar/, logo/, camera/, layout/ and effects/.) */
 
 export function MusicPanel({ options, update }) {
     const t = useT();
@@ -21,15 +21,6 @@ export function MusicPanel({ options, update }) {
                 </Field>
             )}
         </div>
-    );
-}
-
-export function LayoutPanel({ options, update }) {
-    const t = useT();
-    return (
-        <Field label={t('Layout')}>
-            <Seg label={t('Layout')} value={options.layout ?? 'single'} options={LAYOUT_OPTS} onChange={(v) => update({ layout: v })} />
-        </Field>
     );
 }
 
@@ -75,20 +66,6 @@ export function ClipsPanel({ options, update }) {
             <Field label={t('Tighten')}>
                 <TightenSeg value={options.tighten} onChange={set('tighten')} compact />
             </Field>
-            <div className="flex items-center gap-2">
-                <GpuToggle checked={!!options.punch} disabled={false} onChange={set('punch')} label={t('Emphasis punch-ins')} />
-                <div className="min-w-0">
-                    <p className="text-[13px] font-medium">{t('Punch-ins')}</p>
-                    <p className="text-[11px] text-muted-foreground">{t('Brief zoom on loud words.')}</p>
-                </div>
-            </div>
-            <div className="flex items-center gap-2">
-                <GpuToggle checked={!!options.merge_flash} disabled={false} onChange={set('merge_flash')} label={t('Merge flash joins')} />
-                <div className="min-w-0">
-                    <p className="text-[13px] font-medium">{t('Merge flashes')}</p>
-                    <p className="text-[11px] text-muted-foreground">{t('White dips between compilation parts.')}</p>
-                </div>
-            </div>
             <Field label={t('Focus')} hint={t('Picks that talk about it rank first.')}>
                 <input
                     type="text"
@@ -102,10 +79,4 @@ export function ClipsPanel({ options, update }) {
             </Field>
         </div>
     );
-}
-
-/** Camera and Effects wait for the engine. */
-export function SoonPanel() {
-    const t = useT();
-    return <p className="text-[12px] text-muted-foreground">{t('Coming with the next engine update.')}</p>;
 }

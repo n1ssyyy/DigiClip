@@ -5,32 +5,11 @@ import { CaptionProbe, HeadlineLayer } from './StageLayers';
 import { BarLayer, LogoLayer } from './StageBarLogo';
 import WordCaption from './WordCaption';
 import StageOverlay from './StageOverlay';
+import StagePicture from './StagePicture';
+import StageSeam from './StageSeam';
 
 const PAD = 24; // breathing room around the frame
 const NOTE = 36; // the line under the frame
-
-/** A soft dark backdrop with a plain abstract figure: what the stage
- *  shows when there is no video to borrow a frame from. */
-function StandIn() {
-    return (
-        <svg aria-hidden viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 size-full">
-            <defs>
-                <linearGradient id="stand-in-bg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#222226" />
-                    <stop offset="1" stopColor="#0c0c0e" />
-                </linearGradient>
-                <radialGradient id="stand-in-glow" cx="0.5" cy="0.38" r="0.55">
-                    <stop offset="0" stopColor="#ffffff" stopOpacity="0.07" />
-                    <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-                </radialGradient>
-            </defs>
-            <rect width="100" height="100" fill="url(#stand-in-bg)" />
-            <rect width="100" height="100" fill="url(#stand-in-glow)" />
-            <circle cx="50" cy="38" r="10" fill="#34343a" />
-            <path d="M26 100 C26 70 36 55 50 55 C64 55 74 70 74 100 Z" fill="#2c2c32" />
-        </svg>
-    );
-}
 
 /** The usual interface zones of vertical video, as faint hatched bands. */
 function SafeAreas({ unit }) {
@@ -53,9 +32,10 @@ const sameSize = (p, n) => p && p.w === n.w && p.h === n.h && p.bh === n.bh;
  * layer (select, move, resize), drawn in screen pixels.
  *
  * `layers` holds the resolved headline, bar and logo (each `null` while it
- * is off); `edit` the actions the pointer layer takes.
+ * is off); `scene` what the Look does to the picture (`stageScene`); `edit`
+ * the actions the pointer layer takes.
  */
-export default function Stage({ canvas, resolved, lines, measure, layers, selected, edit, sizes, logoFile, clock, reduced, sample, videoRef, videoFailed, onVideoError, onLoadedMetadata, safe, notice }) {
+export default function Stage({ canvas, scene, resolved, lines, measure, layers, selected, edit, sizes, logoFile, clock, reduced, sample, videoRef, videoFailed, onVideoError, onLoadedMetadata, safe, notice }) {
     const t = useT();
     const wellRef = useRef(null);
     const [box, setBox] = useState({ w: 0, h: 0 });
@@ -130,24 +110,16 @@ export default function Stage({ canvas, resolved, lines, measure, layers, select
                     <div className="relative shrink-0" style={{ width: cw * s, height: ch * s }}>
                         <div className="absolute inset-0 overflow-hidden rounded-[4px] bg-black shadow-[0_10px_34px_rgb(0_0_0/0.55)] ring-1 ring-white/10">
                             <div className="absolute top-0 left-0" style={{ width: cw, height: ch, transform: `scale(${s})`, transformOrigin: '0 0' }}>
-                                <StandIn />
-                                {sample.job && sample.poster && videoFailed && (
-                                    <img src={sample.poster} alt="" className="absolute inset-0 size-full object-cover" draggable={false} />
-                                )}
-                                {hasVideo && (
-                                    <video
-                                        key={sample.job.id}
-                                        ref={videoRef}
-                                        src={sample.src}
-                                        poster={sample.poster ?? undefined}
-                                        muted
-                                        playsInline
-                                        preload="metadata"
-                                        onError={onVideoError}
-                                        onLoadedMetadata={onLoadedMetadata}
-                                        className="absolute inset-0 size-full object-cover"
-                                    />
-                                )}
+                                <StagePicture
+                                    canvas={canvas}
+                                    scene={scene}
+                                    sample={sample}
+                                    hasVideo={hasVideo}
+                                    videoFailed={videoFailed}
+                                    videoRef={videoRef}
+                                    onVideoError={onVideoError}
+                                    onLoadedMetadata={onLoadedMetadata}
+                                />
                                 {bar && <BarLayer r={bar} clock={clock} len={sample.len} />}
                                 {logo && <LogoLayer r={logo} file={logoFile} />}
                                 <CaptionLayer r={resolved} lines={lines} clock={clock} reduced={reduced} measure={measure} />
@@ -157,6 +129,20 @@ export default function Stage({ canvas, resolved, lines, measure, layers, select
                                 {safe && tall && <SafeAreas unit={1 / s} />}
                             </div>
                         </div>
+                        {scene.splitOn && (
+                            <StageSeam
+                                s={s}
+                                cw={cw}
+                                ch={ch}
+                                split={scene.split}
+                                selected={selected === 'layout'}
+                                onSelect={edit.select}
+                                onSplit={edit.seam}
+                                onReset={() => edit.reset('layout')}
+                                onBegin={edit.begin}
+                                onEnd={edit.end}
+                            />
+                        )}
                         <StageOverlay
                             s={s}
                             cw={cw}
