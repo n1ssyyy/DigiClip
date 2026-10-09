@@ -5,7 +5,7 @@ import Findings from '../components/health/Findings';
 import Footer from '../components/health/Footer';
 import Status, { DetailsSkeleton } from '../components/health/Status';
 import { Swap } from '../components/digiclip/Skeleton';
-import { healthView } from '../lib/healthView';
+import { healthView, platformOf } from '../lib/healthView';
 import { refreshHealth, useStore } from '../lib/socket';
 import { useT } from '../lib/i18n';
 
@@ -19,6 +19,7 @@ export default function Health() {
     const [updatedAt, setUpdatedAt] = useState(Date.now());
     const [, setTick] = useState(0);
     const t = useT();
+    const platform = useMemo(() => platformOf(typeof navigator === 'undefined' ? '' : navigator.userAgent), []);
 
     const refresh = () => {
         refreshHealth().then(() => setUpdatedAt(Date.now())).catch(() => {});
@@ -51,8 +52,8 @@ export default function Health() {
     }, [conn]);
 
     const view = useMemo(
-        () => healthView({ health, conn, settings, models }, t),
-        [health, conn, settings, models, t],
+        () => healthView({ health, conn, settings, models, platform }, t),
+        [health, conn, settings, models, platform, t],
     );
 
     return (

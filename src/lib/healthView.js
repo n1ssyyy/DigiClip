@@ -12,9 +12,34 @@ const plain = (s, vars) => fill(s, vars);
 
 export const DEFAULT_STT = 'base.en';
 
-/** @param {{health: object|null, conn: string, settings: object|null, models: object}} state
+/** 'windows' | 'macos' | 'linux' from a browser user-agent string, else ''.
+ *  The app's webview reports the operating system it runs on. */
+export function platformOf(ua) {
+    const s = String(ua ?? '');
+    if (/Windows/i.test(s)) return 'windows';
+    if (/Macintosh|Mac OS X/i.test(s)) return 'macos';
+    if (/Linux|X11/i.test(s)) return 'linux';
+    return '';
+}
+
+// Why ffmpeg is missing differs by system: Windows gets it downloaded by the
+// engine on first need, macOS and Linux never do (the creator installs it).
+function ffmpegMissing(platform, t) {
+    if (platform === 'windows') {
+        return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. It downloads ffmpeg by itself the next time it needs it (about 80 MB, so it needs an internet connection).");
+    }
+    if (platform === 'macos') {
+        return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. On a Mac it isn't downloaded for you: install it with Homebrew (brew install ffmpeg).");
+    }
+    if (platform === 'linux') {
+        return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. On Linux it isn't downloaded for you: install it with your package manager (for example sudo apt install ffmpeg or sudo dnf install ffmpeg).");
+    }
+    return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. On Windows DigiClip downloads it by itself the next time it needs it (about 80 MB, needs an internet connection). On macOS and Linux you install it yourself: brew install ffmpeg, sudo apt install ffmpeg or sudo dnf install ffmpeg.");
+}
+
+/** @param {{health: object|null, conn: string, settings: object|null, models: object, platform?: string}} state
  *  @param {(text: string, vars?: object) => string} [t] */
-export function healthView({ health, conn, settings, models } = {}, t = plain) {
+export function healthView({ health, conn, settings, models, platform = '' } = {}, t = plain) {
     const problems = [];
     const notes = [];
     const facts = [];
@@ -38,7 +63,12 @@ export function healthView({ health, conn, settings, models } = {}, t = plain) {
     if (health.ffmpeg_ok === false) {
         problems.push({
             id: 'ffmpeg',
-            text: t("ffmpeg wasn't found, so DigiClip can't cut or render clips. Reinstalling DigiClip brings it back."),
+            text: ffmpegMissing(platform, t),
+        });
+    } else if (health.ffmpeg_ok === true && health.ffmpeg_libass === false) {
+        problems.push({
+            id: 'libass',
+            text: t("This ffmpeg was built without libass, so DigiClip can't burn captions into videos. Install an ffmpeg build that includes libass."),
         });
     }
     if (!whisper && health.whisper_cli != null) {
@@ -74,7 +104,7 @@ export function healthView({ health, conn, settings, models } = {}, t = plain) {
         facts.push({
             id: 'ffmpeg',
             label: 'ffmpeg',
-            value: health.ffmpeg_ok == null ? '' : health.ffmpeg_libass ? t('with libass') : t('without libass'),
+            value: health.ffmpeg_ok && health.ffmpeg_libass === true ? t('with libass') : '',
         });
     }
     if (health.encoder) facts.push({ id: 'encoder', label: t('Encoder'), value: String(health.encoder) });

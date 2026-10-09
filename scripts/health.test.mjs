@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { healthView } from '../src/lib/healthView.js';
+import { healthView, platformOf } from '../src/lib/healthView.js';
 import clips from '../src/i18n/clips.js';
 import home from '../src/i18n/home.js';
 import mcp from '../src/i18n/mcp.js';
@@ -37,10 +37,45 @@ test('health: all well is one line and plain facts, nothing marked', () => {
     for (const f of v.facts) assert.deepEqual(Object.keys(f).sort(), ['id', 'label', 'value']);
 });
 
-test('health: ffmpeg without libass is a fact, not a problem', () => {
+test('health: ffmpeg without libass is a problem that says what it means and what to do', () => {
     const v = healthView(state({ health: { ...GOOD, ffmpeg_libass: false } }));
-    assert.equal(v.overall, 'ok');
-    assert.equal(fact(v, 'ffmpeg').value, 'without libass');
+    assert.equal(v.overall, 'problem');
+    assert.deepEqual(ids(v.problems), ['libass']);
+    assert.match(v.problems[0].text, /burn captions/);
+    assert.match(v.problems[0].text, /build that includes libass/);
+    assert.doesNotMatch(v.problems[0].text, /Reinstall|remove|delete/i);
+    assert.equal(fact(v, 'ffmpeg'), undefined);
+    // Unknown libass (older engine) judges nothing; missing ffmpeg is the ffmpeg problem only.
+    assert.equal(healthView(state({ health: { ...GOOD, ffmpeg_libass: undefined } })).problems.length, 0);
+    assert.deepEqual(ids(healthView(state({ health: { ...GOOD, ffmpeg_ok: false, ffmpeg_libass: false } })).problems), ['ffmpeg']);
+    assert.deepEqual(ids(healthView(state({ health: { ...GOOD, ffmpeg_ok: null, ffmpeg_libass: false } })).problems), []);
+});
+
+test('health: missing ffmpeg says what is true for the system, never "reinstall"', () => {
+    const text = (platform) => healthView(state({ platform, health: { ...GOOD, ffmpeg_ok: false } })).problems[0].text;
+    assert.match(text('windows'), /downloads ffmpeg by itself.*80 MB.*internet/);
+    assert.doesNotMatch(text('windows'), /brew|apt/);
+    assert.match(text('macos'), /Homebrew \(brew install ffmpeg\)/);
+    assert.doesNotMatch(text('macos'), /80 MB|apt/);
+    assert.match(text('linux'), /apt install ffmpeg.*dnf install ffmpeg/);
+    assert.doesNotMatch(text('linux'), /brew|80 MB/);
+    for (const p of [undefined, '', 'plan9']) {
+        assert.match(text(p), /On Windows.*80 MB.*On macOS and Linux.*brew install ffmpeg.*apt install ffmpeg.*dnf install ffmpeg/);
+    }
+    for (const p of ['windows', 'macos', 'linux', '']) assert.doesNotMatch(text(p), /einstall/i);
+});
+
+test('health: the speech-to-text advice still says reinstall (it ships with the app)', () => {
+    const v = healthView(state({ health: { ...GOOD, whisper_cli: false, whisper_vulkan: false } }));
+    assert.match(v.problems[0].text, /Reinstalling DigiClip brings it back/);
+});
+
+test('health: the platform comes from the webview user agent', () => {
+    assert.equal(platformOf('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Edg/130.0'), 'windows');
+    assert.equal(platformOf('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15'), 'macos');
+    assert.equal(platformOf('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15'), 'linux');
+    assert.equal(platformOf(''), '');
+    assert.equal(platformOf(undefined), '');
 });
 
 test('health: before the first answer it is checking, with nothing to show', () => {
@@ -141,6 +176,7 @@ test('health: every string it shows is translated', () => {
     healthView(state({ conn: 'retry', health: { ...GOOD, ffmpeg_ok: false, whisper_cli: false, whisper_vulkan: false, gpu_available: false }, models: { 'base.en': { downloaded: false } } }), t);
     healthView(state({ models: { 'base.en': { downloading: true } } }), t);
     healthView(state({ health: { ...GOOD, ffmpeg_libass: false } }), t);
+    for (const platform of ['windows', 'macos', 'linux', '']) healthView(state({ platform, health: { ...GOOD, ffmpeg_ok: false } }), t);
     healthView(state({ health: { ...GOOD, gpu_reason: '', whisper_vulkan: false } }), t);
     healthView(state({ health: { ...GOOD, gpu_available: false, gpu_reason: '' } }), t);
     for (const l of LANGS) {
