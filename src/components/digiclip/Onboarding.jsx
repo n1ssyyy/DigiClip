@@ -99,11 +99,12 @@ export default function Onboarding({ username, open, leaving, onClose }) {
         return () => ro.disconnect();
     }, []);
 
-    // Focus lives in the card: on open, and again when a step swaps the button
-    // that had it.
+    // Focus lives in the card: on open (once it is placed: a hidden card
+    // cannot take focus), and again when a step swaps the button that had it.
+    const placed = place != null;
     useEffect(() => {
         if (card.current && !card.current.contains(document.activeElement)) primary.current?.focus({ preventScroll: true });
-    }, [step, open]);
+    }, [step, open, placed]);
 
     function giveFocusBack() {
         const el = origin.current;
