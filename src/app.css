@@ -469,64 +469,7 @@ header [data-no-drag] {
     }
 }
 
-/* Home project viewer: incoming project slides in from the travel direction
-   (down the list = rises from below, up the list = drops from above). */
-@keyframes proj-enter-down {
-    from {
-        transform: translateY(28px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-@keyframes proj-enter-up {
-    from {
-        transform: translateY(-28px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
-}
-@media (prefers-reduced-motion: no-preference) {
-    .proj-enter-down {
-        animation: proj-enter-down 320ms cubic-bezier(0.22, 1, 0.36, 1);
-    }
-    .proj-enter-up {
-        animation: proj-enter-up 320ms cubic-bezier(0.22, 1, 0.36, 1);
-    }
-    .proj-leave-down {
-        animation: proj-leave-down 180ms ease-in forwards;
-    }
-    .proj-leave-up {
-        animation: proj-leave-up 180ms ease-in forwards;
-    }
-}
-@keyframes proj-leave-down {
-    from {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateY(-18px);
-        opacity: 0;
-    }
-}
-@keyframes proj-leave-up {
-    from {
-        transform: translateY(0);
-        opacity: 1;
-    }
-    to {
-        transform: translateY(18px);
-        opacity: 0;
-    }
-}
-
-/* Queue row enter: new rows drop in from above (slide down).
+/* List row enter: new rows drop in from above (slide down).
    Distinct from .rise (up from below, used by tiles/panels). */
 @keyframes queue-in {
     from {
@@ -544,42 +487,7 @@ header [data-no-drag] {
     }
 }
 
-/* Queue row exit: top rows slide up out, bottom rows slide down out,
-   middle rows fade in place. Surviving rows ease shut via the list's
-   own layout (no FLIP needed — space-y collapses with a transition on
-   the exiting row's margin/height). ExitBeat holds 240ms. */
-@keyframes row-out-top {
-    to {
-        transform: translateY(-16px);
-        opacity: 0;
-    }
-}
-@keyframes row-out-bottom {
-    to {
-        transform: translateY(16px);
-        opacity: 0;
-    }
-}
-@keyframes row-out-fade {
-    to {
-        opacity: 0;
-    }
-}
-@media (prefers-reduced-motion: no-preference) {
-    .row-out-top {
-        animation: row-out-top 220ms ease-in forwards;
-    }
-    .row-out-bottom {
-        animation: row-out-bottom 220ms ease-in forwards;
-    }
-    .row-out-fade {
-        animation: row-out-fade 200ms ease-in forwards;
-    }
-}
-
-/* Tile mount: new clips rise into the grid (FLIP-lite: mount-only, so
-   polls never replay it). The source strip glides to its new cell via
-   the grid's own transition since it never remounts. */
+/* Tile mount: clips rise into the grid (mount-only, so polls never replay it). */
 @keyframes tile-in {
     from {
         transform: translateY(14px) scale(0.97);
@@ -590,23 +498,9 @@ header [data-no-drag] {
         opacity: 1;
     }
 }
-/* Mirror of tile-in for the pager coming back up: drops in from above. */
-@keyframes tile-in-up {
-    from {
-        transform: translateY(-14px) scale(0.97);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0) scale(1);
-        opacity: 1;
-    }
-}
 @media (prefers-reduced-motion: no-preference) {
     .tile-in {
         animation: tile-in 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-    }
-    .tile-in-up {
-        animation: tile-in-up 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
     }
 }
 

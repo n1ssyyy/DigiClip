@@ -1,1662 +1,129 @@
-import { useEffect, useRef, useState } from 'react';
-import { Button } from '../components/ui/button';
-import { UploadCloud, FileVideo, X, RotateCcw, Film, Download, Loader2, Merge, FileText, Trash2, ChevronLeft, ChevronRight, Pencil, ScrollText, Link2 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import { cn, HOT_EDGE } from '../lib/utils';
-import {
-    artUrl, srcUrl, startJob, startJobUrl, removeJob, retryJob,
-    fetchKit, downloadArt, downloadText, flashMessage, useStore, clearFocus,
-} from '../lib/socket';
-import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../lib/native';
-import Tip from '../components/digiclip/Tooltip';
-import { FadeImg } from '../components/digiclip/Skeleton';
-import LookLine from '../components/digiclip/LookLine';
-import { toEngine, useJobOptions } from '../lib/look';
-import ClipInsights, { overall, scoreTone } from '../components/digiclip/ClipInsights';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Card } from '../components/ui/card';
+import { artUrl, srcUrl, removeJob, useStore, clearFocus } from '../lib/socket';
 import EditClipDialog from '../components/digiclip/EditClipDialog';
 import TranscriptDialog from '../components/digiclip/TranscriptDialog';
+import AddVideo from '../components/home/AddVideo';
+import ClipGrid from '../components/home/ClipGrid';
+import { ClearDialog, RemoveDialog } from '../components/home/ConfirmDialogs';
+import ExitBeat from '../components/home/ExitBeat';
+import PlayerDialog from '../components/home/PlayerDialog';
+import useAddVideo from '../components/home/useAddVideo';
+import VideoHeader from '../components/home/VideoHeader';
+import VideoList from '../components/home/VideoList';
+import WorkingPanel from '../components/home/WorkingPanel';
+import { fmtDur, listModel, neighbour, newcomer, phaseOf } from '../lib/homeList';
 import { useT } from '../lib/i18n';
 
-const VIDEO_RE = new RegExp(`\\.(${VIDEO_EXT.join('|')})$`, 'i');
+const SEEN_KEY = 'digiclip.seenProjects';
 
-// Pipeline steps shown as dots joined by lines in the queue.
-const STEPS = [
-    { key: 'upload', label: 'Upload' },
-    { key: 'audio', label: 'Audio' },
-    { key: 'script', label: 'Script' },
-    { key: 'clips', label: 'Clips' },
-];
-
-// Maps a job status to { done, active, failed, paused } step indexes.
-function stepState(status) {
-    switch (status) {
-        case 'queued':
-        case 'extracting':
-            return { done: 1, active: 1 };
-        case 'transcribing':
-            return { done: 2, active: 2 };
-        case 'analyzing':
-            return { done: 3, active: 3 };
-        case 'clips_ready':
-        case 'done':
-            return { done: 4, active: null };
-        case 'cancelled':
-            return { done: 1, active: null, paused: true };
-        case 'failed':
-            return { done: 1, active: null, failed: true };
-        // Link jobs fetch the source first: the Upload step is live.
-        case 'downloading':
-        default:
-            return { done: 0, active: 0 };
-    }
-}
-
-const LIVE_LABEL = {
-    downloading: 'Downloading', queued: 'Queued', extracting: 'Extracting audio',
-    transcribing: 'Transcribing', analyzing: 'Picking clips',
-    clips_ready: 'Ready', done: 'Ready', cancelled: 'Cancelled', failed: 'Failed',
-};
-
-// Status signal, one language everywhere: green done, orange working,
-// red broken. Colors crossfade (background-color + color transitions)
-// so status changes melt instead of snapping.
-function statusDot(status) {
-    if (status === 'failed') return 'bg-red-500';
-    if (status === 'clips_ready' || status === 'done') return 'bg-emerald-500';
-    if (status === 'cancelled') return 'bg-orange-500';
-    return 'animate-pulse bg-orange-500';
-}
-
-// Scroller names read the same signal as the pill: white done,
-// orange working, red broken.
-function statusText(status) {
-    if (status === 'failed') return 'text-red-500';
-    if (status === 'clips_ready' || status === 'done') return 'text-white';
-    return 'text-orange-500';
-}
-
-/** Crossfading label: old text fades out, new text fades in, and the
- *  wrapper width animates so the pill breathes with its content. */
-function SwapLabel({ text, className }) {
-    const [shown, setShown] = useState(text);
-    const [phase, setPhase] = useState('in');
-    const timer = useRef(null);
-
-    useEffect(() => {
-        if (text === shown) return;
-        setPhase('out');
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => {
-            setShown(text);
-            setPhase('in');
-        }, 140);
-        return () => { if (timer.current) clearTimeout(timer.current); };
-    }, [text, shown]);
-    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-    return (
-        <span
-            className={cn(
-                'inline-block motion-safe:transition-all motion-safe:duration-150',
-                phase === 'out' ? 'opacity-0' : 'opacity-100',
-                className,
-            )}
-        >
-            {shown}
-        </span>
-    );
-}
-
-function fmtDur(s) {
-    if (s == null) return null;
-    const m = Math.floor(s / 60);
-    return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-}
-
-function fmtRange(a, b) {
-    if (a == null || b == null) return null;
-    return `${fmtDur(a)} → ${fmtDur(b)}`;
-}
-
-/** Dots-and-lines pipeline stepper for one queued video. Wears the status
- *  color end to end: green done, orange working, red broken. */
-const TONES = {
-    green: { dot: 'bg-emerald-500', line: 'bg-emerald-500/60', ring: 'ring-emerald-500/20' },
-    orange: { dot: 'bg-orange-500', line: 'bg-orange-500/60', ring: 'ring-orange-500/20' },
-    red: { dot: 'bg-red-500', line: 'bg-red-500/60', ring: 'ring-red-500/20' },
-};
-
-function Stepper({ status }) {
-    const t = useT();
-    const st = stepState(status);
-    const tone = TONES[st.failed ? 'red' : status === 'clips_ready' || status === 'done' ? 'green' : 'orange'];
-    const current = status === 'downloading' ? 'Downloading' : st.active != null ? STEPS[st.active]?.label : (LIVE_LABEL[status] ?? 'Done');
-    return (
-        <div className="flex items-center" aria-label={t('Pipeline: {step}', { step: current ? t(current) : current })}>
-            {STEPS.map((s, i) => {
-                const done = i < st.done;
-                const active = i === st.active;
-                const failedDot = st.failed && i === 1;
-                return (
-                    <div key={s.key} className={cn('flex items-center', i < STEPS.length - 1 && 'flex-1')}>
-                        <Tip label={t(s.label)} side="top" className="shrink-0">
-                            <span
-                                className={cn(
-                                'size-2.5 shrink-0 rounded-full motion-safe:transition-colors motion-safe:duration-500',
-                                done && !failedDot && tone.dot,
-                                active && cn('animate-pulse ring-4', tone.dot, tone.ring),
-                                failedDot && cn(tone.dot, 'ring-4', tone.ring),
-                                !done && !active && !failedDot && 'bg-border',
-                                st.paused && !done && 'bg-orange-500/50',
-                            )}
-                        />
-                        </Tip>
-                        {i < STEPS.length - 1 && (
-                            <span className={cn('relative mx-1 h-0.5 flex-1 overflow-hidden rounded-full bg-border')} aria-hidden>
-                                <span className={cn(
-                                    'absolute inset-0 origin-left rounded-full motion-safe:transition-transform motion-safe:duration-700 motion-safe:ease-out',
-                                    tone.line,
-                                    i + 1 <= st.done ? 'scale-x-100' : 'scale-x-0',
-                                )} />
-                            </span>
-                        )}
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
-/** Cancel confirmation: replaces window.confirm with an in-app dialog.
- *  Overlay fades (fade/fade-out), box pops (pop/pop-out) — the outs use
- *  dedicated keyframes so Chromium restarts the animation on close.
- *  Pinned below the window header (top-[var(--chrome)]) with a
- *  sidebar-width left offset: the header stays sharp/clickable, the box
- *  centers in the content page, not the viewport. Held mounted by the
- *  parent's ExitBeat (ms=200). */
-function CancelDialog({ project, onClose, leaving }) {
-    const t = useT();
-    const keepRef = useRef(null);
-
-    useEffect(() => {
-        keepRef.current?.focus();
-        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    function confirm() {
-        if (project?.id) removeJob(project.id);
-        onClose();
-    }
-
-    return (
-        <div
-            className={cn('fixed inset-x-0 bottom-0 top-[var(--chrome)] z-50 flex items-center justify-center bg-black/60 pl-[var(--chrome)] backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
-            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-            <div
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="cancel-title"
-                aria-describedby="cancel-desc"
-                className={cn('w-[min(400px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl', leaving ? 'pop-out' : 'pop')}
-            >
-                <h2 id="cancel-title" className="text-[13px] font-semibold">{t('Cancel and remove?')}</h2>
-                <p id="cancel-desc" className="mt-1.5 text-[13px] text-muted-foreground">
-                    <span className="font-medium text-foreground">{project.name}</span>
-                    {' '}{t('stops processing and its clips are deleted. Your source file stays put. This can\'t be undone.')}
-                </p>
-                <div className="mt-4 flex justify-end gap-2">
-                    <Button ref={keepRef} variant="outline" size="sm" onClick={onClose}>
-                        {t('Keep video')}
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={confirm}>
-                        {t('Remove')}
-                    </Button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/** Bulk-remove confirmation: same overlay language as the cancel dialog
- *  (overlay fade/fade-out, box pop/pop-out; pinned below the header,
- *  centered in the content page; ExitBeat-held exit). Only finished jobs
- *  (done, failed, cancelled) leave; running work is never touched. */
-function ClearDialog({ count, onClose, onConfirm, leaving }) {
-    const t = useT();
-    const keepRef = useRef(null);
-
-    useEffect(() => {
-        keepRef.current?.focus();
-        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    return (
-        <div
-            className={cn('fixed inset-x-0 bottom-0 top-[var(--chrome)] z-50 flex items-center justify-center bg-black/60 pl-[var(--chrome)] backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
-            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-            <div
-                role="alertdialog"
-                aria-modal="true"
-                aria-labelledby="clear-title"
-                aria-describedby="clear-desc"
-                className={cn('w-[min(400px,calc(100vw-3rem))] rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-5 shadow-2xl', leaving ? 'pop-out' : 'pop')}
-            >
-                <h2 id="clear-title" className="text-[13px] font-semibold">{t('Remove finished?')}</h2>
-                <p id="clear-desc" className="mt-1.5 text-[13px] text-muted-foreground">
-                    {count === 1 ? t('{n} finished job leaves the queue.', { n: count }) : t('{n} finished jobs leave the queue.', { n: count })}
-                    {' '}{t('Running work stays put, and source files are never touched. This can\'t be undone.')}
-                </p>
-                <div className="mt-4 flex justify-end gap-2">
-                    <Button ref={keepRef} variant="outline" size="sm" onClick={onClose}>
-                        {t('Keep')}
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={onConfirm}>
-                        {t('Remove')}
-                    </Button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/** One queue row: top half (name left, status center, buttons right),
- *  bottom half (thicker live stepper). Enters by dropping in from above
- *  (.queue-in); exits via `leaving` (slide toward the nearest edge when
- *  the row sits at the top/bottom of the list, plain fade for middle
- *  rows), held mounted by the parent's ExitBeat. */
-/** Short tags for a job: who started it when it wasn't you (an AI app
- *  over MCP, the watch folder), its aspect when not the default 9:16,
- *  and the focus topic it was ranked for. */
-function jobTags(job, t) {
-    const tags = [];
-    const options = job?.options;
-    if (job?.origin === 'watch') tags.push(t('watch folder'));
-    else if (job?.origin?.startsWith('mcp:')) tags.push(t('via {app}', { app: job.origin.slice(4) || 'AI' }));
-    if (options?.aspect && options.aspect !== '9:16') tags.push(options.aspect);
-    if (options?.focus) tags.push(t('focus: {topic}', { topic: options.focus }));
-    return tags;
-}
-
-function QueueRow({ project, onCancel, leaving, edge }) {
-    const t = useT();
-    const failed = project.status === 'failed';
-    const cancelled = project.status === 'cancelled';
-    const retryable = failed || cancelled;
-    const label = LIVE_LABEL[project.status] ? t(LIVE_LABEL[project.status]) : project.status;
-    const merged = project.options?.merge != null;
-
-    return (
-        <div className={cn(
-            'flex items-center gap-2 overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-card p-1.5',
-            !leaving && 'queue-in',
-            leaving && edge === 'top' && 'row-out-top',
-            leaving && edge === 'bottom' && 'row-out-bottom',
-            leaving && !edge && 'row-out-fade',
-        )}>
-            <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-md bg-muted">
-                <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
-                <FadeImg src={artUrl(project.id, 'poster.jpg')} />
-                <span className={cn('absolute top-1.5 left-1.5 size-2 rounded-full ring-2 ring-black/50', statusDot(project.status))} aria-hidden />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col justify-between gap-1 self-stretch overflow-hidden py-0.5">
-                <div className="flex items-center gap-2">
-                    <Tip label={project.name} side="top" className="min-w-0">
-                        <p className="min-w-0 shrink truncate text-[13px] font-medium">
-                            {project.name}
-                            {merged && <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">{t('merged')}</span>}
-                            {jobTags(project, t).map((tag) => (
-                                <span key={tag} className="ml-1.5 font-mono text-[10px] text-muted-foreground">{tag}</span>
-                            ))}
-                        </p>
-                    </Tip>
-                    <span className="flex flex-1 items-center justify-center">
-                        <Tip label={failed ? project.error : null} side="top" wrap>
-                        <Badge variant="secondary" className={cn(
-                            'whitespace-nowrap motion-safe:transition-all motion-safe:duration-500',
-                            failed ? 'text-red-500' : project.status === 'clips_ready' || project.status === 'done' ? 'text-emerald-500' : 'text-orange-500',
-                        )}
-                        >
-                            <SwapLabel text={label} />
-                        </Badge>
-                        </Tip>
-                    </span>
-                    <span className="flex shrink-0 items-center justify-end gap-0.5">
-                        {retryable && (
-                            <Tip label={t('Retry')} side="top">
-                                <button
-                                    type="button" aria-label={t('Retry {name}', { name: project.name })}
-                                    onClick={() => retryJob(project.id)}
-                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                                >
-                                    <RotateCcw className="size-4" />
-                                </button>
-                            </Tip>
-                        )}
-                        <Tip label={t('Cancel and remove')} side="top">
-                            <button
-                                type="button" aria-label={t('Cancel {name}', { name: project.name })}
-                                onClick={() => onCancel(project)}
-                                className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            >
-                                <X className="size-4" />
-                            </button>
-                        </Tip>
-                    </span>
-                </div>
-                <div className="rounded-md border bg-muted/40 px-2 py-1">
-                    <Stepper status={project.status} />
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/** Delayed unmount: keeps children mounted for the exit beat after
- *  `open` flips false, passing `leaving` down so the dialog can play
- *  its exit (overlay fade-out + box pop-out). Renders immediately when
- *  `open` flips true so the enter animation starts on the same commit,
- *  no one-frame flash of nothing. `ms` must cover the exit animation
- *  (dialogs 180ms -> hold 200ms, rows 240ms). */
-function ExitBeat({ open, ms = 200, children }) {
-    const [held, setHeld] = useState(open);
-    const [leaving, setLeaving] = useState(false);
-    const timer = useRef(null);
-    const heldRef = useRef(null);
-    if (open) heldRef.current = children;
-
-    useEffect(() => {
-        if (timer.current) clearTimeout(timer.current);
-        if (open) {
-            setHeld(true);
-            setLeaving(false);
-        } else if (held) {
-            setLeaving(true);
-            timer.current = setTimeout(() => {
-                setHeld(false);
-                setLeaving(false);
-            }, ms);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open]);
-    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-    // Render on the same commit `open` turns true (held may still be
-    // false until the effect above runs) so the fade/pop enter starts
-    // instantly; keep rendering while held during the exit beat.
-    if (!held && !open) return null;
-    const kids = open ? children : heldRef.current;
-    if (!kids) return null;
-    const only = Array.isArray(kids) ? kids[0] : kids;
-    if (only && typeof only === 'object' && 'props' in only) {
-        return { ...only, props: { ...only.props, leaving } };
-    }
-    return kids;
-}
-
-/** One queue row with a graceful delete: when the row's id disappears
- *  from `ids` (server confirmed the delete over the socket), the row plays its
- *  exit (slide toward the nearest edge for top/bottom rows, fade for
- *  middle rows) while the surviving rows ease into place, then unmounts.
- *  New rows drop in from above with .queue-in. */
-function QueueExitBeat({ id, ids, project, onCancel }) {
-    const [gone, setGone] = useState(false);
-    const [leaving, setLeaving] = useState(false);
-    const [edge, setEdge] = useState(null);
-    const timer = useRef(null);
-    const ref = useRef(null);
-
-    useEffect(() => {
-        if (ids.includes(id)) return;
-        setLeaving(true);
-        timer.current = setTimeout(() => setGone(true), 240);
-        return () => { if (timer.current) clearTimeout(timer.current); };
-    }, [ids, id]);
-    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-    // Edge from live position: measure once when the exit starts.
-    useEffect(() => {
-        if (!leaving || !ref.current) return;
+/** Videos whose clips have been on screen (a ready one not yet opened wears a
+ *  green dot in the list). Local to this machine, not engine state. */
+function useSeen(shownId, shownReady) {
+    const [seen, setSeen] = useState(() => {
         try {
-            const list = ref.current.closest('[data-queue-list]');
-            if (!list) return;
-            const rows = [...list.querySelectorAll('[data-queue-row]')];
-            const at = rows.indexOf(ref.current);
-            if (at === 0) setEdge('top');
-            else if (at === rows.length - 1) setEdge('bottom');
-            else setEdge(null);
-        } catch {
-        }
-    }, [leaving]);
-
-    if (gone) return null;
-    return (
-        <div ref={ref} data-queue-row>
-            <QueueRow project={project} onCancel={onCancel} leaving={leaving} edge={edge} />
-        </div>
-    );
-}
-
-/** One generated clip: title, time range, and its render state, a download
- *  button the moment the video file exists. */
-/** In-app video player: same overlay language as the cancel dialog
- *  (overlay fade/fade-out, box pop/pop-out; pinned below the header,
- *  centered in the content page). The <video> element is mounted once and only its src/poster swap per selection: remounting
- *  mid-load restarted buffering from byte zero, which read as a
- *  flash/cutout. State also resets only when the src actually changes,
- *  so background store updates can't yank a playing video back to its
- *  skeleton. */
-/** Clip shape from its file name (`clip-01-4x5.mp4`); 9:16 when untagged. */
-function clipShape(mp4) {
-    const m = /-(\d+)x(\d+)\.mp4$/i.exec(mp4 ?? '');
-    const w = m ? +m[1] : 9;
-    const h = m ? +m[2] : 16;
-    return { w, h, tag: `${w}x${h}` };
-}
-
-function PlayerDialog({ title, sub, src, poster, shape, download, kit, clip, jobId, onEdit, onClose, leaving }) {
-    const t = useT();
-    const videoRef = useRef(null);
-    const [waiting, setWaiting] = useState(true);
-    const [ready, setReady] = useState(false);
-    const [failed, setFailed] = useState(false);
-    const [kitText, setKitText] = useState(null);
-    const srcRef = useRef(src);
-
-    // New selection: show the loader behind the incoming video, keep the
-    // old frame visible underneath until the new one can play.
-    if (srcRef.current !== src) {
-        srcRef.current = src;
-        setWaiting(true);
-        setFailed(false);
-        setKitText(null);
-    }
-
-    useEffect(() => {
-        if (!kit) return;
-        let dead = false;
-        fetchKit(kit.job, kit.rank).then((text) => { if (!dead) setKitText(text); }).catch(() => {});
-        return () => { dead = true; };
-    }, [kit]);
-
-    useEffect(() => {
-        const el = videoRef.current;
-        if (!el) return;
-        if (el.getAttribute('src') !== src) el.setAttribute('src', src);
-        el.load();
-    }, [src]);
-
-    useEffect(() => {
-        const el = videoRef.current;
-        if (!el) return;
-        if (poster != null) el.setAttribute('poster', poster);
-        else el.removeAttribute('poster');
-    }, [poster]);
-
-    useEffect(() => {
-        const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-        document.addEventListener('keydown', onKey);
-        return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
-
-    return (
-        <div
-            className={cn('fixed inset-x-0 bottom-0 top-[var(--chrome)] z-50 flex items-center justify-center bg-black/70 p-4 pl-[calc(var(--chrome)_+_1rem)] backdrop-blur-sm', leaving ? 'fade-out' : 'fade')}
-            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
-            <div
-                role="dialog"
-                aria-modal="true"
-                aria-label={title}
-                className={cn(
-                    'rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] p-3 shadow-2xl',
-                    leaving ? 'pop-out' : 'pop',
-                )}
-                // Generated clips size the box to their own shape (a 9:16
-                // clip gets the same 340px portrait box as always, 1:1 and
-                // 4:5 grow wider) so the video lands without bars. Source
-                // playback stays a wide landscape box.
-                // Clips carry a 272px insights column beside the video.
-                style={{ width: shape ? `min(${Math.min(760, Math.round(562 * shape.w / shape.h) + 24) + (clip ? 272 : 0)}px, 100%)` : 'min(760px, 100%)' }}
-            >
-                <div className="flex items-center gap-2 pb-2">
-                    <p className="min-w-0 flex-1 truncate text-[13px] font-semibold">{title}</p>
-                    {sub && <p className="shrink-0 font-mono text-[10px] text-muted-foreground">{sub}</p>}
-                    {clip && onEdit && (
-                        <Tip label={t('Edit and re-render')} side="top">
-                            <button
-                                type="button" aria-label={t('Edit clip')}
-                                onClick={onEdit}
-                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                                <Pencil className="size-4" aria-hidden />
-                            </button>
-                        </Tip>
-                    )}
-                    {kitText && kit && (
-                        <Tip label={t('Upload kit (title + hashtags)')} side="top">
-                            <button
-                                type="button" aria-label={t('Download upload kit')}
-                                onClick={() => downloadText(kitText, kit.filename ?? 'upload-kit.txt').catch((e) => flashMessage(t('Couldn\'t save kit: {error}', { error: e?.message ?? e })))}
-                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                                <FileText className="size-4" aria-hidden />
-                            </button>
-                        </Tip>
-                    )}
-                    {download && (
-                        <Tip label={t('Download video')} side="top">
-                            <button
-                                type="button" aria-label={t('Download video')}
-                                onClick={() => downloadArt(download.url, download.filename).catch((e) => flashMessage(t('Couldn\'t save video: {error}', { error: e?.message ?? e })))}
-                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                            >
-                                <Download className="size-4" aria-hidden />
-                            </button>
-                        </Tip>
-                    )}
-                    <button
-                        type="button" aria-label={t('Close player')} autoFocus
-                        onClick={onClose}
-                        className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                    >
-                        <X className="size-4" aria-hidden />
-                    </button>
-                </div>
-                <div className={cn(clip && 'flex items-start gap-3')}>
-                <div className={cn('relative', clip && 'min-w-0 flex-1')}>
-                    {!ready && <span aria-hidden className="skel absolute inset-0 rounded-md" />}
-                    {waiting && !failed && (
-                        <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" aria-hidden>
-                            <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                        </span>
-                    )}
-                    {failed && (
-                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-md bg-black/60 p-4 text-center">
-                            <p className="text-[13px] font-medium text-white">{t('Couldn\'t load this video')}</p>
-                            <button
-                                type="button"
-                                onClick={() => { setFailed(false); setWaiting(true); videoRef.current?.load(); }}
-                                className="rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-white/20"
-                            >
-                                {t('Retry')}
-                            </button>
-                        </div>
-                    )}
-                    <div
-                        className={cn(
-                            'overflow-hidden rounded bg-black',
-                            // The frame owns the shape: clips get a full-width
-                            // box at their own aspect so the video fills the
-                            // dialog edge to edge; the source keeps 16:9.
-                            shape ? 'mx-auto max-h-[72dvh] w-full' : 'aspect-video w-full',
-                        )}
-                        style={shape ? { aspectRatio: `${shape.w} / ${shape.h}` } : undefined}
-                    >
-                    <video
-                        ref={videoRef}
-                        className={cn(
-                            'h-full w-full object-contain motion-safe:transition-opacity motion-safe:duration-300',
-                            ready ? 'opacity-100' : 'opacity-0',
-                        )}
-                        controls
-                        controlsList="nodownload"
-                        playsInline
-                        preload="auto"
-                        onCanPlay={() => { setWaiting(false); setFailed(false); setReady(true); }}
-                        onPlaying={() => { setWaiting(false); setFailed(false); setReady(true); }}
-                        onWaiting={() => { if (!failed) setWaiting(true); }}
-                        onStalled={() => { if (!ready && !failed) setWaiting(true); }}
-                        onError={() => { setWaiting(false); setFailed(true); }}
-                    />
-                    </div>
-                </div>
-                {clip && (
-                    <div className="digi-scroll max-h-[72dvh] w-[260px] shrink-0 space-y-3 overflow-y-auto">
-                        <ClipInsights clip={clip} />
-                        {clip.variants?.length > 0 && (
-                            <div className="space-y-1">
-                                <p className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">{t('Other shapes')}</p>
-                                <div className="flex flex-wrap gap-1">
-                                    {clip.variants.map((v) => (
-                                        <button
-                                            key={v.aspect}
-                                            type="button"
-                                            onClick={() => downloadArt(artUrl(jobId, v.mp4, clip.rev), `digiclip-clip${clip.rank}-${v.aspect}.mp4`).catch((e) => flashMessage(t('Couldn\'t save video: {error}', { error: e?.message ?? e })))}
-                                            className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 font-mono text-[11px] hover:bg-accent"
-                                        >
-                                            <Download className="size-3" aria-hidden />
-                                            {v.aspect.replace('x', ':')}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/** Paged flip support: while `leaving`, the tile sinks downward after
- *  `exitDelay`ms. Entering is staged by the parent (`entered` flips per
- *  row on timers): offset below until entered, then it rises into place
- *  — plain transitions, no keyframes, so nothing can snap. Unpaged
- *  mounts keep the classic rise-in. */
-function ClipTile({ job, clip, tall, projectName, onPlay, fresh, leaving = false, exitDelay = 0, entered = true, paged = false }) {
-    const t = useT();
-    const playable = clip.render_status === 'done' && clip.mp4;
-    // making -> done crossfade: the render pill melts between states
-    // instead of snapping, and the poster fades in over the tile.
-    const [pillShown, setPillShown] = useState(playable ? 'done' : clip.render_status === 'failed' ? 'failed' : 'making');
-    const [pillPhase, setPillPhase] = useState('in');
-    const pillTimer = useRef(null);
-    const pillTarget = playable ? 'done' : clip.render_status === 'failed' ? 'failed' : 'making';
-    useEffect(() => {
-        if (pillTarget === pillShown) return;
-        setPillPhase('out');
-        if (pillTimer.current) clearTimeout(pillTimer.current);
-        pillTimer.current = setTimeout(() => {
-            setPillShown(pillTarget);
-            setPillPhase('in');
-        }, 140);
-        return () => { if (pillTimer.current) clearTimeout(pillTimer.current); };
-    }, [pillTarget, pillShown]);
-    useEffect(() => () => { if (pillTimer.current) clearTimeout(pillTimer.current); }, []);
-    // Progress covers the whole making phase: face-tracking reports
-    // first (render_pct is still 0), the encode takes over after.
-    const progress = (clip.render_pct ?? 0) > 0 ? clip.render_pct : (clip.track_pct ?? 0);
-    const rendering = clip.render_status === 'rendering' && progress > 0;
-    const shape = clipShape(clip.mp4);
-    const fileName = `digiclip-clip${clip.rank}-${shape.tag}.mp4`;
-    const score = overall(clip);
-    const clipTitle = clip.title || t('Clip #{n}', { n: clip.rank });
-    const play = () => onPlay({
-        title: clipTitle,
-        sub: projectName,
-        src: artUrl(job.id, clip.mp4, clip.rev),
-        shape,
-        download: { url: artUrl(job.id, clip.mp4, clip.rev), filename: fileName },
-        kit: clip.kit ? { job: job.id, rank: clip.rank, filename: clip.kit } : null,
-        clipRef: { job: job.id, rank: clip.rank },
-    });
-    return (
-        <div
-            role={playable ? 'button' : undefined}
-            tabIndex={playable ? 0 : undefined}
-            aria-label={playable ? t('Play {name}', { name: clipTitle }) : undefined}
-            onClick={playable ? play : undefined}
-            onKeyDown={playable ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    play();
-                }
-            } : undefined}
-            className={cn(
-                'flex min-h-0 flex-col justify-between overflow-hidden rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-card p-1.5',
-                !paged && fresh && 'tile-in',
-                tall && 'row-span-2',
-                playable && 'cursor-pointer transition-colors hover:border-t-white/30 hover:border-x-white/[0.16]',
-                paged && !entered && 'opacity-0 translate-y-3',
-                leaving && 'opacity-0 translate-y-3',
-            )}
-            style={paged
-                ? { transition: 'opacity 220ms ease-out, translate 220ms ease-out, transform 220ms ease-out', ...(leaving ? { transitionDelay: `${exitDelay}ms` } : {}) }
-                : undefined}
-        >
-            <span className="flex h-6 items-center gap-1.5 text-[11px] font-medium">
-                <Film className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-                <span className="truncate">{clipTitle}</span>
-            </span>
-            <span className="relative my-1 min-h-0 flex-1 overflow-hidden rounded bg-muted/50">
-                <Film className="absolute inset-0 m-auto size-4 text-muted-foreground/50" aria-hidden />
-                {playable && clip.poster && <FadeImg key={clip.rev ?? 0} src={artUrl(job.id, clip.poster, clip.rev)} />}
-                {score != null && (
-                    <Tip label={t('Virality score (open the clip for why)')} side="top" className="absolute top-1 left-1">
-                        <span className="flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white tabular-nums">
-                            <span className={cn('size-1.5 rounded-full', scoreTone(score))} aria-hidden />
-                            {score}
-                        </span>
-                    </Tip>
-                )}
-                {rendering && (
-                    <span
-                        aria-hidden
-                        className="absolute right-0 bottom-0 left-0 h-[2px] bg-white/80 motion-safe:transition-[width] motion-safe:duration-300"
-                        style={{ width: `${progress}%` }}
-                    />
-                )}
-            </span>
-            <span className="flex h-6 items-center justify-between font-mono text-[10px] text-muted-foreground">
-                <span className="truncate">#{clip.rank}{fmtRange(clip.start_s, clip.end_s) ? ` · ${fmtRange(clip.start_s, clip.end_s)}` : ''}</span>
-                <span className={cn(
-                    'inline-flex shrink-0 motion-safe:transition-opacity motion-safe:duration-150',
-                    pillPhase === 'out' ? 'opacity-0' : 'opacity-100',
-                )}>
-                {pillShown === 'done' ? (
-                    <Tip label={t('Download clip #{n}', { n: clip.rank })} side="top">
-                        <button
-                            type="button"
-                            aria-label={t('Download clip #{n}', { n: clip.rank })}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                downloadArt(artUrl(job.id, clip.mp4, clip.rev), fileName).catch((e) => flashMessage(t('Couldn\'t save video: {error}', { error: e?.message ?? e })));
-                            }}
-                            className="shrink-0 rounded-md p-1 text-foreground hover:bg-accent"
-                        >
-                            <Download className="size-3.5" aria-hidden />
-                        </button>
-                    </Tip>
-                ) : pillShown === 'failed' ? (
-                    <span className="shrink-0 text-red-500">{t('failed')}</span>
-                ) : (
-                    <Tip label={t('Clip is being made')} side="top">
-                        <span className="flex shrink-0 items-center gap-1 justify-end">
-                            {t('making')}
-                            {rendering ? ` ${progress}%` : ''}
-                            <Loader2 className="size-3 animate-spin" aria-hidden />
-                        </span>
-                    </Tip>
-                )}
-                </span>
-            </span>
-        </div>
-    );
-}
-
-/** Project scroller: clamped-centering strip. The selected project sits
- *  in the middle row, except the first/last which pin to the top/bottom
- *  edge so no dead gap appears at either end. Project names float over
- *  the grid as clickthrough labels. Scroll the panel (or tap a pill) to
- *  rotate. */
-function ProjectScroller({ projects, activeId, onJump, snap, visible, seenIds }) {
-    const t = useT();
-    const n = projects.length;
-    const idx = Math.max(0, projects.findIndex((p) => p.id === activeId));
-    // Signal per project: white = opened, green = fresh/unviewed,
-    // orange = still working, red = error. Seen-ness is local UI state
-    // (a Set of ids mirrored from localStorage), not server status.
-    function pillClsFor(p, current, d) {
-        const ready = p.status === 'clips_ready' || p.status === 'done';
-        const fresh = ready && !seenIds?.has(p.id);
-        const tone = p.status === 'failed' ? 'red'
-            : !ready ? 'orange'
-            : fresh ? 'green' : 'white';
-        const base = {
-            red: 'bg-red-500',
-            orange: 'bg-orange-500',
-            green: 'bg-emerald-500',
-            white: 'bg-white ring-1 ring-black/30',
-        }[tone];
-        // Selected bar fills its (grown) row at the original slim width;
-        // the button pads it 3px.
-        if (current) return `h-full w-2 ${base}`;
-        const dim = {
-            red: ['bg-red-500/70', 'bg-red-500/45', 'bg-red-500/25'],
-            orange: ['bg-orange-500/70', 'bg-orange-500/45', 'bg-orange-500/25'],
-            green: ['bg-emerald-500/80', 'bg-emerald-500/50', 'bg-emerald-500/30'],
-            white: ['bg-white/80', 'bg-white/50', 'bg-white/30'],
-        }[tone][Math.min(d - 1, 2)];
-        const size = d === 1 ? 'size-2' : d === 2 ? 'size-1.5' : 'size-1';
-        return `${size} ${dim}`;
-    }
-
-    function nameClsFor(p, current) {
-        const ready = p.status === 'clips_ready' || p.status === 'done';
-        const fresh = ready && !seenIds?.has(p.id);
-        if (current) {
-            if (p.status === 'failed') return 'font-semibold text-red-500';
-            if (!ready) return 'font-semibold text-orange-500';
-            return fresh ? 'font-semibold text-emerald-500' : 'font-semibold text-white';
-        }
-        if (p.status === 'failed') return 'text-red-500';
-        if (!ready) return 'text-orange-500';
-        return fresh ? 'text-emerald-500' : 'text-white';
-    }
-
-    if (n === 0) return null;
-    const rowH = 24;
-    const rows = 3;
-    // Clamped centering: the active project sits in the middle row,
-    // except at the ends where it pins to the edge so no dead gap
-    // appears — idx 0 shows rows 0-2 with active on top, idx n-1
-    // shows n-3..n-1 with active on bottom. Short lists hug content.
-    const viewH = Math.min(n, rows) * rowH;
-    // Dynamic row sizing, ratios-style (flex-grow thinking, flex-basis
-    // mechanics): neighbors sit at a compact 16px; the selected row
-    // absorbs the whole strip minus its visible neighbors — 40px with
-    // two neighbors, 32 with one, full height alone. Rows before `first`
-    // are always plain neighbors, so the slide offset stays exact while
-    // the heights ease behind it. (Pure flex-grow can't do this: it only
-    // distributes free space in a fixed container, and ours must stay
-    // content-sized for the travel animation.)
-    const smallH = 16;
-    const visCount = Math.min(n, rows);
-    const selH = viewH - smallH * (visCount - 1);
-    const first = n <= rows ? 0 : Math.min(Math.max(idx - 1, 0), n - rows);
-    const y = -first * smallH;
-    const slide = {
-        transform: `translateY(${y}px)`,
-        transition: snap ? 'none' : 'transform 350ms cubic-bezier(0.22, 1, 0.36, 1)',
-    };
-    const mask = '[mask-image:linear-gradient(to_bottom,transparent,black_22%,black_78%,transparent)]';
-    return (
-        <div
-            className="relative flex shrink-0 items-center self-stretch"
-            role="navigation"
-            aria-label={t('Projects')}
-        >
-            {/* Names float over the grid as clickthrough labels; only the
-                pills take up space. */}
-            <div className={cn(
-                'pointer-events-none absolute top-1/2 right-full z-10 mr-1.5 -translate-y-1/2 py-[6px] transition-opacity motion-safe:duration-300',
-                visible ? 'opacity-100' : 'opacity-0',
-            )}
-            >
-            <div className="overflow-hidden [mask-image:linear-gradient(to_bottom,transparent,black_25%,black_75%,transparent)]" style={{ height: viewH }}>
-                <div className="flex flex-col" style={slide}>
-                    {projects.map((p, i) => {
-                        const d = Math.abs(i - idx);
-                        const current = p.id === activeId;
-                        const nameOpacity = d === 0 ? 1 : d === 1 ? 0.6 : d === 2 ? 0.35 : 0;
-                        return (
-                            <div
-                                key={p.id}
-                                className="flex shrink-0 origin-right items-center justify-end transition-[height,transform] motion-safe:duration-300"
-                                style={{ height: current ? selH : smallH, transform: `scale(${d === 0 ? 1 : d === 1 ? 0.88 : 0.76})` }}
-                            >
-                                <span
-                                    style={{ opacity: nameOpacity }}
-                                    className={cn(
-                                        'block max-w-36 truncate text-right text-[13px] transition-all motion-safe:duration-300',
-                                        nameClsFor(p, current),
-                                    )}
-                                >
-                                    {p.name}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-            </div>
-            {/* One container, all pills inside. Gutters match the panel:
-                8px grid gap + 6px box side = 14px each side, same as the
-                6px box side + 8px panel edge on the right. */}
-            <div className="m-auto rounded-full border border-x-white/10 border-b-black/60 border-t-white/20 bg-card/95 p-0.5 shadow-lg backdrop-blur">
-                <div className={`overflow-hidden ${mask}`} style={{ height: viewH }}>
-                    <div className="flex h-full flex-col" style={slide}>
-                        {projects.map((p, i) => {
-                            const d = Math.abs(i - idx);
-                            const current = p.id === activeId;
-                            return (
-                                <PillExitBeat key={p.id} id={p.id} ids={projects.map((q) => q.id)} top={i === 0} bottom={i === projects.length - 1}>
-                                <div
-                                    className="flex shrink-0 items-center justify-center motion-safe:transition-[height] motion-safe:duration-300"
-                                    style={{ height: current ? selH : smallH }}
-                                >
-                                        <button
-                                            type="button"
-                                            aria-label={t('Jump to {name}', { name: p.name })}
-                                            aria-current={current || undefined}
-                                            onClick={() => onJump(p.id)}
-                                            className={cn(
-                                                'flex h-full w-full cursor-pointer items-center justify-center',
-                                                current && 'p-[2px]',
-                                            )}
-                                        >
-                                            <span className={cn(
-                                                'block rounded-full transition-all motion-safe:duration-300',
-                                                pillClsFor(p, current, d),
-                                            )}
-                                            />
-                                        </button>
-                                </div>
-                                </PillExitBeat>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-/** Scroller pill with a graceful delete: when the pill's id leaves
- *  `ids`, it slides toward its edge (top pills up, bottom pills down,
- *  middle pills fade) then unmounts while survivors ease into place. */
-function PillExitBeat({ id, ids, top, bottom, children }) {
-    const [gone, setGone] = useState(false);
-    const [leaving, setLeaving] = useState(false);
-    const timer = useRef(null);
-
-    useEffect(() => {
-        if (ids.includes(id)) return;
-        setLeaving(true);
-        timer.current = setTimeout(() => setGone(true), 240);
-        return () => { if (timer.current) clearTimeout(timer.current); };
-    }, [ids, id]);
-    useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-    if (gone) return null;
-    if (!leaving) return children;
-    return (
-        <div className={cn(
-            top && 'row-out-top',
-            bottom && !top && 'row-out-bottom',
-            !top && !bottom && 'row-out-fade',
-        )}>
-            {children}
-        </div>
-    );
-}
-
-export default function Home() {
-    const t = useT();
-    const projects = useStore((s) => s.jobs);
-    const settings = useStore((s) => s.settings);
-    const [jobOptions] = useJobOptions(settings);
-    const limits = { accept: 'MP4 · MOV · MKV · WEBM', note: t('straight off your disk') };
-    const wheelLock = useRef(0);
-    const wheelAcc = useRef(0);
-    const touchY = useRef(null);
-    // Nesting counter so the hover paint doesn't flicker when the drag
-    // crosses child elements inside the card.
-    const dragDepth = useRef(0);
-    // Last time the OS-level Tauri drop (real paths) fired. Compared
-    // against DOM drops to detect a dead shell event (see onDrop).
-    const lastTauriDrop = useRef(0);
-    const [dragging, setDragging] = useState(false);
-    // hotPair lights a header + its body together on hover so the pair
-    // reads as one unit without touching.
-    const [hotPair, setHotPair] = useState(null);
-    const [confirmTarget, setConfirmTarget] = useState(null);
-    const [confirmClear, setConfirmClear] = useState(false);
-    // Finished jobs only (done, failed, cancelled): running work is
-    // never touched by the bulk clear.
-    const finishedIds = projects.filter((p) => p.status === 'done' || p.status === 'failed' || p.status === 'cancelled').map((p) => p.id);
-    function clearFinished() {
-        finishedIds.forEach((id) => removeJob(id));
-        setConfirmClear(false);
-    }
-    const [player, setPlayer] = useState(null);
-    const [editTarget, setEditTarget] = useState(null); // { job, rank }
-    const [transcriptJob, setTranscriptJob] = useState(null);
-    // Player and editor follow the live clip, so a re-render lands in
-    // an open dialog (new rev, new scores) without reopening it.
-    const liveClip = (ref) => (ref ? projects.find((j) => j.id === ref.job)?.clips?.find((c) => c.rank === ref.rank) ?? null : null);
-    const playerClip = liveClip(player?.clipRef);
-    const editJob = editTarget ? projects.find((j) => j.id === editTarget.job) ?? null : null;
-    const editClipLive = liveClip(editTarget);
-    const transcriptTarget = transcriptJob ? projects.find((j) => j.id === transcriptJob) ?? null : null;
-    const [uploading, setUploading] = useState(null);
-    const [activeId, setActiveId] = useState(null);
-    const [dir, setDir] = useState(null);
-    // snap: far jumps (wrap-around, distant tap) cut instead of sweeping.
-    const [snap, setSnap] = useState(false);
-    // Fresh-vs-opened projects (scroller green -> white): local UI state,
-    // persisted per browser. A project counts as opened only once its
-    // clips have actually been on screen (shownId), not when merely
-    // scrolled past (activeId).
-    const [seenIds, setSeenIds] = useState(() => {
-        try {
-            const raw = localStorage.getItem('digiclip.seenProjects');
-            const arr = raw ? JSON.parse(raw) : [];
+            const arr = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]');
             return new Set(Array.isArray(arr) ? arr : []);
         } catch {
             return new Set();
         }
     });
-    // shownId trails activeId: the outgoing videos fade out first, then the
-    // incoming project fades in, never a crossfade overlap.
-    const [shownId, setShownId] = useState(null);
-    const [leaving, setLeaving] = useState(false);
-    // Project names fade; pills always stay. Names surface on movement or
-    // when the mouse gets close to the scroller, then fade back out.
-    const [namesVisible, setNamesVisible] = useState(false);
-    const hideNamesTimer = useRef(null);
-    function showNamesSticky() {
-        if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current);
-        setNamesVisible(true);
-    }
-    function hideNamesNow() {
-        if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current);
-        setNamesVisible(false);
-    }
-    // Movement: names linger, then fade after a beat.
     useEffect(() => {
-        setNamesVisible(true);
-        if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current);
-        hideNamesTimer.current = setTimeout(() => setNamesVisible(false), 1600);
-        return () => { if (hideNamesTimer.current) clearTimeout(hideNamesTimer.current); };
-    }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
-    const ids = projects.map((p) => p.id);
-    const shownIdx = Math.max(0, ids.indexOf(shownId));
-    const shown = projects[shownIdx] ?? null;
-
-    // Dynamic grid layout: the outer height stays fixed, the arrangement
-    // follows the clip count (vertical tiles for few, strip + grid for many).
-    const showClips = shown?.clips ?? [];
-    const clipCount = showClips.length;
-    // Pager: 5+ clips flip through pages of 4 (1 source strip + 4 clips)
-    // inside the same cells; 4 or fewer show all with the count-based
-    // layout below.
-    const [clipPage, setClipPage] = useState(0);
-    const PAGE = 4;
-    const paged = clipCount > PAGE;
-    const pageTotal = Math.max(1, Math.ceil(clipCount / PAGE));
-    const page = Math.min(clipPage, pageTotal - 1);
-    const visClips = paged ? showClips.slice(page * PAGE, page * PAGE + PAGE) : showClips.slice(0, PAGE);
-    // Deepest grid row on this page (source owns row 0, clips pair up
-    // below it): drives the staggered delays in both directions.
-    const maxRow = visClips.length > 0 ? 1 + Math.floor((visClips.length - 1) / 2) : 0;
-    // Paged flip choreography, identical in both directions: the source
-    // always slides out upward while the clip rows sink downward,
-    // bottom-row first; the new page then rises in from below with the
-    // source first, then top row, then bottom. Reduced motion cuts
-    // clean instead.
-    const [pageLeaving, setPageLeaving] = useState(false);
-    // Enter staircase: -1 = fully offset, then 0 (source), 1, 2 ease in
-    // row by row. Starts "all entered" so boot and project switches
-    // appear instantly; flips drive it -1 upward (see flipPage).
-    const [enterStep, setEnterStep] = useState(2);
-    const pageTimer = useRef(null);
-    const enterTimer = useRef(null);
-    useEffect(() => () => {
-        if (pageTimer.current) clearTimeout(pageTimer.current);
-        if (enterTimer.current) clearInterval(enterTimer.current);
-    }, []);
-    function flipPage(target) {
-        const clamped = Math.max(0, Math.min(pageTotal - 1, target));
-        if (clamped === page || pageLeaving) return;
-        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        if (reduce) {
-            setClipPage(clamped);
-            return;
-        }
-        setPageLeaving(true);
-        if (pageTimer.current) clearTimeout(pageTimer.current);
-        if (enterTimer.current) clearInterval(enterTimer.current);
-        // Deepest row on the TARGET page: the staircase stops there.
-        const targetList = showClips.slice(clamped * PAGE, clamped * PAGE + PAGE);
-        const targetMax = targetList.length > 0 ? 1 + Math.floor((targetList.length - 1) / 2) : 0;
-        pageTimer.current = setTimeout(() => {
-            // New page mounts fully offset; the staircase below eases it
-            // in row by row — plain transitions, no keyframes or fill
-            // modes, so there is nothing that can snap.
-            setClipPage(clamped);
-            setPageLeaving(false);
-            setEnterStep(-1);
-            enterTimer.current = setInterval(() => {
-                setEnterStep((s) => {
-                    if (s >= targetMax) {
-                        clearInterval(enterTimer.current);
-                        return s;
-                    }
-                    return s + 1;
-                });
-            }, 70);
-        }, 360);
-    }
-    const gridCls = paged ? 'grid-cols-2 grid-rows-3'
-        : clipCount === 0 ? 'grid-cols-1 grid-rows-1'
-        : clipCount === 1 ? 'grid-cols-2 grid-rows-1'
-        : clipCount === 3 ? 'grid-cols-2 grid-rows-2'
-        : 'grid-cols-2 grid-rows-3';
-    const sourceCls = paged || (clipCount !== 0 && clipCount !== 1 && clipCount !== 3) ? 'col-span-2' : '';
-    const tallClip = !paged && clipCount === 2;
-
-    // Flip to another project with a directional slide. Wraps around.
-    function goTo(id, forcedDir) {
-        if (id === activeId || !ids.includes(id)) return;
-        const from = ids.indexOf(activeId);
-        const to = ids.indexOf(id);
-        setDir(forcedDir ?? (to > from ? 'down' : 'up'));
-        setSnap(Math.abs(to - from) > 1);
-        setActiveId(id);
-    }
-    function step(d) {
-        if (ids.length < 2) return;
-        const cur = Math.max(0, ids.indexOf(activeId));
-        const next = (cur + d + ids.length) % ids.length;
-        setDir(d > 0 ? 'down' : 'up');
-        setSnap((d > 0 && cur === ids.length - 1) || (d < 0 && cur === 0));
-        setActiveId(ids[next]);
-    }
-    // One-shot: the snap render cuts, then animation restores itself.
-    useEffect(() => {
-        if (snap) setSnap(false);
-    }, [activeId, snap]);
-    // New project in view: clips start on page one, and the project
-    // counts as opened (scroller green -> white) once its clips land.
-    useEffect(() => {
-        setClipPage(0);
-        if (enterTimer.current) clearInterval(enterTimer.current);
-        setEnterStep(2);
-    }, [shownId]);
-    useEffect(() => {
-        if (shownId == null) return;
-        setSeenIds((prev) => {
+        if (!shownId || !shownReady) return;
+        setSeen((prev) => {
             if (prev.has(shownId)) return prev;
-            const next = new Set(prev);
-            next.add(shownId);
+            const next = new Set(prev).add(shownId);
             try {
-                localStorage.setItem('digiclip.seenProjects', JSON.stringify([...next].slice(-200)));
+                localStorage.setItem(SEEN_KEY, JSON.stringify([...next].slice(-200)));
             } catch {
+                // storage may be blocked; the dot just comes back next time
             }
             return next;
         });
-    }, [shownId]);
+    }, [shownId, shownReady]);
+    return seen;
+}
 
-    // The scroller is the control: wheel (or swipe) anywhere on the right
-    // panel rotates projects, one notch one flip with a short 300ms gate
-    // so trackpads don't machine-gun through the list. Fast successive
-    // flips collapse onto the latest target.
-    function onWheel(e) {
-        const now = Date.now();
-        if (now < wheelLock.current) return;
-        if (Math.sign(e.deltaY) !== Math.sign(wheelAcc.current)) wheelAcc.current = 0;
-        wheelAcc.current += e.deltaY;
-        if (Math.abs(wheelAcc.current) < 40) return;
-        const d = wheelAcc.current > 0 ? 1 : -1;
-        wheelAcc.current = 0;
-        wheelLock.current = now + 300;
-        step(d);
-    }
-
-    /** Shared knobs for a fresh job off this screen. Durations are
-     *  sanitized here so stale/corrupt local storage can never send
-     *  the engine an inverted window; auto sends nothing (15–90s). */
-    function baseOptions() {
-        return {
-            ...toEngine(jobOptions),
-            model: settings?.stt_model,
-            gpu: settings?.gpu,
-        };
-    }
-
-    /** Bare compilation of the shown project's picks (the anti-repeat
-     *  path): a new job off the same source, badged "merged" in the queue. */
-    function mergeShown() {
-        if (!shown) return;
-        startJob(shown.source, { ...baseOptions(), merge: '' }).catch(() => {});
-    }
-    /** Start a job from a local path (dialog pick or window drop). The
-     *  file never uploads anywhere — the engine reads it off disk.
-     *  Failures surface in the banner instead of dying silently. */
-    const [link, setLink] = useState('');
-    const linkOk = /^https?:\/\/\S+\.\S+/i.test(link.trim());
-    /** Start a job from a pasted link; the engine downloads it. */
-    function startFromLink() {
-        const url = link.trim();
-        if (!linkOk) {
-            flashMessage(t('Paste a full link, starting with https://'));
-            return;
-        }
-        startJobUrl(url, baseOptions())
-            .then(() => setLink(''))
-            .catch((e) => flashMessage(t('Couldn\'t start the link: {error}', { error: e?.message ?? e })));
-    }
-
-    function startFromPath(path) {
-        if (!path) return;
-        const name = path.split(/[\\/]/).pop() ?? path;
-        setUploading({ name });
-        // Banner receipt: proves the OS drop reached us. If this shows
-        // but no job appears, the failure is downstream (and the catch
-        // below will name it); if even this stays silent, the drop
-        // event itself never arrived.
-        flashMessage(t('Starting {name}…', { name }));
-        startJob(path, baseOptions())
-            .catch((e) => flashMessage(t('Couldn\'t start {name}: {error}', { name, error: e?.message ?? e })))
-            .finally(() => {
-                setTimeout(() => setUploading(null), 800);
-            });
-    }
-
-    // Several files at once queue one job each; the engine runs them in turn.
-    function startFromPaths(paths) {
-        const vids = (paths ?? []).filter((p) => VIDEO_RE.test(p));
-        vids.forEach((p) => startFromPath(p));
-        if (vids.length > 1) flashMessage(t('Queued {n} videos', { n: vids.length }));
-    }
-
-    function browse() {
-        pickVideos()
-            .then(startFromPaths)
-            .catch((e) => flashMessage(t('Browse failed: {error}', { error: e?.message ?? e })));
-    }
-
-    // Window drops carry real paths (Tauri drag-drop event); the upload
-    // card's own drag handlers are hover paint only.
-    useEffect(() => onFilesDropped((paths) => {
-        lastTauriDrop.current = Date.now();
-        startFromPaths(paths);
-    }), []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Hover paint rides the OS drag channel (enter/over lights the card,
-    // leave/drop clears it) — the same channel drops provably arrive on.
-    // The card's own DOM handlers below stay as backup.
-    useEffect(() => onDragHover(setDragging), []); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // A drop landing anywhere except the card must never navigate the
-    // webview away to the file (which used to blank the whole app). The
-    // OS-level Tauri drop event above still fires — this only stops the
-    // browser default.
-    useEffect(() => {
-        const stop = (e) => e.preventDefault();
-        window.addEventListener('dragover', stop);
-        window.addEventListener('drop', stop);
-        return () => {
-            window.removeEventListener('dragover', stop);
-            window.removeEventListener('drop', stop);
-        };
-    }, []);
-
-    // An AI app asked (show_in_app) for this project: bring it up once.
+/** Home is two things: add a video, and your videos. With none yet it is only
+ *  the first, and a line on what happens next. */
+export default function Home() {
+    const t = useT();
+    const jobs = useStore((s) => s.jobs);
     const focus = useStore((s) => s.focus);
+    const add = useAddVideo();
+    const model = useMemo(() => listModel(jobs), [jobs]);
+    const idsKey = model.ids.join(',');
+
+    const [activeId, setActiveId] = useState(null);
+    const [removeTarget, setRemoveTarget] = useState(null);
+    const [confirmClear, setConfirmClear] = useState(false);
+    const [player, setPlayer] = useState(null);
+    const [editTarget, setEditTarget] = useState(null); // { job, rank }
+    const [transcriptJob, setTranscriptJob] = useState(null);
+
+    const shown = model.rows.find((r) => r.job.id === activeId)?.job ?? model.rows[0]?.job ?? null;
+    const shownPhase = shown ? phaseOf(shown) : null;
+    const shownReady = shownPhase === 'ready' || shownPhase === 'making';
+    const seen = useSeen(shown?.id, shownReady);
+
+    // Player and editor follow the live clip, so a re-render lands in
+    // an open dialog (new rev, new scores) without reopening it.
+    const liveClip = (ref) => (ref ? jobs.find((j) => j.id === ref.job)?.clips?.find((c) => c.rank === ref.rank) ?? null : null);
+    const playerClip = liveClip(player?.clipRef);
+    const editJob = editTarget ? jobs.find((j) => j.id === editTarget.job) ?? null : null;
+    const editClipLive = liveClip(editTarget);
+    const transcriptTarget = transcriptJob ? jobs.find((j) => j.id === transcriptJob) ?? null : null;
+
+    // A video started from this app comes up on its own, so its progress is
+    // what you see; loading the list never moves you.
+    const known = useRef(new Set());
     useEffect(() => {
-        if (!focus?.job || !ids.includes(focus.job)) return;
+        const fresh = newcomer(known.current, jobs, Date.now());
+        known.current = new Set(model.ids);
+        if (fresh) setActiveId(fresh);
+    }, [idsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // An AI app asked (show_in_app) for this video: bring it up once.
+    useEffect(() => {
+        if (!focus?.job || !model.ids.includes(focus.job)) return;
         clearFocus();
-        goTo(focus.job);
-    }, [focus?.seq, ids.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+        setActiveId(focus.job);
+    }, [focus?.seq, idsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Keep the viewer on a live project when the list reloads underneath it.
-    useEffect(() => {
-        if (projects.length === 0) return;
-        if (!ids.includes(activeId)) {
-            setDir(null);
-            setActiveId(ids[0]);
-        }
-    }, [projects.map((p) => p.id).join(','), activeId]); // eslint-disable-line react-hooks/exhaustive-deps
+    function removeShown(job) {
+        if (job.id === shown?.id) setActiveId(neighbour(model.ids, job.id));
+        removeJob(job.id);
+        setRemoveTarget(null);
+    }
+    function clearFinished() {
+        model.finishedIds.forEach((id) => removeJob(id));
+        if (model.finishedIds.includes(shown?.id)) setActiveId(null);
+        setConfirmClear(false);
+    }
+    const playSource = () => setPlayer({
+        title: shown.name,
+        sub: t('Source') + (fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
+        src: srcUrl(shown.id),
+        poster: artUrl(shown.id, 'poster.jpg'),
+        download: { url: srcUrl(shown.id), filename: `${shown.name}.mp4` },
+        kit: null,
+    });
 
-    // Sequential swap: fade the current videos out, then show the incoming
-    // project (which fades in from the travel direction). Fast successive
-    // flips collapse onto the latest target, no stale flash.
-    useEffect(() => {
-        if (activeId === shownId) return;
-        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-        if (dir == null || reduce) {
-            setShownId(activeId);
-            return;
-        }
-        setLeaving(true);
-        const t = setTimeout(() => {
-            setShownId(activeId);
-            setLeaving(false);
-        }, 180);
-        return () => clearTimeout(t);
-    }, [activeId, shownId, dir]);
-
-    return (
-        <div className="grid h-full min-h-[480px] grid-cols-2 gap-[5px]">
-            {/* LEFT HALF: upload (30%) over queue */}
-            <div className="flex min-h-0 min-w-0 flex-col gap-[5px]">
-                <Card className="stagger-1 flex h-[34%] min-h-[196px] shrink-0 flex-col overflow-hidden">
-                    <CardContent className="flex min-h-0 flex-1 flex-col p-2">
-                        <div
-                            role="button"
-                            tabIndex={0}
-                            aria-label={t('Pick a video to clip')}
-                            onClick={browse}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    browse();
-                                }
-                            }}
-                            onDragEnter={(e) => { e.preventDefault(); dragDepth.current += 1; setDragging(true); }}
-                            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-                            onDragLeave={() => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setDragging(false); }}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                dragDepth.current = 0;
-                                setDragging(false);
-                                // Diagnostic: a DOM drop always fires in a
-                                // webview. If the OS-level Tauri drop (real
-                                // paths) doesn't follow within a beat, the
-                                // shell event is dead — say so instead of
-                                // failing silently.
-                                const files = [...(e.dataTransfer?.files ?? [])];
-                                if (isTauri() && files.length > 0) {
-                                    const names = files.map((f) => f.name).join(', ');
-                                    setTimeout(() => {
-                                        if (Date.now() - lastTauriDrop.current > 1500) {
-                                            flashMessage(t('Got “{names}” but no file path arrived — the drop event isn\'t firing. Rebuild the desktop app to pick up the fix.', { names }));
-                                        }
-                                    }, 1500);
-                                }
-                            }}
-                            className={cn(
-                                'relative flex min-h-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1.5 rounded border-2 border-dashed px-2 text-center transition-colors',
-                                'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                                dragging ? 'border-primary bg-accent shadow-[0_0_0_3px_rgb(255_255_255/0.12),0_0_24px_rgb(255_255_255/0.08)]' : 'border-input hover:bg-accent/50',
-                            )}
-                        >
-                            <UploadCloud className="size-6 shrink-0 text-muted-foreground" aria-hidden />
-                            <span className="text-[13px] font-medium">{t('Drop a video here, or click to browse')}</span>
-                            <span className="font-mono text-[10px] text-muted-foreground">
-                                {limits.accept} · {limits.note}
-                            </span>
-                        </div>
-                        <form
-                            className="flex h-8 shrink-0 items-stretch gap-1 pt-1.5"
-                            onSubmit={(e) => { e.preventDefault(); startFromLink(); }}
-                        >
-                            <div className="relative min-w-0 flex-1">
-                                <Link2 className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                                <input
-                                    type="url"
-                                    value={link}
-                                    onChange={(e) => setLink(e.target.value)}
-                                    placeholder={t('…or paste a link (YouTube, Vimeo, X…)')}
-                                    aria-label={t('Video link')}
-                                    className="h-full w-full min-w-0 rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] pr-2 pl-8 text-[12px] outline-none placeholder:text-muted-foreground/70 focus-visible:ring-2 focus-visible:ring-ring"
-                                />
-                            </div>
-                            <Button type="submit" size="sm" variant="secondary" disabled={!linkOk} className="h-full">
-                                {t('Fetch')}
-                            </Button>
-                        </form>
-                        {uploading && (
-                            <p className="pt-1 font-mono text-[11px] text-muted-foreground">
-                                {t('{name} — starting…', { name: uploading.name })}
-                            </p>
-                        )}
-                        <LookLine dim={dragging} />
-                    </CardContent>
-                </Card>
-
-                {/* Queue header stays its own panel; the stub hanging into the
-                    gap below points at the list so the two read as a pair
-                    without touching. h-10 keeps all headers the same. */}
-                <Card
-                    className={cn('relative shrink-0 transition-colors', hotPair === 'queue' && HOT_EDGE)}
-                    onMouseEnter={() => setHotPair('queue')}
-                    onMouseLeave={() => setHotPair(null)}
-                >
-                    <span aria-hidden className="absolute top-full left-6 h-[5px] w-px bg-border" />
-                    <CardHeader className="h-10 justify-center py-0 pr-2 pl-4">
-                        <div className="flex items-center justify-between gap-2">
-                            <CardTitle className="text-[13px]">{t('Queue')}</CardTitle>
-                            <Tip label={t('Remove finished jobs')} side="top">
-                                <button
-                                    type="button" aria-label={t('Remove finished jobs')}
-                                    disabled={finishedIds.length === 0}
-                                    onClick={() => setConfirmClear(true)}
-                                    className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                                >
-                                    <Trash2 className="size-4" aria-hidden />
-                                </button>
-                            </Tip>
-                        </div>
-                    </CardHeader>
-                </Card>
-                <Card
-                    className={cn('stagger-2 flex min-h-0 flex-1 flex-col overflow-hidden transition-colors', hotPair === 'queue' && HOT_EDGE)}
-                    onMouseEnter={() => setHotPair('queue')}
-                    onMouseLeave={() => setHotPair(null)}
-                >
-                    <CardContent className="min-h-0 flex-1 overflow-y-auto p-2">
-                        {projects.length === 0 ? (
-                            <div className="flex min-h-full flex-col items-center justify-center gap-2.5">
-                                <UploadCloud className="size-6 text-muted-foreground/70" aria-hidden />
-                                <p className="text-center text-[13px] text-muted-foreground">
-                                    {t('Queue is clear. Drop your first video above.')}
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-1" data-queue-list>
-                                {projects.map((p) => (
-                                    <QueueExitBeat
-                                        key={p.id}
-                                        id={p.id}
-                                        ids={projects.map((q) => q.id)}
-                                        project={p}
-                                        onCancel={setConfirmTarget}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* RIGHT HALF: Projects header stays its own panel; same stub
-                as Queue so the header points at the viewer below. */}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-[5px]">
-                <Card
-                    className={cn('relative shrink-0 transition-colors', hotPair === 'projects' && HOT_EDGE)}
-                    onMouseEnter={() => setHotPair('projects')}
-                    onMouseLeave={() => setHotPair(null)}
-                >
-                    <span aria-hidden className="absolute top-full left-6 h-[5px] w-px bg-border" />
-                    <CardHeader className="h-10 justify-center py-0 pr-2 pl-4">
-                        {/* Three zones: label left, buttons right, and the
-                            pills (status, title, tags) centred as one group.
-                            The side tracks never shrink below their content
-                            and split the spare room evenly, so the group
-                            stays centred; when space runs out only the title
-                            pill truncates. */}
-                        <div className="grid grid-cols-[minmax(max-content,1fr)_minmax(0,max-content)_minmax(max-content,1fr)] items-center gap-2 text-[13px]">
-                            <span className="font-semibold">{t('Projects')}</span>
-                            {shown != null && (
-                                <>
-                                    <span className="flex min-w-0 items-center justify-center gap-1">
-                                        <Badge variant="secondary" className="shrink-0 gap-1.5">
-                                            {LIVE_LABEL[shown.status] ? t(LIVE_LABEL[shown.status]) : shown.status}
-                                            <span className={cn('size-1.5 rounded-full', statusDot(shown.status))} aria-hidden />
-                                            <span className="font-mono text-[10px]">
-                                                {shownIdx + 1}/{projects.length}
-                                            </span>
-                                        </Badge>
-                                        <Badge variant="secondary" className="min-w-0 text-[12px] text-foreground" title={shown.name}>
-                                            <span className="truncate">{shown.name}</span>
-                                        </Badge>
-                                        {shown.options?.merge != null && (
-                                            <Badge variant="secondary" className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                                                {t('merged')}
-                                            </Badge>
-                                        )}
-                                        {jobTags(shown, t).map((tag) => (
-                                            <Badge key={tag} variant="secondary" className="max-w-32 shrink-0 font-mono text-[10px] text-muted-foreground">
-                                                <span className="truncate">{tag}</span>
-                                            </Badge>
-                                        ))}
-                                    </span>
-                                    <span className="flex items-center justify-end gap-0.5">
-                                        <Tip label={t('Transcript: make a clip from any stretch')} side="top">
-                                            <button
-                                                type="button" aria-label={t('Open the transcript of {name}', { name: shown.name })}
-                                                disabled={shown.status !== 'clips_ready' && shown.status !== 'done'}
-                                                onClick={() => setTranscriptJob(shown.id)}
-                                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-                                            >
-                                                <ScrollText className="size-4" aria-hidden />
-                                            </button>
-                                        </Tip>
-                                        <Tip label={t('Merge picks into one video')} side="top">
-                                            <button
-                                                type="button" aria-label={t('Merge {name} into one video', { name: shown.name })}
-                                                onClick={mergeShown}
-                                                className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
-                                            >
-                                                <Merge className="size-4" aria-hidden />
-                                            </button>
-                                        </Tip>
-                                    </span>
-                                </>
-                            )}
-                        </div>
-                    </CardHeader>
-                </Card>
-                <Card
-                    className={cn('stagger-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-colors', hotPair === 'projects' && HOT_EDGE)}
-                    onMouseEnter={() => setHotPair('projects')}
-                    onMouseLeave={() => setHotPair(null)}
-                >
-                    <CardContent
-                    className="relative min-h-0 flex-1 overflow-hidden p-0"
-                    onWheel={onWheel}
-                    onMouseMove={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const dist = rect.right - e.clientX;
-                        // Hysteresis: appear when properly close, only vanish
-                        // once clearly away, no flicker at the boundary.
-                        if (dist < 120) showNamesSticky();
-                        else if (dist > 230) hideNamesNow();
-                    }}
-                    onMouseLeave={() => hideNamesNow()}
-                    onTouchStart={(e) => { touchY.current = e.touches[0].clientY; }}
-                    onTouchEnd={(e) => {
-                        if (touchY.current == null) return;
-                        const dy = touchY.current - e.changedTouches[0].clientY;
-                        touchY.current = null;
-                        if (Math.abs(dy) < 40) return;
-                        step(dy > 0 ? 1 : -1);
-                    }}
-                >
-                    {shown == null ? (
-                        <div className="flex h-full flex-col items-center justify-center gap-2.5 px-4">
-                            <Film className="size-6 text-muted-foreground/70" aria-hidden />
-                            <p className="text-center text-[13px] text-muted-foreground">
-                                {t('Nothing here yet. Uploads appear here grouped by project.')}
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="flex h-full min-h-0 gap-1.5 p-2">
-                            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5">
-                            {/* Dynamic grid: fixed outer height, but the
-                                arrangement follows the clip count, vertical
-                                tiles for a few videos, source strip + grid
-                                once there are more. Tiles animate in place:
-                                new clips rise in, the source strip eases to
-                                its new cell, nothing remounts on poll. Only
-                                the grid animates; the pill strip stays put.
-                                Overflow flips pages of 3 through the pager
-                                row below instead of a "+N more" tile. */}
-                            <div
-                                key={shown.id}
-                                className={cn(
-                                    'grid min-h-0 min-w-0 flex-1 gap-1.5',
-                                    gridCls,
-                                    leaving && dir === 'down' && 'proj-leave-down',
-                                    leaving && dir === 'up' && 'proj-leave-up',
-                                    !leaving && dir === 'down' && 'proj-enter-down',
-                                    !leaving && dir === 'up' && 'proj-enter-up',
-                                )}
-                            >
-                                <Tip label={t('Play {name}', { name: shown.name })} side="top" className={cn('flex min-h-0', sourceCls)}>
-                                <div
-                                    role="button"
-                                    tabIndex={0}
-                                    aria-label={t('Play {name}', { name: shown.name })}
-                                    onClick={() => setPlayer({
-                                        title: shown.name,
-                                        sub: t('Source') +(fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
-                                        src: srcUrl(shown.id),
-                                        poster: artUrl(shown.id, 'poster.jpg'),
-                                        download: { url: srcUrl(shown.id), filename: `${shown.name}.mp4` },
-                                        kit: null,
-                                    })}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
-                                            e.preventDefault();
-                                            setPlayer({
-                                                title: shown.name,
-                                                sub: t('Source') +(fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''),
-                                                src: srcUrl(shown.id),
-                                                poster: artUrl(shown.id, 'poster.jpg'),
-                                                download: { url: srcUrl(shown.id), filename: `${shown.name}.mp4` },
-                                                kit: null,
-                                            });
-                                        }
-                                    }}
-                                    className={cn(
-                                        'relative min-h-0 w-full flex-1 cursor-pointer overflow-hidden rounded-md bg-muted transition-all motion-safe:duration-200 hover:ring-1 hover:ring-muted-foreground/40',
-                                        // Page flip: the source always dips
-                                        // out upward and rises back in
-                                        // first, either direction.
-                                        (pageLeaving || (paged && enterStep < 0)) && 'opacity-0',
-                                        pageLeaving && '-translate-y-3',
-                                        paged && !pageLeaving && enterStep < 0 && 'translate-y-3',
-                                    )}
-                                    {...(pageLeaving ? { style: { transitionDelay: `${maxRow * 60}ms` } } : {})}
-                                >
-                                    <FileVideo className="absolute inset-0 m-auto size-5 text-muted-foreground" aria-hidden />
-                                    <FadeImg src={artUrl(shown.id, 'poster.jpg')} eager />
-                                    <span className="absolute top-1.5 left-1.5 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                                        {t('SOURCE')}{fmtDur(shown.duration_s) ? ` · ${fmtDur(shown.duration_s)}` : ''}
-                                    </span>
-                                    {clipCount === 0 && shown.status !== 'failed' && (
-                                        <span className="absolute right-1.5 bottom-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
-                                            {t('Clips land here')}
-                                        </span>
-                                    )}
-                                </div>
-                                </Tip>
-                                {visClips.map((c, i) => {
-                                    // Grid rows below the source strip pair
-                                    // up. Exit runs bottom-first; enter is
-                                    // staged top-first by enterStep.
-                                    const row = 1 + Math.floor(i / 2);
-                                    return (
-                                        <ClipTile
-                                            key={c.rank} job={shown} clip={c} tall={tallClip} projectName={shown.name} onPlay={setPlayer} fresh
-                                            leaving={pageLeaving} exitDelay={(maxRow - row) * 60}
-                                            entered={enterStep >= row} paged={paged}
-                                        />
-                                    );
-                                })}
-                            </div>
-                            {pageTotal > 1 && (
-                                <div className="flex h-6 shrink-0 items-center justify-center gap-1" role="navigation" aria-label={t('Clip pages')}>
-                                    <button
-                                        type="button"
-                                        aria-label={t('Previous clips')}
-                                        disabled={page === 0}
-                                        onClick={() => flipPage(page - 1)}
-                                        className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                                    >
-                                        <ChevronLeft className="size-3.5" aria-hidden />
-                                    </button>
-                                    <span className="min-w-10 text-center font-mono text-[10px] text-muted-foreground tabular-nums">
-                                        {page + 1} / {pageTotal}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        aria-label={t('Next clips')}
-                                        disabled={page >= pageTotal - 1}
-                                        onClick={() => flipPage(page + 1)}
-                                        className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                                    >
-                                        <ChevronRight className="size-3.5" aria-hidden />
-                                    </button>
-                                </div>
-                            )}
-                            </div>
-                            <ProjectScroller projects={projects} activeId={activeId} onJump={(id) => goTo(id)} snap={snap} visible={namesVisible} seenIds={seenIds} />
-                        </div>
-                    )}
-                </CardContent>
-                </Card>
-            </div>
-            <ExitBeat open={confirmTarget != null} ms={200}>
-                {confirmTarget && (
-                    <CancelDialog project={confirmTarget} onClose={() => setConfirmTarget(null)} />
+    const dialogs = (
+        <>
+            <ExitBeat open={removeTarget != null} ms={200}>
+                {removeTarget && (
+                    <RemoveDialog
+                        video={removeTarget}
+                        running={phaseOf(removeTarget) === 'working'}
+                        onClose={() => setRemoveTarget(null)}
+                        onConfirm={() => removeShown(removeTarget)}
+                    />
                 )}
             </ExitBeat>
             <ExitBeat open={confirmClear} ms={200}>
                 {confirmClear && (
-                    <ClearDialog count={finishedIds.length} onClose={() => setConfirmClear(false)} onConfirm={clearFinished} />
+                    <ClearDialog count={model.finishedIds.length} onClose={() => setConfirmClear(false)} onConfirm={clearFinished} />
                 )}
             </ExitBeat>
             <ExitBeat open={player != null} ms={200}>
@@ -1680,6 +147,51 @@ export default function Home() {
                     <TranscriptDialog job={transcriptTarget} onClose={() => setTranscriptJob(null)} />
                 )}
             </ExitBeat>
+        </>
+    );
+
+    if (!shown) {
+        return (
+            <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-4 px-6">
+                <div className="w-[min(560px,100%)]">
+                    <AddVideo add={add} roomy />
+                </div>
+                <p className="max-w-[460px] text-center text-[12px] leading-snug text-muted-foreground">
+                    {t('Then DigiClip picks the best moments and cuts them into captioned clips. They appear here.')}
+                </p>
+                {dialogs}
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex h-full min-h-[420px] flex-col gap-[5px]">
+            <AddVideo add={add} />
+            <Card className="stagger-2 flex min-h-0 flex-1 overflow-hidden">
+                <VideoList
+                    rows={model.rows}
+                    activeId={shown.id}
+                    seen={seen}
+                    finishedCount={model.finishedIds.length}
+                    onPick={setActiveId}
+                    onRemove={setRemoveTarget}
+                    onClear={() => setConfirmClear(true)}
+                />
+                <div key={shown.id} className="fade flex min-h-0 min-w-0 flex-1 flex-col">
+                    <VideoHeader
+                        job={shown}
+                        ready={shownReady}
+                        onPlaySource={playSource}
+                        onTranscript={() => setTranscriptJob(shown.id)}
+                        onMerge={() => add.merge(shown)}
+                        onRemove={() => setRemoveTarget(shown)}
+                    />
+                    {shownReady
+                        ? <ClipGrid job={shown} onPlay={setPlayer} />
+                        : <WorkingPanel job={shown} phase={shownPhase} onRemove={() => setRemoveTarget(shown)} />}
+                </div>
+            </Card>
+            {dialogs}
         </div>
     );
 }

@@ -2376,3 +2376,4 @@ import './sceneStage.test.mjs';
 import './looks.test.mjs';
 import './fonts.test.mjs';
 import './home.test.mjs';
+import './homeList.test.mjs';
