@@ -31,6 +31,11 @@ export function clipsText(n, tr = (s) => s) {
     return tr('{n} clips', { n: c });
 }
 
+/** The count as the add bar's picker shows it under the label "Clips": the
+ *  number alone, or the word for automatic (the list of choices keeps the full
+ *  wording of clipsText). */
+export const countFace = (n, tr = (s) => s) => (asCount(n) === 0 ? tr('Auto') : String(asCount(n)));
+
 /** The way clips are picked as it is shown ("Smart"); an unknown one is Smart. */
 export const kindText = (kind, tr = (s) => s) => tr(KIND_NAME[kind] ?? 'Smart');
 

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 import { defaults } from '../src/lib/look.js';
 import { extraShapes, joinShapes, mainShape, setMainShape, shapeCount, toggleExtra } from '../src/lib/shapes.js';
-import { KINDS, clipsText, countChoices, homePieces, homeSummary, kindText, shapeText } from '../src/lib/homeLine.js';
+import { KINDS, clipsText, countChoices, countFace, homePieces, homeSummary, kindText, shapeText } from '../src/lib/homeLine.js';
 import { CUSTOM, watchChoice } from '../src/lib/watchLook.js';
 import { fileSummary, headlineSummary } from '../src/lib/layerSummary.js';
 import { spaceAction } from '../src/lib/exactFrame.js';
@@ -115,6 +115,18 @@ test('home line: the counts on offer, with a saved one beyond the range', () => 
     assert.deepEqual(countChoices(3), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     assert.deepEqual(countChoices(14).slice(-2), [10, 14]);
     assert.equal(clipsText(7, en), '7 clips');
+});
+
+test('home line: the picker face says the number or the word for auto, not "5 clips" under "Clips"', () => {
+    assert.equal(countFace(5, en), '5');
+    assert.equal(countFace(1, en), '1');
+    assert.equal(countFace(14, en), '14');
+    assert.equal(countFace(0, en), 'Auto');
+    assert.equal(countFace('x', en), 'Auto');
+    assert.equal(countFace(-3, en), 'Auto');
+    assert.equal(countFace(2.6, en), '3');
+    assert.equal(countFace(0, inLang('tr')), 'Otomatik');
+    assert.equal(clipsText(5, en), '5 clips'); // the open list keeps its wording
 });
 
 test('home line: other languages say it in their own words', () => {

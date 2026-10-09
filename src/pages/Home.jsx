@@ -6,6 +6,7 @@ import TranscriptDialog from '../components/digiclip/TranscriptDialog';
 import AddVideo from '../components/home/AddVideo';
 import ClipGrid from '../components/home/ClipGrid';
 import { ClearDialog, RemoveDialog } from '../components/home/ConfirmDialogs';
+import DropOverlay from '../components/home/DropOverlay';
 import ExitBeat from '../components/home/ExitBeat';
 import PlayerDialog from '../components/home/PlayerDialog';
 import useAddVideo from '../components/home/useAddVideo';
@@ -18,7 +19,7 @@ import { useT } from '../lib/i18n';
 const SEEN_KEY = 'digiclip.seenProjects';
 
 /** Videos whose clips have been on screen (a ready one not yet opened wears a
- *  green dot in the list). Local to this machine, not engine state. */
+ *  white dot in the list). Local to this machine, not engine state. */
 function useSeen(shownId, shownReady) {
     const [seen, setSeen] = useState(() => {
         try {
@@ -152,7 +153,7 @@ export default function Home() {
 
     if (!shown) {
         return (
-            <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-4 px-6">
+            <div className="relative flex h-full min-h-[420px] flex-col items-center justify-center gap-4 px-6" {...add.dropHandlers}>
                 <div className="w-[min(560px,100%)]">
                     <AddVideo add={add} roomy />
                 </div>
@@ -160,12 +161,13 @@ export default function Home() {
                     {t('Then DigiClip picks the best moments and cuts them into captioned clips. They appear here.')}
                 </p>
                 {dialogs}
+                <DropOverlay show={add.dragging} />
             </div>
         );
     }
 
     return (
-        <div className="flex h-full min-h-[420px] flex-col gap-[5px]">
+        <div className="relative flex h-full min-h-[420px] flex-col gap-[5px]" {...add.dropHandlers}>
             <AddVideo add={add} />
             <Card className="stagger-2 flex min-h-0 flex-1 overflow-hidden">
                 <VideoList
@@ -192,6 +194,7 @@ export default function Home() {
                 </div>
             </Card>
             {dialogs}
+            <DropOverlay show={add.dragging} />
         </div>
     );
 }

@@ -19,24 +19,40 @@ export function clipShape(clip, job) {
     return w > 0 && h > 0 ? { w, h, tag: `${w}x${h}` } : { w: 9, h: 16, tag: '9x16' };
 }
 
-/** The narrowest a tile may be for its shape: tall posters can be slim, wide
- *  ones need room. */
-export function minTileWidth(shape) {
+/** Which of the four shape classes a shape belongs to (tall, 4:5, square, wide). */
+const shapeClass = (shape) => {
     const r = shape.w / shape.h;
-    if (r < 0.7) return 156; // 9:16
-    if (r < 0.9) return 172; // 4:5
-    if (r <= 1.1) return 188; // 1:1
-    return 256; // 16:9 and wider
+    if (r < 0.7) return 0; // 9:16
+    if (r < 0.9) return 1; // 4:5
+    if (r <= 1.1) return 2; // 1:1
+    return 3; // 16:9 and wider
+};
+
+/** The narrowest a tile may be for its shape: the quiet line under the poster
+ *  (score chip 26, length 30, start 30, download 22, three 6px gaps = 126) must
+ *  still fit, and the picture must stay readable - tall posters can be slim,
+ *  wide ones need room. */
+export function minTileWidth(shape) {
+    return [136, 152, 168, 224][shapeClass(shape)];
 }
 
-/** What a tile costs besides its poster, in px: frame (border 2 + padding 12),
- *  score strip 16, title 2 x 15, footer 24 and three 4px gaps. ClipTile's
- *  classes are built to these numbers, so a plan can know a tile's height. */
-export const TILE_FRAME = 14;
-export const TILE_CHROME = 96;
-/** The least a tile is squeezed to when the window is very short (its footer
- *  line, "#14 · 7:03 → 7:27" and the download, still fits). */
-const FLOOR_W = 148;
+/** The widest a tile grows, so one or two clips are not giant. */
+export function maxTileWidth(shape) {
+    return [232, 264, 296, 400][shapeClass(shape)];
+}
+
+/** The width a tile gets when the clips cannot all be in view: roomy enough to
+ *  read, and the grid scrolls. */
+export function comfortTileWidth(shape) {
+    return [176, 200, 224, 288][shapeClass(shape)];
+}
+
+/** What a tile costs besides its poster, in px. The poster IS the tile (no
+ *  frame), so TILE_FRAME is 0; under it: gap 6, title 2 x 15, gap 2, quiet
+ *  line 24. ClipTile's classes are built to these numbers, so a plan can know
+ *  a tile's height. */
+export const TILE_FRAME = 0;
+export const TILE_CHROME = 62;
 
 /** A tile's height at width `tileW`: its poster (in the clip's shape) plus the chrome. */
 export function tileHeight(tileW, shape) {
@@ -44,21 +60,42 @@ export function tileHeight(tileW, shape) {
 }
 
 /** Columns and tile size for the visible box `area` ({ w, h }, px) of the clip
- *  grid. Width decides the columns (as many as fit at the shape's minimum, the
- *  tiles share what is left); height caps the tile so one whole row, picture to
- *  footer, fits in view without scrolling - tiles get smaller, not stretched,
- *  and need not fill the row. `pad` is the grid's padding on every side. */
-export function gridPlan(area, shape, gap = 8, pad = 10) {
+ *  grid holding `count` clips. Among the column counts at which ALL the clips
+ *  fit in view without scrolling (every tile at least the shape's minimum wide,
+ *  at most its maximum), the one with the largest tile wins; a tie goes to
+ *  fewer rows, then to fewer columns (so six clips make 3 + 3, not 5 + 1). When no count fits, the shape's comfortable
+ *  width decides how many columns the row holds, the tiles share the row's
+ *  width (up to the maximum), and the grid scrolls. Tiles never leave their shape.
+ *  `pad` is the grid's padding on every side. */
+export function gridPlan(area, shape, count, gap = 8, pad = 10) {
     const min = minTileWidth(shape);
-    const W = Number.isFinite(area?.w) && area.w > 0 ? Math.max(0, area.w - pad * 2) : min;
+    const max = maxTileWidth(shape);
+    const comfort = comfortTileWidth(shape);
+    const known = Number.isFinite(area?.w) && area.w > 0;
+    const W = known ? Math.max(0, area.w - pad * 2) : comfort;
     const H = Number.isFinite(area?.h) && area.h > 0 ? area.h - pad * 2 : Infinity;
-    const cap = Number.isFinite(H)
-        ? Math.max(FLOOR_W, Math.floor(((H - TILE_CHROME) * shape.w) / shape.h) + TILE_FRAME)
-        : Infinity;
-    const m = Math.min(min, cap);
-    const cols = Math.max(1, Math.floor((W + gap) / (m + gap)));
-    const tileW = Math.min(Math.floor((W - gap * (cols - 1)) / cols), cap);
-    return { cols, tileW, tileH: tileHeight(tileW, shape) };
+    const n = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+
+    let best = null;
+    for (let cols = 1; known && cols <= n; cols++) {
+        const rows = Math.ceil(n / cols);
+        let w = Math.min(Math.floor((W - gap * (cols - 1)) / cols), max);
+        if (Number.isFinite(H)) {
+            const one = (H - gap * (rows - 1)) / rows; // the height one tile may take
+            w = Math.min(w, Math.floor(((one - TILE_CHROME) * shape.w) / shape.h) + TILE_FRAME);
+            while (w > 0 && rows * tileHeight(w, shape) + gap * (rows - 1) > H) w--;
+        }
+        if (w < min) continue;
+        if (!best || w > best.tileW || (w === best.tileW && (rows < best.rows || (rows === best.rows && cols < best.cols)))) best = { cols, rows, tileW: w };
+    }
+    if (best) return { cols: best.cols, tileW: best.tileW, tileH: tileHeight(best.tileW, shape), fits: true };
+
+    // Nothing fits: the comfortable width decides how many columns the row
+    // holds, then the tiles share the row (up to the shape's maximum), so no
+    // blank band is left on the right.
+    const cols = Math.max(1, Math.floor((W + gap) / (comfort + gap)));
+    const tileW = Math.max(1, Math.min(max, Math.floor((W - gap * (cols - 1)) / cols) || comfort));
+    return { cols, tileW, tileH: tileHeight(tileW, shape), fits: false };
 }
 
 /** Rows a text takes at `per` characters a line when it is wrapped at word
@@ -90,7 +127,7 @@ export function wrapRows(text, per) {
 }
 
 /** Characters one line of a tile's title holds. */
-export function charsPerLine(tileW, fontPx = 11, padPx = 14) {
+export function charsPerLine(tileW, fontPx = 11, padPx = 0) {
     return Math.max(4, Math.floor((tileW - padPx - 1) / (fontPx * 0.6)));
 }
 
@@ -109,12 +146,12 @@ export function fitTitle(title, per, lines = 2) {
 }
 
 /** Characters one line of a video's name in the list holds: the list's width
- *  less its padding and scrollbar, the row's padding, the thumbnail and gap,
+ *  less its padding and scrollbar, the row's padding, the 64px thumbnail and gap,
  *  and the buttons that sit beside the name (`actions` of them, 22px each).
  *  The type is 12px mono. */
 export function rowNameChars(listW, actions = 0) {
     const reserve = actions > 0 ? actions * 22 + 6 : 0;
-    return Math.max(4, Math.floor((listW - 96 - reserve - 1) / 7.2));
+    return Math.max(4, Math.floor((listW - 104 - reserve - 1) / 7.2));
 }
 
 /** A video's name as the list shows it: two lines at most, shortened at a

@@ -156,3 +156,59 @@ export function fmtRange(a, b) {
     if (a == null || b == null) return null;
     return `${fmtDur(a)} → ${fmtDur(b)}`;
 }
+
+/** "0:15" - how long a clip runs, from its own start and end. */
+export function clipLength(clip) {
+    if (clip?.start_s == null || clip?.end_s == null) return null;
+    const s = Math.round(clip.end_s - clip.start_s);
+    return s > 0 ? fmtDur(s) : null;
+}
+
+/** "7:03" - where a clip starts in its source video. */
+export function clipStart(clip) {
+    return clip?.start_s == null ? null : fmtDur(clip.start_s);
+}
+
+/** From this score up a clip's number wears the accent; below it stays quiet. */
+export const SCORE_HIGH = 70;
+
+/** 'high' (accent) or 'plain' (muted). Never a warning: a low score is not an error. */
+export const scoreLevel = (score) => (score >= SCORE_HIGH ? 'high' : 'plain');
+
+const ymd = (d, timeZone) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: 'numeric', day: 'numeric' })
+        .formatToParts(d).map((x) => [x.type, x.value]));
+    return [p.year, p.month, p.day];
+};
+
+/** When a video was added, short: today is the time ("14:05"), any other day
+ *  the day and month ("3 Oct"), and a day in another year adds the year
+ *  ("3 Oct 2025"). `locale` is the app's language; `timeZone` is the machine's
+ *  unless a test fixes it. */
+export function fmtAdded(ms, now = Date.now(), locale = 'en', timeZone = undefined) {
+    if (!Number.isFinite(ms)) return null;
+    const d = new Date(ms);
+    const [y, m, day] = ymd(d, timeZone);
+    const [ny, nm, nday] = ymd(new Date(now), timeZone);
+    const opts = y === ny && m === nm && day === nday
+        ? { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+        : { day: 'numeric', month: 'short', ...(y === ny ? {} : { year: 'numeric' }) };
+    const want = locale === 'en' ? 'en-GB' : locale;
+    try {
+        return new Intl.DateTimeFormat(want, { ...opts, timeZone }).format(d);
+    } catch {
+        return new Intl.DateTimeFormat('en-GB', { ...opts, timeZone }).format(d);
+    }
+}
+
+/** The one meta line under a video's name in the list, with the dot it wears:
+ *  a finished video says "6 clips · 3 Oct" (a white dot until it has been
+ *  opened, none after), a working one its stage (orange, pulsing), a failed or
+ *  cancelled one the word (red). `dot` is 'new', 'work', 'bad' or null. */
+export function rowMeta(job, { tr = (s) => s, locale = 'en', now = Date.now(), fresh = false, timeZone } = {}) {
+    const st = rowStatus(job, tr);
+    if (st.phase === 'failed' || st.phase === 'cancelled') return { ...st, dot: 'bad' };
+    if (st.phase === 'working' || st.phase === 'making') return { ...st, dot: 'work' };
+    const when = fmtAdded(job?.created_ms, now, locale, timeZone);
+    return { ...st, text: [st.text, when].filter(Boolean).join(' · '), dot: fresh ? 'new' : null };
+}

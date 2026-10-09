@@ -7,7 +7,7 @@ import { useT } from '../../lib/i18n';
 const VIDEO_RE = new RegExp(`\\.(${VIDEO_EXT.join('|')})$`, 'i');
 
 /** Everything that puts a new video into DigiClip: browse, a drop anywhere on
- *  the window, a pasted link, and the merge of a video's picks (a new job off
+ *  the page, a pasted link, and the merge of a video's picks (a new job off
  *  the same source). The file never uploads anywhere; the engine reads it off
  *  disk. Failures surface in the banner instead of dying silently. */
 export default function useAddVideo() {
@@ -16,10 +16,12 @@ export default function useAddVideo() {
     const [jobOptions] = useJobOptions(settings);
     const [link, setLink] = useState('');
     const [uploading, setUploading] = useState(null);
-    const [dragging, setDragging] = useState(false);
-    // Nesting counter so the hover paint doesn't flicker when the drag
-    // crosses child elements inside the card.
-    const dragDepth = useRef(0);
+    // Two sources say a file is being dragged over: the shell (OS drag
+    // channel, real paths) and the page's own DOM events. Kept apart and
+    // joined, so neither can switch the other off mid-drag.
+    const [osDrag, setOsDrag] = useState(false);
+    const [domDrag, setDomDrag] = useState(false);
+    const dragging = osDrag || domDrag;
     // Last time the OS-level Tauri drop (real paths) fired. Compared
     // against DOM drops to detect a dead shell event (see onDrop).
     const lastTauriDrop = useRef(0);
@@ -83,41 +85,50 @@ export default function useAddVideo() {
             .catch((e) => flashMessage(t('Browse failed: {error}', { error: e?.message ?? e })));
     }
 
-    // Window drops carry real paths (Tauri drag-drop event); the card's
+    // Window drops carry real paths (Tauri drag-drop event); the page's
     // own drag handlers are hover paint only.
     useEffect(() => onFilesDropped((paths) => {
         lastTauriDrop.current = Date.now();
         startFromPaths(paths);
     }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Hover paint rides the OS drag channel (enter/over lights the card,
+    // Hover paint rides the OS drag channel (enter/over shows the overlay,
     // leave/drop clears it) - the same channel drops provably arrive on.
-    // The card's own DOM handlers stay as backup.
-    useEffect(() => onDragHover(setDragging), []);
+    // The page's own DOM handlers stay as backup.
+    useEffect(() => onDragHover(setOsDrag), []);
 
-    // A drop landing anywhere except the card must never navigate the
-    // webview away to the file (which used to blank the whole app). The
-    // OS-level Tauri drop event above still fires - this only stops the
-    // browser default.
+    // A drop landing anywhere must never navigate the webview away to the
+    // file (which used to blank the whole app). The OS-level Tauri drop
+    // event above still fires - this only stops the browser default. A drag
+    // that ends anywhere (dropped, escaped, left the window) clears the paint.
     useEffect(() => {
         const stop = (e) => e.preventDefault();
+        const end = () => setDomDrag(false);
         window.addEventListener('dragover', stop);
         window.addEventListener('drop', stop);
+        window.addEventListener('drop', end);
+        window.addEventListener('dragend', end);
         return () => {
             window.removeEventListener('dragover', stop);
             window.removeEventListener('drop', stop);
+            window.removeEventListener('drop', end);
+            window.removeEventListener('dragend', end);
         };
     }, []);
 
-    /** The drop zone's own DOM handlers. */
+    const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+
+    /** The page's own DOM handlers: spread them on the page's root. Entering
+     *  a child fires leave on the one before, so a leave only counts when the
+     *  pointer really left the root (relatedTarget is outside it), which keeps
+     *  the overlay steady across children. */
     const dropHandlers = {
-        onDragEnter: (e) => { e.preventDefault(); dragDepth.current += 1; setDragging(true); },
-        onDragOver: (e) => { e.preventDefault(); setDragging(true); },
-        onDragLeave: () => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (dragDepth.current === 0) setDragging(false); },
+        onDragEnter: (e) => { if (hasFiles(e)) { e.preventDefault(); setDomDrag(true); } },
+        onDragOver: (e) => { e.preventDefault(); if (hasFiles(e)) setDomDrag(true); },
+        onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDomDrag(false); },
         onDrop: (e) => {
             e.preventDefault();
-            dragDepth.current = 0;
-            setDragging(false);
+            setDomDrag(false);
             // Diagnostic: a DOM drop always fires in a webview. If the
             // OS-level Tauri drop (real paths) doesn't follow within a
             // beat, the shell event is dead - say so instead of failing
