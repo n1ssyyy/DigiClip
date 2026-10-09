@@ -8,7 +8,7 @@ import { chooseValue, findFont, flatRows, fontStatus, groupFonts, showSearch } f
 import { isTypeKey, moveActive, typeahead } from '../../../lib/fontPicker';
 import { cn } from '../../../lib/utils';
 import { addFontFromDialog, removeFont } from '../fontActions';
-import { ensureFace, fontPreview, useFaceStatus, useFontLibrary } from '../useFonts';
+import { ensureFace, fontPreview, library, useFaceStatus, useFontLibrary } from '../useFonts';
 import FontRow, { faceStyle } from './FontRows';
 
 const box = 'rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)]';
@@ -83,6 +83,10 @@ export default function FontPicker({ label, layer, value, def, onPick }) {
         close(true);
     }
     function openList() {
+        // Read the list again each time: a file dropped into the fonts folder
+        // by hand shows up without reconnecting. The list on screen stays
+        // until the new one is in.
+        if (lib.hasCap) library.refresh();
         setOpen(true);
         setActive(Math.max(0, rows.findIndex((r) => r.family.toLowerCase() === String(value).toLowerCase())));
     }

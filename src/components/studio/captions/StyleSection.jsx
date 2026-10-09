@@ -1,7 +1,7 @@
 import { SUBS_LANGS, captionsSet } from '../../../lib/look';
 import { cssFont } from '../../../lib/fontNames';
 import { CAPTION_STYLES, fontBox, outlineRing, resolveCaptions, rgba } from '../../../lib/captionStyles';
-import { Select, SwitchRow } from '../../digiclip/JobOptions';
+import { Select, SwitchRow } from '../../digiclip/fields';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
 import Field, { ResetButton } from '../Field';

@@ -77,6 +77,9 @@ export default {
         "Clip pages": "Faqet e klipeve",
         "Previous clips": "Klipet e mëparshme",
         "Next clips": "Klipet e radhës",
+        "Auto clips": "Klipe automatike",
+        "1 clip": "1 klip",
+        "Open Studio": "Hap Studion",
     },
     de: {
         "Upload": "Upload",
@@ -155,6 +158,9 @@ export default {
         "Clip pages": "Clip-Seiten",
         "Previous clips": "Vorherige Clips",
         "Next clips": "Nächste Clips",
+        "Auto clips": "Auto-Clips",
+        "1 clip": "1 Clip",
+        "Open Studio": "Studio öffnen",
     },
     fr: {
         "Upload": "Import",
@@ -233,6 +239,9 @@ export default {
         "Clip pages": "Pages de clips",
         "Previous clips": "Clips précédents",
         "Next clips": "Clips suivants",
+        "Auto clips": "Clips auto",
+        "1 clip": "1 clip",
+        "Open Studio": "Ouvrir Studio",
     },
     es: {
         "Upload": "Subida",
@@ -311,6 +320,9 @@ export default {
         "Clip pages": "Páginas de clips",
         "Previous clips": "Clips anteriores",
         "Next clips": "Clips siguientes",
+        "Auto clips": "Clips automáticos",
+        "1 clip": "1 clip",
+        "Open Studio": "Abrir Studio",
     },
     it: {
         "Upload": "Caricamento",
@@ -389,6 +401,9 @@ export default {
         "Clip pages": "Pagine di clip",
         "Previous clips": "Clip precedenti",
         "Next clips": "Clip successive",
+        "Auto clips": "Clip automatici",
+        "1 clip": "1 clip",
+        "Open Studio": "Apri Studio",
     },
     tr: {
         "Upload": "Yükleme",
@@ -467,5 +482,8 @@ export default {
         "Clip pages": "Klip sayfaları",
         "Previous clips": "Önceki klipler",
         "Next clips": "Sonraki klipler",
+        "Auto clips": "Otomatik klip",
+        "1 clip": "1 klip",
+        "Open Studio": "Studio’yu aç",
     },
 };

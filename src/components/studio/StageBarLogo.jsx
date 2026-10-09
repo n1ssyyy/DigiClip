@@ -1,6 +1,6 @@
 import { ImagePlus } from 'lucide-react';
 import { rgba } from '../../lib/captionStyles';
-import { baseName } from '../digiclip/JobOptions';
+import { baseName } from '../../lib/utils';
 import { useClock } from './usePlayer';
 
 const rnd = (v, d = 100) => Math.round(v * d) / d;

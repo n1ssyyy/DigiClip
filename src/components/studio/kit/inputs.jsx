@@ -1,6 +1,6 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { Slider, Swatch } from '../../digiclip/controls';
-import { Kicker } from '../../digiclip/JobOptions';
+import { Kicker } from '../../digiclip/fields';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
 import { ResetBtn } from '../Field';

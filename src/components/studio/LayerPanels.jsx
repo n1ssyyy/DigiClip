@@ -1,11 +1,11 @@
 import { Stepper, TightenSeg } from '../digiclip/controls';
-import { DurSeg, KindSeg, LEVEL_OPTS, MusicSlot, Seg, inputCls } from '../digiclip/JobOptions';
+import { DurSeg, KindSeg, LEVEL_OPTS, MusicSlot, Seg, inputCls } from '../digiclip/fields';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 import Field from './Field';
+import ExtraShapes from './ExtraShapes';
 
-/** The controls the Home popover already has for these topics, moved
- *  into the inspector and bound to the same state. (The other layers have
+/** The music and clips panels of the inspector. (The other layers have
  *  panels of their own in headline/, bar/, logo/, camera/, layout/ and effects/.) */
 
 export function MusicPanel({ options, update }) {
@@ -76,6 +76,9 @@ export function ClipsPanel({ options, update }) {
                     maxLength={120}
                     className={inputCls}
                 />
+            </Field>
+            <Field label={t('Also make')} hint={t('One run then makes each clip in every chosen shape.')}>
+                <ExtraShapes aspect={options.aspect} onChange={set('aspect')} />
             </Field>
         </div>
     );

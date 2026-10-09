@@ -11,13 +11,16 @@ import { useT } from '../../lib/i18n';
 /**
  * The saved Looks, for the picker and the keys: the list, which look the
  * working copy is, whether it has been edited, and the actions. A Look is a
- * preset (`settings.presets`), written with `saveSettings` the way the Home
- * popover writes them. An action that cannot be saved says so in the toast
+ * preset (`settings.presets`), written with `saveSettings` (the watch folder
+ * and the CLI read the same list). An action that cannot be saved says so in the toast
  * and changes nothing.
+ *
+ * Home reads the list and loads a look too (`undoHint: false`: its toast does
+ * not promise an undo key the page does not have).
  *
  * @param {{options: object, current: string|null, load: Function, setCurrent: Function}} look  `useLook()`
  */
-export function useLooks({ look, settings }) {
+export function useLooks({ look, settings, undoHint = true }) {
     const t = useT();
     const presets = settings?.presets;
     const { options, current: name } = look;
@@ -56,8 +59,8 @@ export function useLooks({ look, settings }) {
         look.load(next, entry.name);
         // Only the app's own names are translated; a name the person typed is theirs.
         const shown = entry.kind === 'starter' ? t(entry.name) : entry.name;
-        flashMessage(same ? t('Loaded “{name}”.', { name: shown }) : t('Loaded “{name}”. Ctrl+Z goes back.', { name: shown }));
-    }, [look, t]);
+        flashMessage(same || !undoHint ? t('Loaded “{name}”.', { name: shown }) : t('Loaded “{name}”. Ctrl+Z goes back.', { name: shown }));
+    }, [look, t, undoHint]);
 
     /** Save the working copy over the current look (the person's own). */
     const save = useCallback(async () => {

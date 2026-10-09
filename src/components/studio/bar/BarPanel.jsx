@@ -4,7 +4,7 @@ import { BAR_DEFAULT_COLOR, resolveBar } from '../../../lib/layers';
 import { barView, layerClear, layerPatch } from '../../../lib/layerEffective';
 import { BAR_LAYER, numSpec, numUi, sectionHasOverrides, sectionResetPatch } from '../../../lib/layerSections';
 import { useT } from '../../../lib/i18n';
-import { SwitchRow } from '../../digiclip/JobOptions';
+import { SwitchRow } from '../../digiclip/fields';
 import { ResetButton } from '../Field';
 import { CapNotice } from '../Notice';
 import { Choice } from '../kit/choices';
@@ -19,7 +19,7 @@ const HEX = /^#[0-9a-f]{6}$/i;
 const v2Note = (t) => t('This engine is older than these controls. They apply after the next engine update.');
 
 /** Bar: on or off, which edge, how thick, what colour. The colour is the
- *  flat one the Home popover also edits (the Look's own replaces it). */
+ *  flat one (the Look's own replaces it). */
 function BarSection({ options, update, edit, onResetAll, anySet }) {
     const t = useT();
     const { view, set, clear } = usePanel();
@@ -88,7 +88,7 @@ function GlowSection() {
 
 /**
  * The Progress bar inspector: sections (Bar, Track, Shape, Glow) over the
- * Look's bar section, with the colour the Home popover shares.
+ * Look's bar section, with the flat colour option.
  */
 export default function BarPanel({ look }) {
     const t = useT();

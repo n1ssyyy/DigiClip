@@ -17,6 +17,7 @@ export default function ExactButton({ exact, narrow }) {
             <button
                 type="button"
                 aria-label={t('Exact frame')}
+                data-exact-button=""
                 aria-disabled={!exact.ok || undefined}
                 aria-busy={pending || undefined}
                 aria-pressed={shown}

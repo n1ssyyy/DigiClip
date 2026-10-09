@@ -3,7 +3,7 @@ import { cameraView, feelPatch, sceneChanged, sceneReset } from '../../../lib/sc
 import { CAMERA_LAYER } from '../../../lib/sceneSections';
 import { FEEL_LABEL } from '../../../lib/sceneSummary';
 import { useT } from '../../../lib/i18n';
-import { SwitchRow } from '../../digiclip/JobOptions';
+import { SwitchRow } from '../../digiclip/fields';
 import { CapNotice } from '../Notice';
 import { Choice } from '../kit/choices';
 import { usePanel } from '../kit/context';
@@ -57,7 +57,7 @@ function ZoomSection() {
     );
 }
 
-/** Punch-ins: the quick zoom on loud words (the switch is the Home popover's too). */
+/** Punch-ins: the quick zoom on loud words (the switch is the `punch` option). */
 function PunchSection({ options, update }) {
     const t = useT();
     const older = useOlder();

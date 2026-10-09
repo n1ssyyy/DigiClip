@@ -1,8 +1,9 @@
 import { Camera, Captions, Columns2, Eye, EyeOff, Gauge, Heading, ImagePlus, Music, Scissors, Sparkles } from 'lucide-react';
 import { Card } from '../ui/card';
 import Tip from '../digiclip/Tooltip';
-import { Kicker, baseName } from '../digiclip/JobOptions';
+import { Kicker } from '../digiclip/fields';
 import { fontTrait, withFont } from '../../lib/lookSummary';
+import { fileSummary, headlineSummary } from '../../lib/layerSummary';
 import { sceneSummary } from '../../lib/sceneSummary';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
@@ -51,9 +52,13 @@ function summary(id, o, t) {
         }
         case 'headline': {
             if (!o.headline) return t('Off');
-            const size = o.look?.headline?.size;
-            const line = `${(o.headline_text ?? '').trim() || t("The clip's own title")}${size !== undefined ? ` · ${Math.round(size * 100)}%` : ''}`;
-            return withFont(line, fontTrait({ style: o.style, headline: true, look: { headline: o.look?.headline } }), ROW_MAX);
+            return headlineSummary({
+                text: o.headline_text,
+                size: o.look?.headline?.size,
+                font: fontTrait({ style: o.style, headline: true, look: { headline: o.look?.headline } }),
+                max: ROW_MAX,
+                tr: t,
+            });
         }
         case 'bar': {
             if (!o.progress_bar) return t('Off');
@@ -62,10 +67,9 @@ function summary(id, o, t) {
         }
         case 'logo': {
             if (!o.logo) return t('No file');
-            const size = o.look?.logo?.size;
-            return `${baseName(o.logo)}${size !== undefined ? ` · ${Math.round(size * 100)}%` : ''}`;
+            return fileSummary({ file: o.logo, size: o.look?.logo?.size, max: ROW_MAX, fallback: t('Your logo') });
         }
-        case 'music': return o.music ? baseName(o.music) : t('No file');
+        case 'music': return o.music ? fileSummary({ file: o.music, max: ROW_MAX, fallback: t('Your music') }) : t('No file');
         case 'camera': case 'layout': case 'effects': return sceneSummary(id, o, t);
         case 'clips': return `${o.count > 0 ? t('{n} clips', { n: o.count }) : t('Auto')} · ${t(KIND_LABEL[o.kind] ?? 'Smart')}`;
         default: return '';
@@ -137,7 +141,7 @@ export default function Layers({ options, selected, onSelect, update, setCaption
                                     {!narrow && (
                                         <span className="min-w-0 flex-1">
                                             <span className={cn('block truncate text-[12px] leading-tight', on && 'font-medium')}>{t(row.name)}</span>
-                                            <span className="block truncate text-[10px] leading-tight text-muted-foreground">{sum}</span>
+                                            <span className="block break-words text-[10px] leading-tight text-muted-foreground">{sum}</span>
                                         </span>
                                     )}
                                 </button>

@@ -1,47 +1,14 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { usePanelBeat } from '../digiclip/usePanelBeat';
 import { useFloatingPanel } from '../digiclip/useFloatingPanel';
-import { lookSummary } from '../../lib/lookSummary';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 import { ActionRows, Confirm, NameField } from './LookActions';
+import LookRows, { focusCurrent, moveInList } from './LookRows';
 
 export const CLOSED = { open: false, mode: 'list' };
-
-/** The enabled items of the open menu, in order. */
-const items = (panel) => [...(panel?.querySelectorAll('[data-look-item]:not(:disabled)') ?? [])];
-
-function Group({ label, children }) {
-    const id = useId();
-    return (
-        <div role="group" aria-labelledby={id}>
-            <p id={id} className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-            {children}
-        </div>
-    );
-}
-
-function LookRow({ entry, on, summary, name, onPick }) {
-    return (
-        <button
-            type="button"
-            role="menuitemradio"
-            aria-checked={on}
-            data-look-item=""
-            data-current={on ? '' : undefined}
-            onClick={onPick}
-            className={cn('flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:bg-accent', on && 'bg-accent/60')}
-        >
-            <span className="min-w-0 flex-1">
-                <span className="block break-words text-[12px]">{name}</span>
-                <span className="block break-words font-mono text-[10px] text-muted-foreground">{summary}</span>
-            </span>
-            <Check className={cn('size-3.5 shrink-0', !on && 'opacity-0')} aria-hidden />
-        </button>
-    );
-}
 
 /**
  * The Look picker, which is the title of the Studio page: the current look's
@@ -82,8 +49,7 @@ export default function LookPicker({ looks, ui, setUi }) {
     // that is current, else the first item.
     useEffect(() => {
         if (!open || !show || leaving || mode !== 'list') return;
-        const list = items(panelRef.current);
-        (panelRef.current?.querySelector('[data-current]') ?? list[0])?.focus();
+        focusCurrent(panelRef.current);
     }, [open, show, leaving, mode, placed]);
 
     function onKeyDown(e) {
@@ -100,15 +66,7 @@ export default function LookPicker({ looks, ui, setUi }) {
             return;
         }
         if (e.target.tagName === 'INPUT') return;
-        const keys = { ArrowDown: 1, ArrowUp: -1, Home: 'first', End: 'last' };
-        if (!(e.key in keys)) return;
-        e.preventDefault();
-        const list = items(panelRef.current);
-        if (!list.length) return;
-        const i = list.indexOf(document.activeElement);
-        const step = keys[e.key];
-        const next = step === 'first' ? 0 : step === 'last' ? list.length - 1 : (i + step + list.length) % list.length;
-        list[next].focus();
+        moveInList(e, panelRef.current);
     }
 
     // Run an action; the menu closes once it worked.
@@ -119,17 +77,6 @@ export default function LookPicker({ looks, ui, setUi }) {
         looks.load(entry);
         close();
     };
-
-    const row = (entry) => (
-        <LookRow
-            key={`${entry.kind}:${entry.name}`}
-            entry={entry}
-            on={entry.kind === current.kind && entry.name === current.name}
-            name={entry.kind === 'mine' ? entry.name : t(entry.name)}
-            summary={entry.kind === 'mine' ? lookSummary(entry.options, t) : t(entry.blurb)}
-            onPick={() => pick(entry)}
-        />
-    );
 
     return (
         <div ref={rootRef} className="relative min-w-0">
@@ -157,8 +104,7 @@ export default function LookPicker({ looks, ui, setUi }) {
                     className={cn('digi-menu fixed z-[100] rounded-md border bg-popover text-popover-foreground shadow-md', leaving ? 'menu-out' : 'pop')}
                 >
                     <div className="digi-scroll max-h-80 overflow-y-auto p-1">
-                        {looks.list.mine.length > 0 && <Group label={t('Your looks')}>{looks.list.mine.map(row)}</Group>}
-                        <Group label={t('Starter looks')}>{looks.list.starters.map(row)}</Group>
+                        <LookRows looks={looks} onPick={pick} />
                     </div>
                     <div className="border-t border-white/10 p-1">
                         {mode === 'list' && <ActionRows looks={looks} setMode={(m) => setUi({ open: true, ...m })} run={run} />}

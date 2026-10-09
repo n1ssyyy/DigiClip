@@ -5,7 +5,7 @@ import { layerClear, layerPatch, logoView } from '../../../lib/layerEffective';
 import { LOGO_LAYER, numSpec, numUi, sectionHasOverrides, sectionResetPatch } from '../../../lib/layerSections';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
-import { CORNER_OPTS, LogoSlot, Seg } from '../../digiclip/JobOptions';
+import { CORNER_OPTS, LogoSlot, Seg } from '../../digiclip/fields';
 import Field, { ResetButton } from '../Field';
 import PlaceField from '../PlaceField';
 import { CapNotice } from '../Notice';

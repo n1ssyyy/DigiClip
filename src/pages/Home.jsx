@@ -11,7 +11,8 @@ import {
 import { isTauri, onDragHover, onFilesDropped, pickVideos, VIDEO_EXT } from '../lib/native';
 import Tip from '../components/digiclip/Tooltip';
 import { FadeImg } from '../components/digiclip/Skeleton';
-import OptionsButton, { toEngine, useJobOptions } from '../components/digiclip/JobOptions';
+import LookLine from '../components/digiclip/LookLine';
+import { toEngine, useJobOptions } from '../lib/look';
 import ClipInsights, { overall, scoreTone } from '../components/digiclip/ClipInsights';
 import EditClipDialog from '../components/digiclip/EditClipDialog';
 import TranscriptDialog from '../components/digiclip/TranscriptDialog';
@@ -962,13 +963,13 @@ export default function Home() {
     const t = useT();
     const projects = useStore((s) => s.jobs);
     const settings = useStore((s) => s.settings);
-    const [jobOptions, setJobOptions] = useJobOptions(settings);
+    const [jobOptions] = useJobOptions(settings);
     const limits = { accept: 'MP4 · MOV · MKV · WEBM', note: t('straight off your disk') };
     const wheelLock = useRef(0);
     const wheelAcc = useRef(0);
     const touchY = useRef(null);
     // Nesting counter so the hover paint doesn't flicker when the drag
-    // crosses child elements (the options button) inside the card.
+    // crosses child elements inside the card.
     const dragDepth = useRef(0);
     // Last time the OS-level Tauri drop (real paths) fired. Compared
     // against DOM drops to detect a dead shell event (see onDrop).
@@ -1299,7 +1300,7 @@ export default function Home() {
         <div className="grid h-full min-h-[480px] grid-cols-2 gap-[5px]">
             {/* LEFT HALF: upload (30%) over queue */}
             <div className="flex min-h-0 min-w-0 flex-col gap-[5px]">
-                <Card className="stagger-1 flex h-[30%] min-h-[148px] shrink-0 flex-col overflow-hidden">
+                <Card className="stagger-1 flex h-[34%] min-h-[196px] shrink-0 flex-col overflow-hidden">
                     <CardContent className="flex min-h-0 flex-1 flex-col p-2">
                         <div
                             role="button"
@@ -1340,13 +1341,6 @@ export default function Home() {
                                 dragging ? 'border-primary bg-accent shadow-[0_0_0_3px_rgb(255_255_255/0.12),0_0_24px_rgb(255_255_255/0.08)]' : 'border-input hover:bg-accent/50',
                             )}
                         >
-                            <div
-                                className="absolute top-1.5 right-1.5"
-                                onClick={(e) => e.stopPropagation()}
-                                onKeyDown={(e) => e.stopPropagation()}
-                            >
-                                <OptionsButton options={jobOptions} onChange={setJobOptions} />
-                            </div>
                             <UploadCloud className="size-6 shrink-0 text-muted-foreground" aria-hidden />
                             <span className="text-[13px] font-medium">{t('Drop a video here, or click to browse')}</span>
                             <span className="font-mono text-[10px] text-muted-foreground">
@@ -1377,6 +1371,7 @@ export default function Home() {
                                 {t('{name} — starting…', { name: uploading.name })}
                             </p>
                         )}
+                        <LookLine dim={dragging} />
                     </CardContent>
                 </Card>
 

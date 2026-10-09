@@ -4,10 +4,10 @@ import { Check, ChevronDown, Film, Redo2, Undo2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import Tip from '../digiclip/Tooltip';
 import { Segmented } from '../digiclip/controls';
-import { ASPECT_OPTS } from '../digiclip/JobOptions';
+import { ASPECT_OPTS } from '../digiclip/fields';
 import { usePanelBeat } from '../digiclip/usePanelBeat';
 import { useFloatingPanel } from '../digiclip/useFloatingPanel';
-import { aspectList } from '../../lib/look';
+import { mainShape, setMainShape } from '../../lib/shapes';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 import { STAND_IN } from './useSample';
@@ -114,17 +114,14 @@ function HistoryButton({ icon: Icon, label, shortcut, disabled, onClick }) {
 /** The Look picker (the page's title), the stage's shape, the sample, the exact frame and undo/redo. */
 export default function TopBar({ options, update, sample, history, looks, lookUi, setLookUi, exact, narrow }) {
     const t = useT();
-    const shapes = aspectList(options.aspect);
-    // One shape is on the stage: the first of the list. Picking another
-    // replaces it and keeps any extra shapes the run will also make.
-    function pick(a) {
-        update({ aspect: [a, ...shapes.slice(1).filter((x) => x !== a)].join(',') });
-    }
+    // One shape is on the stage: the main one. Picking another replaces it
+    // and keeps any extra shapes the run will also make.
+    const pick = (a) => update({ aspect: setMainShape(options.aspect, a) });
     return (
         <Card className="stagger-1 relative shrink-0">
             <div className="flex h-10 items-center gap-3 px-4">
                 <div role="heading" aria-level={1} className="min-w-0 shrink"><LookPicker looks={looks} ui={lookUi} setUi={setLookUi} /></div>
-                <Segmented label={t('Stage shape')} size="sm" value={shapes[0]} options={ASPECT_OPTS} onChange={pick} className="w-52 shrink-0" />
+                <Segmented label={t('Stage shape')} size="sm" value={mainShape(options.aspect)} options={ASPECT_OPTS} onChange={pick} className="w-52 shrink-0" />
                 <div className="min-w-0 flex-1" />
                 <SampleMenu sample={sample} />
                 <ExactButton exact={exact} narrow={narrow} />

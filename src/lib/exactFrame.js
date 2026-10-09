@@ -71,3 +71,21 @@ export function renderTime(ms) {
 export function warningLine(warnings) {
     return (Array.isArray(warnings) ? warnings : []).filter((w) => typeof w === 'string' && w.trim()).map((w) => w.trim()).join(' · ');
 }
+
+/**
+ * What the Space key does on the Studio page. While the engine's still is
+ * up, Space on the "Exact frame" button (where focus stays after it was
+ * clicked) would only press that button again and close the still; it
+ * closes the still and plays instead. Anywhere else the key is the focused
+ * control's own when it means something to it.
+ *
+ * @param {{typing: boolean, free: boolean, stillShown: boolean, onStillButton: boolean}} s
+ *   typing: focus is in a text field; free: focus is on nothing that uses Space;
+ *   stillShown: the still is up; onStillButton: focus is on the Exact frame button
+ * @returns {'none'|'play'|'close-and-play'}
+ */
+export function spaceAction({ typing, free, stillShown, onStillButton }) {
+    if (typing) return 'none';
+    if (stillShown && (free || onStillButton)) return 'close-and-play';
+    return free ? 'play' : 'none';
+}

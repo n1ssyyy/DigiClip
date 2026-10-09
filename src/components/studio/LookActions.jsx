@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { BookmarkPlus, Copy, Pencil, Save, Trash2, X } from 'lucide-react';
-import { inputCls } from '../digiclip/JobOptions';
+import { inputCls } from '../digiclip/fields';
 import Tip from '../digiclip/Tooltip';
 import { checkName, nameStep, nextFreeName } from '../../lib/lookNames';
 import { lookActions } from '../../lib/lookLibrary';

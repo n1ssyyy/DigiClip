@@ -1,7 +1,7 @@
 import { cardPatch } from '../../../lib/layerEffective';
 import { HEADLINE_LAYER } from '../../../lib/layerSections';
 import { useT } from '../../../lib/i18n';
-import { SwitchRow, inputCls } from '../../digiclip/JobOptions';
+import { SwitchRow, inputCls } from '../../digiclip/fields';
 import Field, { ResetButton } from '../Field';
 import { CapNotice } from '../Notice';
 import PlaceField from '../PlaceField';

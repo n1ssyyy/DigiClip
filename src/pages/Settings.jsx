@@ -19,6 +19,7 @@ import { LANGUAGES, setLang, useLang, useT } from '../lib/i18n';
 import { deleteModel, downloadModel, navigate, saveSettings, useStore } from '../lib/socket';
 import { checkForUpdates, ensureAppVersion, runSetup, setAutoUpdate, useUpdates } from '../lib/updates';
 import { idleIconsEnabled, setIdleIcons } from '../lib/iconMotion';
+import { CUSTOM, watchChoice } from '../lib/watchLook';
 
 const inputCls = 'flex h-9 w-full rounded-md border border-x-white/10 border-b-black/60 border-t-white/20 bg-[color-mix(in_srgb,var(--card)_78%,black)] px-3 py-1 text-[13px] outline-none transition-[box-shadow,background-color] focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
@@ -358,15 +359,6 @@ function LayaCard({ model }) {
             )}
         </div>
     );
-}
-
-/** Which saved options the watch folder runs with: a preset, or the
- *  engine defaults. Matched by value, so renaming a preset is harmless. */
-function watchPick(options, presets) {
-    const cur = JSON.stringify(options ?? {});
-    const hit = presets.find((p) => JSON.stringify(p.options) === cur);
-    if (hit) return hit.name;
-    return Object.values(options ?? {}).every((v) => v == null) ? '' : '__custom';
 }
 
 /** Tray + sign-in: shell prefs, applied the moment they flip (they live
@@ -717,7 +709,7 @@ export default function Settings() {
     const jevMissing = decider === 'jev' && !settings.jev_key_set;
     const presets = settings.presets ?? [];
     const watchDir = v.watch_dir ?? '';
-    const watchSel = watchPick(v.watch_options, presets);
+    const watch = watchChoice(v.watch_options, presets);
     const connected = Object.values(mcpInstalled ?? {}).filter((c) => c?.added).length;
 
     // Clip AI: the provider in use and what is saved for it. Maps merge the
@@ -1055,23 +1047,23 @@ export default function Settings() {
                                 </div>
                             </Row>
                             <Row
-                                title={t('Options')}
-                                desc={presets.length ? t('Save presets from the job options panel on Home.') : t('No presets yet: save one from the job options panel on Home.')}
-                                search="preset watch options"
+                                title={t('Look')}
+                                desc={watch.names.length ? t('Design and save Looks in Studio.') : t('No Looks yet: design one in Studio and save it.')}
+                                search="look preset watch options studio"
                             >
                                 <Select
-                                    value={watchSel}
-                                    label={t('Options')}
+                                    value={watch.value}
+                                    label={t('Look')}
                                     onChange={(name) => {
-                                        const p = presets.find((x) => x.name === name);
+                                        const p = presets.find((x) => x?.name === name);
                                         // Defaults = every field unset, shaped like the saved value.
                                         const none = Object.fromEntries(Object.keys(settings.watch_options ?? {}).map((k) => [k, null]));
                                         patch({ watch_options: p ? p.options : none });
                                     }}
                                 >
                                     <option value="">{t('Defaults (from these settings)')}</option>
-                                    {presets.map((p) => <option key={p.name} value={p.name}>{t('Preset: {name}', { name: p.name })}</option>)}
-                                    {watchSel === '__custom' && <option value="__custom" disabled>{t('Custom (preset since changed)')}</option>}
+                                    {watch.names.map((name) => <option key={name} value={name}>{t('Look: {name}', { name })}</option>)}
+                                    {watch.custom && <option value={CUSTOM} disabled>{t('Custom (look since changed)')}</option>}
                                 </Select>
                             </Row>
                         </Section>

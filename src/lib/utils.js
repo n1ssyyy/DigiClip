@@ -9,3 +9,6 @@ export function cn(...inputs) {
  *  brighter top and side edge. Every page uses this one recipe. */
 export const HOT_EDGE = 'border-t-white/25 border-x-white/[0.13]';
 
+
+/** The file name at the end of a path (either kind of slash). */
+export const baseName = (p) => (p ? p.split(/[\/]/).pop() : '');

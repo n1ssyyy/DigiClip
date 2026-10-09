@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { aspectList, useLook } from '../lib/look';
 import { CANVASES, captionLines, clamp, resolveCaptions } from '../lib/captionStyles';
 import { captionBlocks } from '../lib/captionMotion';
+import { spaceAction } from '../lib/exactFrame';
 import { parkTime } from '../lib/stageTime';
 import { stageScene } from '../lib/stageScene';
 import { splitPatch } from '../lib/sceneEffective';
@@ -53,7 +54,7 @@ const r2 = (v) => Math.round(v * 100) / 100;
 
 /**
  * Studio: an interactive stage for designing how clips look. It edits the
- * Look, the same state the options popover on Home edits. Layers are drawn
+ * Look, the same working copy the line under the upload box on Home shows. Layers are drawn
  * the way the engine burns them and can be picked, moved and resized on the
  * stage itself; the inspector holds the same numbers as sliders. The top bar
  * holds the Look picker (named, saved looks are presets) and the exact frame
@@ -226,7 +227,7 @@ export default function Studio() {
 
     // The key handler reads the latest of these without re-binding.
     const liveRef = useRef({});
-    liveRef.current = { onStage, centres, edit, split: L.layout?.split ?? 0.5, save };
+    liveRef.current = { onStage, centres, edit, split: L.layout?.split ?? 0.5, save, exact };
 
     const notice = sample.status === 'loading' ? t('Loading the transcript…')
         : sample.status === 'failed' ? t("Couldn't load this transcript; showing stand-in words.")
@@ -277,8 +278,23 @@ export default function Studio() {
                 return;
             }
         }
-        if (e.key === ' ' && !inTextField(el) && spaceIsFree(el)) {
+        if (e.key === ' ') {
+            // While the engine's still is up, Space on the Exact frame button
+            // would only close it again: it closes the still and plays.
+            const ex = liveRef.current.exact;
+            const todo = spaceAction({
+                typing: inTextField(el),
+                free: spaceIsFree(el),
+                stillShown: ex.phase === 'shown',
+                onStillButton: !!el?.closest?.('[data-exact-button]'),
+            });
+            if (todo === 'none') return;
             e.preventDefault();
+            if (todo === 'close-and-play') {
+                // Off the button, so the key's release does not press it.
+                if (el !== document.body) el.blur?.();
+                ex.dismiss();
+            }
             toggle();
         }
     }, [undo, redo, toggle]);

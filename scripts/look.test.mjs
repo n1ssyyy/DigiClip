@@ -2375,3 +2375,4 @@ import './sceneFx.test.mjs';
 import './sceneStage.test.mjs';
 import './looks.test.mjs';
 import './fonts.test.mjs';
+import './home.test.mjs';

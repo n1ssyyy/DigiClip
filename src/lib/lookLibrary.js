@@ -2,7 +2,7 @@
 // working copy is; whether it has been edited; and the operations that
 // return the next `settings.presets` array. A Look is a preset: same storage,
 // same shape (`{name, options}`), so the watch folder, the CLI and the Home
-// popover see every Look saved here. Pure: no React, no storage.
+// line see every Look saved here. Pure: no React, no storage.
 import { fromEngine, toEngine } from './look.js';
 import { STARTERS } from './starterLooks.js';
 import { nextFreeName } from './lookNames.js';
@@ -23,7 +23,7 @@ export function canon(v) {
 export const signature = (working) => canon(toEngine(working));
 
 /** The same, for engine options (a preset), read back through the panel
- *  state the way the Home preset row compares them. */
+ *  state the way the picker compares them. */
 export const presetSignature = (options, settings) => signature(fromEngine(options, settings));
 
 /** A preset with a usable name and options (anything else in the list is

@@ -1,5 +1,5 @@
-// The shared Look store: the per-video option panel's state model, now one
-// module-level store that Home (the options popover) and Studio both edit.
+// The shared Look store: the working copy of the per-video options, one
+// module-level store that Home (the Look line under the upload box) and Studio both edit.
 //
 // The first half is pure (defaults, toEngine, fromEngine, Look helpers) so
 // it can be tested from Node; the store is a factory with an injectable
@@ -233,9 +233,9 @@ export function captionsSet(look) {
 // pure state updates
 // ---------------------------------------------------------------------------
 
-/** `prev` with `patch` on top. A flat motion or bar colour chosen
- *  elsewhere (the Home popover) replaces the Look's own, so what is shown is
- *  what is sent. */
+/** `prev` with `patch` on top. A flat motion or bar colour set
+ *  through its plain option replaces the Look's own, so what is shown is what
+ *  is sent. */
 export function applyPatch(prev, patch) {
     const flatOnly = !('look' in patch);
     const dropsAnim = 'caption_anim' in patch && flatOnly && prev.look?.captions?.anim !== undefined;

@@ -1,6 +1,6 @@
 import { RotateCcw } from 'lucide-react';
 import Tip from '../digiclip/Tooltip';
-import { Kicker } from '../digiclip/JobOptions';
+import { Kicker } from '../digiclip/fields';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 

@@ -6,7 +6,7 @@ import { layoutView, sceneChanged, sceneReset } from '../../../lib/sceneEffectiv
 import { LAYOUT_LAYER } from '../../../lib/sceneSections';
 import { LAYOUT_LABEL } from '../../../lib/sceneSummary';
 import { useT } from '../../../lib/i18n';
-import { LAYOUT_OPTS, SwitchRow } from '../../digiclip/JobOptions';
+import { LAYOUT_OPTS, SwitchRow } from '../../digiclip/fields';
 import { CapNotice } from '../Notice';
 import { Choice } from '../kit/choices';
 import { usePanel } from '../kit/context';
