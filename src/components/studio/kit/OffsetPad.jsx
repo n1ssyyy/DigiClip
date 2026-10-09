@@ -92,11 +92,11 @@ export default function OffsetPad() {
                 <div className="min-w-0 flex-1 space-y-1.5">
                     <div className="flex items-center gap-1.5">
                         <label htmlFor={`${id}-x`} className="w-3 shrink-0 font-mono text-[10px] text-muted-foreground">X</label>
-                        <NumBox id={`${id}-x`} value={x} spec={SX} ui={ui} set={isSet} onChange={(v) => put(v, y)} className="w-full" />
+                        <NumBox id={`${id}-x`} value={x} spec={SX} ui={ui} set={isSet} onChange={(v) => put(v, y)} className="w-full min-w-0 shrink" />
                     </div>
                     <div className="flex items-center gap-1.5">
                         <label htmlFor={`${id}-y`} className="w-3 shrink-0 font-mono text-[10px] text-muted-foreground">Y</label>
-                        <NumBox id={`${id}-y`} value={y} spec={SY} ui={ui} set={isSet} onChange={(v) => put(x, v)} className="w-full" />
+                        <NumBox id={`${id}-y`} value={y} spec={SY} ui={ui} set={isSet} onChange={(v) => put(x, v)} className="w-full min-w-0 shrink" />
                     </div>
                 </div>
             </div>
