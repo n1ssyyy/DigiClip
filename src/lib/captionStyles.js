@@ -6,6 +6,7 @@
 // engine is right. Pure data and functions: no React, no DOM, importable
 // from Node for the tests.
 
+import { cssColour, normColour } from './alpha.js';
 import { cleanBoxFx, cleanFx, cleanShadowFx, effectiveMotion, isWordLevel } from './captionFields.js';
 import { APP_FONTS, cleanFontName } from './fontNames.js';
 import { drawFont, faceMetrics } from './fontState.js';
@@ -86,12 +87,9 @@ export function assOpacity(c) {
     return 1 - parseInt(c.slice(2, 4), 16) / 255;
 }
 
-/** `#RRGGBB` -> `rgb(r g b / a)` for CSS. */
-export function rgba(hex, opacity = 1) {
-    const h = String(hex).replace('#', '');
-    const n = parseInt(h, 16);
-    return `rgb(${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255} / ${Math.round(opacity * 1000) / 1000})`;
-}
+/** `#RRGGBB` or `#RRGGBBAA` at `opacity` -> `rgb(r g b / a)` for CSS (the
+ *  colour's own opacity times `opacity`). */
+export const rgba = (hex, opacity = 1) => cssColour(hex, opacity);
 
 // The eight presets, from `preset()` in ass.rs. Colours stay in ASS form
 // (primary = spoken, secondary = not yet spoken, outline = outline or box,
@@ -152,8 +150,7 @@ export function canvasSize(canvas) {
 
 export const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 export const num = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, lo, hi) : undefined);
-const HEX = /^#?[0-9a-f]{6}$/i;
-export const hex = (v) => (typeof v === 'string' && HEX.test(v.trim()) ? `#${v.trim().replace('#', '').toUpperCase()}` : undefined);
+export const hex = normColour;
 
 /** Engine motion name -> canonical id (`off`/`static` are `none`). */
 export function animName(v) {
@@ -181,6 +178,8 @@ export function cleanCaptions(c) {
     }
     const size = num(o.size, 0.5, 2);
     if (size !== undefined) out.size = size;
+    const opacity = num(o.opacity, 0, 1);
+    if (opacity !== undefined) out.opacity = opacity;
     const font = cleanFontName(o.font);
     if (font) out.font = font;
     if (typeof o.case === 'string') {
@@ -370,6 +369,8 @@ export function resolveCaptions(styleId, canvas, look, flat = {}) {
         h: ph,
         k,
         show: c.show !== false,
+        /** The whole caption's opacity: it multiplies every part's own. */
+        opacity: c.opacity ?? 1,
         font,
         fontPx,
         lineH,

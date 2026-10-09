@@ -113,7 +113,7 @@ export default function Section({ id, title, changed, onReset, firstOpen = false
                 )}
                 onTransitionEnd={(e) => { if (e.target === e.currentTarget) stop(); }}
             >
-                <div className={cn('min-h-0', (moving || !open) && 'overflow-hidden')}>
+                <div className={cn('min-h-0 min-w-0', (moving || !open) && 'overflow-hidden')}>
                     <OpenContext.Provider value={open}>
                         {seen.current && <div className="space-y-3 px-1 pt-1 pb-4">{children}</div>}
                     </OpenContext.Provider>

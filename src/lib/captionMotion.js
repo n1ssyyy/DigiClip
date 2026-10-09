@@ -14,6 +14,7 @@
 // Times in a plan are milliseconds on the sample's clock; lengths are output
 // pixels.
 
+import { alphaOf, rgbOf } from './alpha.js';
 import { captionLines, metricsOf } from './captionStyles.js';
 import { ENTER_MS, EXIT_MS, effectiveMotion, fromAnim } from './captionFields.js';
 
@@ -82,11 +83,10 @@ const flat = (e) => (e === 'back' ? 'out' : e);
 
 // ---- colours -------------------------------------------------------------------------
 
-/** `#RRGGBB` -> [r, g, b]. */
-export function rgbOf(hex) {
-    const n = parseInt(String(hex).replace('#', ''), 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
+// Colours are `#RRGGBB` or `#RRGGBBAA`. A colour here is its `[r, g, b]` (what
+// moves between word states) and a separate opacity beside it (`alpha`, `a`),
+// which moves on tracks of its own.
+export { rgbOf };
 
 const sameCol = (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 
@@ -118,21 +118,25 @@ export function buildCfg(r) {
     const sec = rgbOf(r.color);
     const accent = rgbOf(r.accent);
     const baseStroke = { col: rgbOf(r.base.stroke.color), w: r.base.stroke.w };
-    const state = (s, color, opacity, scale) => ({
+    const baseStrokeA = alphaOf(r.base.stroke.color);
+    const state = (s, color, alpha, opacity, scale) => ({
         color: s?.color ? rgbOf(s.color) : color,
+        alpha: s?.color ? alphaOf(s.color) : alpha,
         opacity: s?.opacity ?? opacity,
         scale: s?.scale ?? scale,
         blur: (s?.blur ?? 0) * k,
         lift: s?.lift ?? 0,
         rotate: s?.rotate ?? 0,
         stroke: baseStroke,
+        strokeA: baseStrokeA,
         glow: NO_GLOW,
+        glowA: 1,
         abox: 0,
     });
-    const up = state(w.upcoming, sec, 1, 1);
-    const act = state(w.active, prim, 1, 1);
+    const up = state(w.upcoming, sec, alphaOf(r.color), 1, 1);
+    const act = state(w.active, prim, alphaOf(r.active), 1, 1);
     // A spoken word keeps the sung colour, as it does today.
-    const spk = state(w.spoken, act.color, 1, 1);
+    const spk = state(w.spoken, act.color, act.alpha, 1, 1);
     // The spoken word's own stroke is the caption's with its fields on top.
     const as = w.active?.stroke;
     if (as) {
@@ -140,12 +144,15 @@ export function buildCfg(r) {
             col: as.color ? rgbOf(as.color) : baseStroke.col,
             w: as.width !== undefined ? as.width * k : baseStroke.w,
         };
+        act.strokeA = as.color ? alphaOf(as.color) : baseStrokeA;
     }
     // Boxes: the caption's (one per line or per word), and the spoken word's.
     const bx = c.box && typeof c.box === 'object' ? c.box : null;
     const boxCol = r.base.boxCol ? rgbOf(r.base.boxCol) : null;
+    const boxAlpha = r.base.boxCol ? alphaOf(r.base.boxCol) : 1;
     const boxfx = bx && {
         col: bx.color ? rgbOf(bx.color) : (boxCol ?? [0, 0, 0]),
+        alpha: bx.color ? alphaOf(bx.color) : boxAlpha,
         opacity: bx.opacity ?? r.base.boxOpacity,
         padX: (bx.pad_x ?? BOX_PAD_X) * k,
         padY: (bx.pad_y ?? BOX_PAD_Y) * k,
@@ -157,6 +164,7 @@ export function buildCfg(r) {
     const ab = w.active?.box;
     const abox = ab && {
         col: ab.color ? rgbOf(ab.color) : (boxCol ?? accent),
+        alpha: ab.color ? alphaOf(ab.color) : (boxCol ? boxAlpha : alphaOf(r.accent)),
         radius: ab.radius ?? boxfx?.radius ?? 0,
         padX: boxfx ? boxfx.padX : BOX_PAD_X * k,
         padY: boxfx ? boxfx.padY : BOX_PAD_Y * k,
@@ -180,6 +188,9 @@ export function buildCfg(r) {
         spk,
         spkColorSet: !!w.spoken?.color,
         kwColor: w.keyword?.color ? rgbOf(w.keyword.color) : accent,
+        kwAlpha: w.keyword?.color ? alphaOf(w.keyword.color) : alphaOf(r.accent),
+        /** The whole element's opacity: it multiplies every part's own. */
+        elem: r.opacity ?? 1,
         kwScale: w.keyword?.scale ?? null,
         attack: w.attack_ms ?? (mode === 'build' ? 80 : 0),
         attackEase: w.attack_ease ?? 'out',
@@ -198,6 +209,7 @@ export function buildCfg(r) {
         forceRows: r.headlineRows > 1 ? r.headlineRows : null,
         strokeMax,
         shadow,
+        shadowA: sf?.color ? alphaOf(sf.color) : 1,
         boxfx,
         abox,
         glow: c.glow ?? null,
@@ -214,6 +226,16 @@ const bumps = (cfg) => cfg.kwScale === null && (cfg.enter.kind === 'pop' || cfg.
 /** One state's glow: the layers of the Look over each other (a layer's unset
  *  fields keep the one below), the defaults under all of them. No layer, no
  *  glow. */
+/** The opacity of the glow's own colour (the layers stack as in `resolveGlow`;
+ *  a colour that is not named is the letters', which has none of its own). */
+function glowAlpha(layers) {
+    for (let i = layers.length - 1; i >= 0; i--) {
+        const l = layers[i];
+        if (l && l.color !== undefined) return alphaOf(l.color);
+    }
+    return 1;
+}
+
 function resolveGlow(layers, fill, k) {
     const ls = layers.filter(Boolean);
     if (!ls.length) return { ...NO_GLOW, col: fill };
@@ -242,7 +264,11 @@ export function wordLooks(cfg, kw) {
     const spk = { ...cfg.spk };
     if (kw) {
         act.color = cfg.kwColor;
-        if (!cfg.spkColorSet) spk.color = cfg.kwColor;
+        act.alpha = cfg.kwAlpha;
+        if (!cfg.spkColorSet) {
+            spk.color = cfg.kwColor;
+            spk.alpha = cfg.kwAlpha;
+        }
         const m = cfg.kwScale ?? 1;
         act.scale *= m;
         spk.scale *= m;
@@ -251,6 +277,9 @@ export function wordLooks(cfg, kw) {
     up.glow = resolveGlow([cfg.glow], up.color, cfg.k);
     act.glow = resolveGlow([cfg.glow, cfg.glowAct, gk], act.color, cfg.k);
     spk.glow = resolveGlow([cfg.glow, gk], spk.color, cfg.k);
+    up.glowA = glowAlpha([cfg.glow]);
+    act.glowA = glowAlpha([cfg.glow, cfg.glowAct, gk]);
+    spk.glowA = glowAlpha([cfg.glow, gk]);
     return [up, act, spk];
 }
 
@@ -323,6 +352,10 @@ export function wordFx(cfg, s, e, looks, r0, r1, bump) {
         s,
         e,
         col,
+        // The opacities that go with the colours: the fill's, the stroke's, the glow's.
+        ca: track(sweep ? a.alpha : u.alpha, a.alpha, sp.alpha, false),
+        sca: track(u.strokeA, a.strokeA, sp.strokeA, false),
+        gca: track(u.glowA, a.glowA, sp.glowA, false),
         op: track(upOp, a.opacity, sp.opacity, false),
         sc: track(u.scale, a.scale, sp.scale, true),
         blur: track(u.blur, a.blur, sp.blur, true),
@@ -336,6 +369,7 @@ export function wordFx(cfg, s, e, looks, r0, r1, bump) {
         bo: track(u.abox, a.abox, sp.abox, false),
         bump,
         sweep: sweep ? u.color : null,
+        sweepA: sweep ? u.alpha : 1,
     };
 }
 
@@ -363,7 +397,7 @@ export function markExact(fx, win, lwin) {
         for (const k of keys) knots.push(lwin.e0 + k[0] * e.ms);
     }
     if (lwin.exit.kind !== 'none' && lwin.exit.ms > 0) knots.push(lwin.x1 - lwin.exit.ms, lwin.x1);
-    const tracks = [fx.col, fx.scol, fx.gcol, fx.op, fx.sw, fx.gs, fx.gk, fx.bo, fx.sc, fx.blur, fx.lift, fx.rot];
+    const tracks = [fx.col, fx.ca, fx.sca, fx.gca, fx.scol, fx.gcol, fx.op, fx.sw, fx.gs, fx.gk, fx.bo, fx.sc, fx.blur, fx.lift, fx.rot];
     for (const t of tracks) for (const s of t.segs) knots.push(s.t0, s.t1);
     if (fx.bump) knots.push(fx.s, fx.s + BUMP_UP_MS, fx.s + BUMP_END_MS);
     if (fx.sweep) knots.push(fx.s, fx.e);
@@ -407,6 +441,9 @@ export function pulse(fx, t) {
 export function wordFrame(fx, t) {
     return {
         col: evalTrack(fx.col, t),
+        ca: evalTrack(fx.ca, t)[0],
+        sca: evalTrack(fx.sca, t)[0],
+        gca: evalTrack(fx.gca, t)[0],
         op: evalTrack(fx.op, t)[0],
         sc: evalTrack(fx.sc, t)[0] * pulse(fx, t),
         blur: evalTrack(fx.blur, t)[0],
@@ -886,7 +923,11 @@ export function frameAt(plan, t, { reduced = false } = {}) {
         const state = {
             i: w.i,
             col,
+            ca: w.fx.sweep && p === 0 ? w.fx.sweepA : f.ca,
+            sca: f.sca,
+            gca: f.gca,
             under: sweepOn && p > 0 && p < 1 ? w.fx.sweep : null,
+            underA: w.fx.sweepA,
             sweep: sweepOn && p > 0 && p < 1 ? p : null,
             op: f.op,
             sc: reduced ? 1 : f.sc,

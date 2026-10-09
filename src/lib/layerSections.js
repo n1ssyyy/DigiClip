@@ -21,7 +21,7 @@ export const HEADLINE_LAYER = {
     specs: HEADLINE_SPECS,
     ids: ['headline', 'type', 'fill', 'shadow', 'card', 'motion'],
     paths: {
-        headline: ['accent_word'],
+        headline: ['opacity', 'accent_word'],
         type: ['font', 'case', 'size', 'spacing', 'align', 'max_lines', 'width', 'x', 'y'],
         fill: ['ink', 'accent', 'stroke.color', 'stroke.width'],
         shadow: [
@@ -52,7 +52,7 @@ export const BAR_LAYER = {
     specs: BAR_SPECS,
     ids: ['bar', 'track', 'shape', 'glow'],
     paths: {
-        bar: ['pos', 'height', 'color'],
+        bar: ['opacity', 'pos', 'height', 'color'],
         track: ['track', 'track_opacity'],
         shape: ['inset', 'radius'],
         glow: ['glow.color', 'glow.size', 'glow.strength'],

@@ -38,10 +38,9 @@ export function ShadowSection() {
             />
             {view.shadowOn && (
                 <div className="space-y-3 border-l border-white/[0.07] pl-3">
-                    <Colour path="shadow.color" label={t('Colour')} />
+                    <Colour path="shadow.color" opacity="shadow.opacity" label={t('Colour')} />
                     <OffsetPad />
                     <Num path="shadow.blur" label={t('Blur')} />
-                    <Num path="shadow.opacity" label={t('Opacity')} />
                 </div>
             )}
             <ToggleRow label={t('Glow')} checked={view.glowOn} set={view.glowOn} onChange={(on) => setPatch(glowPatch(on))} />
@@ -83,8 +82,7 @@ export function BoxSection() {
             </Row>
             {mode !== 'off' && (
                 <>
-                    <Colour path="box.color" label={t('Colour')} />
-                    <Num path="box.opacity" label={t('Opacity')} />
+                    <Colour path="box.color" opacity="box.opacity" label={t('Colour')} />
                     <Num path="box.pad_x" label={t('Padding width')} />
                     <Num path="box.pad_y" label={t('Padding height')} />
                     <Num path="box.radius" label={t('Roundness')} />

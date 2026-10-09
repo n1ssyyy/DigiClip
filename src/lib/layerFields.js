@@ -37,6 +37,8 @@ const colour = () => ({ type: 'colour' });
  *  `none`, `card.*` its object form). `unit: 's'` is seconds; `sliderMin`, `sliderMax`
  *  keeps a slider usable where the engine allows far more. */
 export const HEADLINE_SPECS = {
+    // The whole headline's opacity: it multiplies every part's own.
+    opacity: ratio(0, 1, 0.05, 1),
     x: ratio(0, 1, 0.01),
     y: ratio(0, 1, 0.01),
     size: ratio(0.5, 2, 0.05, 1),
@@ -67,6 +69,9 @@ export const HEADLINE_SPECS = {
 
 /** `look.bar`. */
 export const BAR_SPECS = {
+    // The whole bar's opacity: the bar is drawn as at full opacity (track, glow, fill)
+    // and that result is blended with the picture by it (a group).
+    opacity: ratio(0, 1, 0.05, 1),
     pos: { type: 'enum', values: BAR_POSITIONS, def: 'bottom' },
     height: ratio(0.5, 3, 0.05, 1),
     color: colour(),

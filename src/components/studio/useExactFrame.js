@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ALPHA_CAP } from '../../lib/alpha';
 import { frameAvailability, frameKey, frameRequest } from '../../lib/exactFrame';
 import { artUrl, cmd, flashMessage, useStore } from '../../lib/socket';
 import { useT } from '../../lib/i18n';
@@ -27,12 +28,13 @@ export function useExactFrame({ options, sample, hasVideo, player }) {
     const t = useT();
     const caps = useStore((s) => s.caps);
     const avail = frameAvailability(caps, hasVideo);
+    const alpha = caps.includes(ALPHA_CAP);
     const [st, setSt] = useState(IDLE);
     const seq = useRef(0);
     const phase = useRef('idle');
     phase.current = st.phase;
     const live = useRef({});
-    live.current = { options, sample, ok: avail.ok };
+    live.current = { options, sample, ok: avail.ok, alpha };
     const { clock, pause } = player;
 
     const dismiss = useCallback(() => {
@@ -42,7 +44,7 @@ export function useExactFrame({ options, sample, hasVideo, player }) {
     }, []);
 
     const request = useCallback(() => {
-        const { options: o, sample: s, ok } = live.current;
+        const { options: o, sample: s, ok, alpha: a } = live.current;
         if (!ok || phase.current === 'pending') return;
         if (phase.current === 'shown') {
             dismiss();
@@ -50,9 +52,9 @@ export function useExactFrame({ options, sample, hasVideo, player }) {
         }
         pause();
         const at = clock.get();
-        const params = frameRequest(o, s, at);
+        const params = frameRequest(o, s, at, { alpha: a });
         if (!params) return;
-        const key = frameKey(o, s, at);
+        const key = frameKey(o, s, at, { alpha: a });
         const id = seq.current + 1;
         seq.current = id;
         phase.current = 'pending';
@@ -79,12 +81,12 @@ export function useExactFrame({ options, sample, hasVideo, player }) {
     useEffect(() => {
         if (st.phase === 'idle') return undefined;
         const check = () => {
-            const { options: o, sample: s, ok } = live.current;
-            if (!ok || frameKey(o, s, clock.get()) !== st.key) dismiss();
+            const { options: o, sample: s, ok, alpha: a } = live.current;
+            if (!ok || frameKey(o, s, clock.get(), { alpha: a }) !== st.key) dismiss();
         };
         check();
         return clock.subscribe(check);
-    }, [st.phase, st.key, options, sample.job?.id, sample.start, sample.len, avail.ok, clock, dismiss]);
+    }, [st.phase, st.key, options, sample.job?.id, sample.start, sample.len, avail.ok, alpha, clock, dismiss]);
 
     useEffect(() => () => { seq.current += 1; }, []);
 

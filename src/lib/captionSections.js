@@ -25,7 +25,7 @@ export const SECTION_CAP = {
 const state = (name, fields) => fields.map((f) => `words.${name}.${f}`);
 
 export const SECTION_PATHS = {
-    style: ['show'],
+    style: ['show', 'opacity'],
     type: ['font', 'size', 'case', 'x', 'y', 'max_words', 'spacing', 'line_gap', 'lines', 'max_chars', 'align', 'rotate'],
     fill: ['color', 'stroke.color', 'stroke.width', 'outline', 'outline_w'],
     shadow: ['shadow', 'shadow.color', 'shadow.x', 'shadow.y', 'shadow.blur', 'shadow.opacity', 'glow', 'glow.color', 'glow.size', 'glow.strength'],

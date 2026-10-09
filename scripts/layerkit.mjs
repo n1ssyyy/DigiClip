@@ -22,14 +22,14 @@ export const look = (s) => s.get().options.look;
 /** A Look section with every field the specs name. */
 export const FULL = {
     headline: {
-        x: 0.5, y: 0.2, size: 1.2, font: 'Anton', case: 'upper', spacing: 0.05, align: 'left', max_lines: 2, width: 0.8,
+        opacity: 0.8, x: 0.5, y: 0.2, size: 1.2, font: 'Anton', case: 'upper', spacing: 0.05, align: 'left', max_lines: 2, width: 0.8,
         ink: '#FFFFFF', accent: '#FFD400', stroke: { color: '#000000', width: 3 },
         shadow: { color: '#000000', x: 2, y: 6, blur: 8, opacity: 0.5 }, glow: { color: '#00E5FF', size: 12, strength: 0.7 },
         card: { color: '#101826', opacity: 0.8, pad: 30, radius: 0.5 }, accent_word: 'last', anim: 'fade',
         enter: { kind: 'slide_down', ms: 400, ease: 'back' }, exit: { kind: 'blur', ms: 300 }, delay_s: 0.5, seconds: 4,
     },
     bar: {
-        pos: 'top', height: 1.5, color: '#FF3B30', track: '#FFFFFF', track_opacity: 0.3, inset: 0.04, radius: 1,
+        opacity: 0.6, pos: 'top', height: 1.5, color: '#FF3B30', track: '#FFFFFF', track_opacity: 0.3, inset: 0.04, radius: 1,
         glow: { color: '#00E5FF', size: 14, strength: 0.5 },
     },
     logo: {

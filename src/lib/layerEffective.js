@@ -56,6 +56,7 @@ export function headlineView(r, look, { len = Infinity, room = 0.8 } = {}) {
         switch (path) {
             case 'x': return r.center.x;
             case 'y': return r.center.y;
+            case 'opacity': return L.opacity ?? 1;
             case 'size': return r.size;
             case 'font': return L.font ?? HEADLINE_FONT;
             case 'case': return L.case ?? 'asis';
@@ -156,6 +157,7 @@ export function barView(r, look, flatSet = false) {
     const L = cleanBar(look);
     function val(path) {
         switch (path) {
+            case 'opacity': return L.opacity ?? 1;
             case 'pos': return r.pos;
             case 'height': return r.height;
             case 'color': return r.color;

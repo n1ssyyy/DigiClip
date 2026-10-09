@@ -2380,3 +2380,4 @@ import './homeList.test.mjs';
 import './health.test.mjs';
 import './tour.test.mjs';
 import './bootView.test.mjs';
+import './alpha.test.mjs';

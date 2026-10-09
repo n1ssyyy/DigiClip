@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ALPHA_CAP, colourOnly, stripLookAlpha } from '../lib/alpha';
 import { aspectList, useLook } from '../lib/look';
 import { CANVASES, captionLines, clamp, resolveCaptions } from '../lib/captionStyles';
 import { captionBlocks } from '../lib/captionMotion';
@@ -102,7 +103,13 @@ export default function Studio() {
 
     const shape = aspectList(options.aspect)[0];
     const canvas = CANVASES[shape] ?? CANVASES['9:16'];
-    const L = options.look ?? {};
+    // The stage shows what the engine will draw: an engine without `look.alpha`
+    // never gets opacity in colours or the new element opacities, so the stage
+    // leaves them out too (the Look itself keeps them).
+    const alpha = useStore((s) => s.caps.includes(ALPHA_CAP));
+    const look0 = options.look ?? {};
+    const L = useMemo(() => (alpha ? look0 : stripLookAlpha(look0)), [look0, alpha]);
+    const barColor = alpha ? options.bar_color : colourOnly(options.bar_color);
     // Fonts: the engine's list, the faces of the fonts in use, and the font a
     // hover in the picker previews (laid over the Look for the stage only).
     useFontSync();
@@ -145,9 +152,9 @@ export default function Studio() {
         [options.headline, options.headline_text, sample.job, shape, LS.headline, logo, measure, sample.len, faces],
     );
     const bar = useMemo(
-        () => (options.progress_bar ? resolveBar(shape, options.bar_color, L.bar) : null),
+        () => (options.progress_bar ? resolveBar(shape, barColor, L.bar) : null),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [options.progress_bar, options.bar_color, shape, L.bar],
+        [options.progress_bar, barColor, shape, L.bar],
     );
     const sizes = useMemo(
         () => ({ captions: L.captions?.size ?? 1, headline: L.headline?.size ?? 1, logo: L.logo?.size ?? 1 }),

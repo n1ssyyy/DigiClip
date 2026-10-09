@@ -1,11 +1,15 @@
 import { useMemo } from 'react';
+import { alphaOf, cssColour, cssRgb, rgbOf } from '../../lib/alpha';
 import { cssFont } from '../../lib/fontNames';
 import { fontBox, rgba } from '../../lib/captionStyles';
 import { cfgOf, frameAt, glowParams, planFor } from '../../lib/captionMotion';
+import { GLYPH_MARK, RING_MARK, strokeCut } from '../../lib/strokeCut';
+import { RingFilters, ringFilter } from './RingCut';
 import { useClock } from './usePlayer';
 
 const rnd = (v, d = 1000) => Math.round(v * d) / d;
-const css = (c, a = 1) => `rgb(${Math.round(c[0])} ${Math.round(c[1])} ${Math.round(c[2])} / ${rnd(a)})`;
+/** CSS for an `[r, g, b]` colour at opacity `a`. */
+const css = (c, a = 1) => cssRgb(c, a);
 
 const rings = new Map();
 /** Text-shadow ring that draws a solid border `r` px wide around glyphs
@@ -57,8 +61,19 @@ function wordTransform(st, plan, shift) {
  * writer lays it out: every word in its own slot (so a neighbour never
  * moves when a word scales, lifts or tilts), its look read off the engine's
  * timeline at the playhead, the line's entrance and exit on the block, and
- * the dressing (box, shadow, glow, text) in the engine's layer order. All of
- * it is evaluated from the clock on each tick; nothing is a CSS transition.
+ * the dressing (box, shadow, glow, stroke, text) in the engine's layer order.
+ * All of it is evaluated from the clock on each tick; nothing is a CSS
+ * transition.
+ *
+ * Opacity is straight alpha, one product per part and no group opacity for
+ * text: a part's own colour opacity x its state's opacity x the line's
+ * entrance and exit fade x the element's opacity (`r.opacity`). A part is one
+ * layer (a layer of a single colour may carry its product as its `opacity`).
+ * What lies under a half-transparent fill shows through it, as in the real
+ * render: the picture, the box, and the shadow and glow, whole copies of the
+ * glyph. The stroke does not: libass draws it as a ring round the glyph and
+ * cuts it away under the glyph, so where a fill is see-through the stroke
+ * layer is cut to its ring (`strokeCut`, an SVG filter, see `RingCut`).
  */
 export default function WordCaption({ r, lines, clock, reduced, measure }) {
     const time = useClock(clock);
@@ -84,7 +99,12 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
         pointerEvents: 'none',
         userSelect: 'none',
     };
-    const styleShadow = r.shadow > 0 ? `drop-shadow(${r.shadow}px ${r.shadow}px 0 ${rgba(r.shadowColor, r.shadowOpacity)})` : '';
+    // The style's own shadow (a hard copy under the text) and its colour.
+    const styleShadow = r.shadow > 0 && !r.box
+        ? { off: r.shadow, col: cssRgb(rgbOf(r.shadowColor)), a: alphaOf(r.shadowColor) * r.shadowOpacity }
+        : null;
+    const ringColours = [];
+    const boxShadow = r.shadow > 0 && r.box ? `drop-shadow(${r.shadow}px ${r.shadow}px 0 ${rgba(r.shadowColor, r.shadowOpacity)})` : '';
 
     // Where a word's text sits: centred on its slot's middle, the ink (not the
     // trailing letter space) on it, baseline where libass puts it.
@@ -118,6 +138,8 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
         <div aria-hidden>
             {groups.map((g, gi) => {
                 const lf = g.fx;
+                // The line's fade and the element's opacity, on every part.
+                const fade = lf.alpha * cfg.elem;
                 const parts = [];
                 if (Math.abs(lf.dx) > 0.01 || Math.abs(lf.dy) > 0.01) parts.push(`translate(${rnd(lf.dx, 100)}px, ${rnd(lf.dy, 100)}px)`);
                 if (Math.abs(lf.sc - 1) > 0.0005) parts.push(`scale(${rnd(lf.sc, 10000)})`);
@@ -150,9 +172,8 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                                     top: b.cy - size / 2 - r.box.pad,
                                     width: b.w + 2 * r.box.pad,
                                     height: size + 2 * r.box.pad,
-                                    backgroundColor: r.box.color,
-                                    opacity: rnd(r.box.opacity * lf.alpha),
-                                    filter: join(styleShadow, blurOf(lf.blur)),
+                                    backgroundColor: cssColour(r.box.color, r.box.opacity, fade),
+                                    filter: join(boxShadow, blurOf(lf.blur)),
                                     pointerEvents: 'none',
                                 }}
                             />,
@@ -172,8 +193,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                                     width: b.w,
                                     height: b.h,
                                     borderRadius: b.radius,
-                                    backgroundColor: css(bx.col),
-                                    opacity: rnd(bx.opacity * lf.alpha),
+                                    backgroundColor: css(bx.col, bx.alpha * bx.opacity * fade),
                                     filter: blurOf(lf.blur) || undefined,
                                     pointerEvents: 'none',
                                 }}
@@ -188,8 +208,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                             <div
                                 key={`w${b.word}`}
                                 style={around(w, b, {
-                                    backgroundColor: css(bx.col),
-                                    opacity: rnd(bx.opacity * st.op * lf.alpha),
+                                    backgroundColor: css(bx.col, bx.alpha * bx.opacity * st.op * fade),
                                     transform: wordTransform(st, plan),
                                     filter: blurOf(st.blur + lf.blur) || undefined,
                                 })}
@@ -205,8 +224,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                             <div
                                 key={`a${b.word}`}
                                 style={around(plan.words[b.word], b, {
-                                    backgroundColor: css(cfg.abox.col),
-                                    opacity: rnd(st.bo * lf.alpha),
+                                    backgroundColor: css(cfg.abox.col, cfg.abox.alpha * st.bo * fade),
                                     transform: wordTransform(st, plan),
                                     filter: blurOf(st.blur + lf.blur) || undefined,
                                 })}
@@ -215,7 +233,30 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                     }
                 }
 
-                // 1: the shadow object, a blurred copy under the text.
+                // 1: the style's own shadow, a hard copy of the text and its stroke.
+                if (styleShadow) {
+                    for (const st of g.words) {
+                        const w = of(st);
+                        const own = wordTransform(st, plan);
+                        out.push(
+                            <div
+                                key={`d${st.i}`}
+                                style={placed(w, {
+                                    color: styleShadow.col,
+                                    textShadow: ring(st.sw, styleShadow.col),
+                                    opacity: rnd(styleShadow.a * st.op * fade),
+                                    // Local to the word: it turns and scales with it.
+                                    transform: join(own, `translate(${rnd(styleShadow.off, 100)}px, ${rnd(styleShadow.off, 100)}px)`),
+                                    filter: blurOf(st.blur + lf.blur) || undefined,
+                                })}
+                            >
+                                {w.text}
+                            </div>,
+                        );
+                    }
+                }
+
+                // 2: the shadow object, a blurred copy under the text.
                 if (cfg.shadow && cfg.shadow.opacity > 0) {
                     const sh = cfg.shadow;
                     const col = css(sh.col);
@@ -227,7 +268,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                                 style={placed(w, {
                                     color: col,
                                     textShadow: ring(st.sw, col),
-                                    opacity: rnd(sh.opacity * st.op * lf.alpha),
+                                    opacity: rnd(sh.opacity * cfg.shadowA * st.op * fade),
                                     transform: wordTransform(st, plan, [sh.x, sh.y]),
                                     filter: blurOf(sh.blur + st.blur + lf.blur) || undefined,
                                 })}
@@ -238,7 +279,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                     }
                 }
 
-                // 2: the glow, a grown, blurred copy; its strength is its opacity.
+                // 3: the glow, a grown, blurred copy; its strength is its opacity.
                 if (cfg.glow || cfg.glowAct || cfg.glowKw) {
                     for (const st of g.words) {
                         if (!(st.gk > 0.001) || !(st.gs > 0.01)) continue;
@@ -251,7 +292,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                                 style={placed(w, {
                                     color: col,
                                     textShadow: ring(gp.border, col),
-                                    opacity: rnd(st.gk * st.op * lf.alpha),
+                                    opacity: rnd(st.gk * st.gca * st.op * fade),
                                     transform: wordTransform(st, plan),
                                     filter: blurOf(gp.blur + st.blur + lf.blur) || undefined,
                                 })}
@@ -262,34 +303,72 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                     }
                 }
 
-                // 3: the words.
+                // 4: the stroke, a ring round the glyph in the stroke's colour and
+                // nothing under the glyph itself: where a fill over it is see-through
+                // the copy is painted in the marker colours (glyph red, ring black) and
+                // the filter keeps the ring only; under a solid fill the plain copy
+                // (the text grown by its width) is the same picture and cheaper.
+                for (const st of g.words) {
+                    if (!(st.sw > 0.05)) continue;
+                    const w = of(st);
+                    const a = st.op * fade;
+                    const cut = strokeCut(...(st.sweep !== null ? [st.underA * a, st.ca * a] : [(st.under ? st.underA : st.ca) * a]));
+                    const col = css(st.scol);
+                    if (cut) ringColours.push(st.scol);
+                    out.push(
+                        <div
+                            key={`k${st.i}`}
+                            style={placed(w, {
+                                color: cut ? GLYPH_MARK : col,
+                                textShadow: ring(st.sw, cut ? RING_MARK : col),
+                                opacity: rnd(st.sca * a),
+                                transform: wordTransform(st, plan),
+                                filter: join(cut ? ringFilter(st.scol) : '', blurOf(st.blur + lf.blur)),
+                            })}
+                        >
+                            {w.text}
+                        </div>,
+                    );
+                }
+
+                // 5: the words. Under a sweep the unswept part and the swept part
+                // are each clipped to their own side, so a clear fill never doubles.
                 for (const st of g.words) {
                     const w = of(st);
-                    const stroke = ring(st.sw, css(st.scol));
+                    const a = st.op * fade;
+                    const swept = st.sweep !== null;
+                    const sweepStyle = { position: 'absolute', inset: 0, textShadow: 'none' };
                     out.push(
                         <div
                             key={`t${st.i}`}
                             style={placed(w, {
-                                color: css(st.under ?? st.col),
-                                textShadow: stroke,
-                                opacity: rnd(st.op * lf.alpha),
+                                color: swept ? 'transparent' : css(st.under ?? st.col, (st.under ? st.underA : st.ca) * a),
                                 transform: wordTransform(st, plan),
-                                filter: join(r.box ? '' : styleShadow, blurOf(st.blur + lf.blur)),
+                                filter: blurOf(st.blur + lf.blur) || undefined,
                             })}
                         >
                             {w.text}
-                            {st.sweep !== null && (
-                                <span
-                                    style={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        color: css(st.col),
-                                        textShadow: 'none',
-                                        clipPath: `inset(-30% ${rnd((1 - st.sweep) * 100, 100)}% -30% -10%)`,
-                                    }}
-                                >
-                                    {w.text}
-                                </span>
+                            {swept && (
+                                <>
+                                    <span
+                                        style={{
+                                            ...sweepStyle,
+                                            color: css(st.under, st.underA * a),
+                                            clipPath: `inset(-30% -10% -30% ${rnd(st.sweep * 100, 100)}%)`,
+                                        }}
+                                    >
+                                        {w.text}
+                                    </span>
+                                    <span
+                                        style={{
+                                            ...sweepStyle,
+                                            color: css(st.col, st.ca * a),
+                                            clipPath: `inset(-30% ${rnd((1 - st.sweep) * 100, 100)}% -30% -10%)`,
+                                        }}
+                                    >
+                                        {w.text}
+                                    </span>
+                                </>
                             )}
                         </div>,
                     );
@@ -300,6 +379,7 @@ export default function WordCaption({ r, lines, clock, reduced, measure }) {
                     </div>
                 );
             })}
+            <RingFilters colours={ringColours} />
         </div>
     );
 }

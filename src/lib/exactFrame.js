@@ -27,15 +27,17 @@ function at(t, len) {
  * @param {object} working  the working copy of the options
  * @param {{job: {id: string}|null, start: number, len: number}} sample  `useSample()`
  * @param {number} t  the playhead, in seconds within the sample
+ * @param {{alpha?: boolean}} [engine]  `alpha`: the engine takes opacity in colours
+ *        (`look.alpha`); without it the options are cut to what it knows
  */
-export function frameRequest(working, sample, t) {
+export function frameRequest(working, sample, t, { alpha = true } = {}) {
     if (!sample?.job?.id) return null;
     return {
         job: sample.job.id,
         start_s: r3(sample.start ?? 0),
         len_s: r3(sample.len ?? 0),
         t: at(t, sample.len),
-        options: toEngine(working),
+        options: toEngine(working, { alpha }),
     };
 }
 
@@ -44,8 +46,8 @@ export function frameRequest(working, sample, t) {
  * depends on), the shape on the stage, the sample and the playhead. When the
  * key now differs from the one the request was made with, the still is stale.
  */
-export function frameKey(working, sample, t) {
-    const o = { ...toEngine(working) };
+export function frameKey(working, sample, t, { alpha = true } = {}) {
+    const o = { ...toEngine(working, { alpha }) };
     for (const k of CUT_ONLY) delete o[k];
     // Only the first shape is on the stage; the others are further runs.
     o.aspect = aspectList(working.aspect)[0];

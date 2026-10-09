@@ -1,9 +1,12 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { Slider, Swatch } from '../../digiclip/controls';
 import { Kicker } from '../../digiclip/fields';
+import { mergePatch } from '../../../lib/captionEffective';
+import { colourShown, colourText, pickColour, pickOpacity } from '../../../lib/colourField';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
 import { ResetBtn } from '../Field';
+import { useAlpha } from '../useAlpha';
 import { PanelContext, usePanel } from './context';
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
@@ -151,27 +154,83 @@ export function Num({ path, label, hint, disabled = false }) {
 /** A colour field of the Look: its name, then the colour well (the effective
  *  colour shows quietly until the Look sets one). The name is never cut: it
  *  keeps a 96px column beside the well, and when a longer name leaves the
- *  well under 132px the well drops to a line of its own below the name.
+ *  well under 168px (room for eight hex digits, the opacity chip and the
+ *  reset) the well drops to a line of its own below the name.
+ *
+ *  With the engine's `look.alpha` the well has an Opacity slider (0 to 100 %)
+ *  that writes the colour's own opacity (`#RRGGBBAA` below 100 %). When the
+ *  colour's opacity is a number of the Look (`opacity`, the path of that
+ *  number: a box's, a card's, a track's, a shadow's) the slider edits that
+ *  number instead and the colour stays six digits, with or without the
+ *  ability: one source of truth. A Look that holds both shows their product
+ *  and keeps the number alone from the next edit.
+ *
  *  `onPick` / `onBack` write somewhere other than the Look's section (the
  *  bar's flat colour). */
-export function Colour({ path, label, disabled = false, onPick, onBack }) {
+export function Colour({ path, label, opacity: opacityPath, disabled = false, onPick, onBack }) {
     const t = useT();
-    const { view, set, clear } = usePanel();
-    const isSet = view.isSet(path);
+    const alpha = useAlpha();
+    const { view, set, clear, setPatch, patchFor, g } = usePanel();
+    const drag = useDrag(g);
+    const bound = opacityPath !== undefined;
+    const colourSet = view.isSet(path);
+    const numberSet = bound && view.isSet(opacityPath);
     const value = view.val(path);
+    const number = bound ? view.val(opacityPath) : undefined;
+    const shown = colourShown(value, number);
+
+    /** Write what an edit answered: the colour and, bound, the number. */
+    function write({ colour, number: n }) {
+        if (colour !== undefined && onPick) onPick(colour);
+        let patch = {};
+        if (colour !== undefined && !onPick) patch = mergePatch(patch, patchFor(path, colour));
+        if (n !== undefined) patch = mergePatch(patch, patchFor(opacityPath, n));
+        if (Object.keys(patch).length) setPatch(patch);
+    }
+    const slider = bound || alpha;
     return (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className={cn('max-w-full min-w-[96px] text-[11px] leading-snug break-words', isSet ? 'text-foreground' : 'text-muted-foreground')}>{label}</span>
+        <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+            <span className={cn('flex min-h-8 max-w-full min-w-[96px] items-center text-[11px] leading-snug break-words', colourSet || numberSet ? 'text-foreground' : 'text-muted-foreground')}>{label}</span>
             <Swatch
                 label={label}
                 resetLabel={t('Reset {name}', { name: label })}
-                value={isSet ? value : undefined}
-                fallback={value}
+                value={colourSet ? colourText(value, alpha) : undefined}
+                fallback={colourText(value, alpha)}
+                set={colourSet || numberSet}
                 disabled={disabled}
-                onChange={(v) => (onPick ? onPick(v) : set(path, v))}
-                onReset={() => (onBack ? onBack() : clear(path))}
-                className="min-w-0 grow basis-[132px]"
+                onChange={(typed) => {
+                    const res = pickColour(value, typed, number);
+                    if (res) write(res);
+                }}
+                onReset={() => {
+                    if (onBack) onBack();
+                    else clear(...(bound ? [path, opacityPath] : [path]));
+                }}
+                opacity={slider ? {
+                    value: shown.opacity,
+                    label: t('Opacity of {name}', { name: label }),
+                    set: bound ? (numberSet || (colourSet && shown.both)) : (colourSet && shown.opacity < 1),
+                    onChange: (a) => {
+                        // An unset colour at full opacity is still the style's own.
+                        if (!bound && !colourSet && a >= 1) return;
+                        write(pickOpacity(value, a, bound));
+                    },
+                    onDragStart: drag.begin,
+                    onDragEnd: drag.end,
+                } : undefined}
+                className="min-w-0 grow basis-[168px]"
             />
         </div>
     );
+}
+
+/** The Opacity of a whole element (captions, headline, bar, logo): a slider
+ *  and a box, 0 to 100 %, tied to `opacity` of the layer's Look section.
+ *  Captions, headline and bar have it with the engine's `look.alpha` only; the
+ *  logo's is older (`always`). */
+export function ElementOpacity({ always = false, disabled = false }) {
+    const t = useT();
+    const alpha = useAlpha();
+    if (!always && !alpha) return null;
+    return <Num path="opacity" label={t('Opacity')} disabled={disabled} />;
 }

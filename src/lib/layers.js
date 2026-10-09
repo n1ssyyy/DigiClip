@@ -8,6 +8,7 @@
 // the text in `headlineText.js` and the fields and their cleaners in
 // `layerFields.js`. When this file and the engine disagree, the engine is
 // right. Pure functions: no React, no DOM, importable from Node for the tests.
+import { rgbOf } from './alpha.js';
 import { canvasSize, clamp } from './captionStyles.js';
 import { HEADLINE_EDGE, HEADLINE_PAD, cleanHeadline, isPositioned } from './layerFields.js';
 import { HEADLINE_MAX, headlineMarkup, headlineText } from './headlineText.js';
@@ -18,7 +19,7 @@ export {
 } from './layerFields.js';
 export { HEADLINE_SAMPLE, headlineMarkup, headlineText, stageHeadline } from './headlineText.js';
 export { headlineRoom, headlineTiming } from './headlineV2.js';
-export { BAR_DEFAULT_COLOR, barThickness, resolveBar } from './barLayer.js';
+export { BAR_DEFAULT_COLOR, PLAIN_TRACK, barParts, barThickness, resolveBar } from './barLayer.js';
 export { CORNERS, logoClear, logoInset, resolveLogo, turnedBox } from './logoLayer.js';
 
 /** Ranges of the sizes the stage resizes (look.rs). */
@@ -76,8 +77,8 @@ export function resolveHeadline(text, canvas, look, opts = {}) {
     // Dark ink gets a light edge, any other a dark one.
     let dark = !inkRgb;
     if (inkRgb) {
-        const n = parseInt(inkRgb.slice(1), 16);
-        dark = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255) < 90;
+        const [r, g, b] = rgbOf(inkRgb);
+        dark = 0.2126 * r + 0.7152 * g + 0.0722 * b < 90;
     }
     if (noCard) {
         // No card: a dark outline keeps the type readable (a light one when
@@ -128,6 +129,8 @@ export function resolveHeadline(text, canvas, look, opts = {}) {
     const seconds = c.seconds > 0 ? c.seconds : 0;
     return {
         positioned: false,
+        /** The whole headline's opacity: it multiplies every part's own. */
+        opacity: c.opacity ?? 1,
         w: pw,
         h: ph,
         k,
