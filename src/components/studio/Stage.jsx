@@ -1,7 +1,9 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../../lib/i18n';
 import CaptionLayer from './CaptionLayer';
-import { BarLayer, CaptionProbe, HeadlineLayer, LogoLayer } from './StageLayers';
+import { CaptionProbe, HeadlineLayer } from './StageLayers';
+import { BarLayer, LogoLayer } from './StageBarLogo';
+import WordCaption from './WordCaption';
 import StageOverlay from './StageOverlay';
 
 const PAD = 24; // breathing room around the frame
@@ -91,7 +93,10 @@ export default function Stage({ canvas, resolved, lines, measure, layers, select
             rects.captions = { x: a.x - w / 2, y: a.mode === 'bottom' ? a.y - (bh + h) / 2 : a.y - h / 2, w, h };
             centres.captions = resolved.center;
         }
-        if (headline) {
+        if (headline?.positioned) {
+            rects.headline = headline.rect;
+            centres.headline = headline.center;
+        } else if (headline) {
             const e = headline.noCard ? 2 * headline.edgeW : 0;
             const w = (headSize?.w ?? headline.wrapW * 0.6) + e;
             const h = (headSize?.h ?? headline.block + 2 * (headline.card?.pad ?? 0)) + e;
@@ -99,11 +104,13 @@ export default function Stage({ canvas, resolved, lines, measure, layers, select
             centres.headline = headline.center;
         }
         if (logo) {
-            rects.logo = { x: logo.x, y: logo.y, w: logo.box.w, h: logo.box.h };
+            // A turned logo keeps an upright box: the one round the turned logo
+            // (effects excluded), so the handles stay square to the frame.
+            rects.logo = { ...logo.bounds };
             centres.logo = logo.center;
         }
         if (bar) {
-            rects.bar = { x: 0, y: bar.y, w: bar.w, h: bar.thickness };
+            rects.bar = { ...bar.rect };
             centres.bar = bar.center;
         }
         return { rects, centres };
@@ -145,7 +152,8 @@ export default function Stage({ canvas, resolved, lines, measure, layers, select
                                 {logo && <LogoLayer r={logo} file={logoFile} />}
                                 <CaptionLayer r={resolved} lines={lines} clock={clock} reduced={reduced} measure={measure} />
                                 {resolved.show && <CaptionProbe r={resolved} lines={lines} clock={clock} measure={measure} onSize={onCapSize} />}
-                                {headline && <HeadlineLayer r={headline} clock={clock} len={sample.len} reduced={reduced} onSize={onHeadSize} />}
+                                {headline?.positioned && <WordCaption r={headline.cap} lines={headline.lines} clock={clock} reduced={reduced} measure={measure} />}
+                                {headline && !headline.positioned && <HeadlineLayer r={headline} clock={clock} len={sample.len} reduced={reduced} onSize={onHeadSize} />}
                                 {safe && tall && <SafeAreas unit={1 / s} />}
                             </div>
                         </div>

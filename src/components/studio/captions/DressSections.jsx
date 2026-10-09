@@ -1,10 +1,10 @@
 import { boxModePatch, glowPatch, shadowPatch } from '../../../lib/captionEffective';
 import { useT } from '../../../lib/i18n';
 import { CapNotice } from '../Notice';
-import OffsetPad from './OffsetPad';
-import { Choice, ToggleRow } from './choices';
-import { useCap } from './context';
-import { Colour, Num, Row } from './inputs';
+import OffsetPad from '../kit/OffsetPad';
+import { Choice, ToggleRow } from '../kit/choices';
+import { usePanel } from '../kit/context';
+import { Colour, Num, Row } from '../kit/inputs';
 
 const fxNote = (t) => t('This engine is older than these controls. They apply after the next engine update.');
 
@@ -25,7 +25,7 @@ export function FillSection() {
 /** Shadow and glow: each a switch with its own controls underneath. */
 export function ShadowSection() {
     const t = useT();
-    const { view, setPatch } = useCap();
+    const { view, setPatch } = usePanel();
     return (
         <>
             <CapNotice cap="look.captions.fx" text={fxNote(t)} />
@@ -59,7 +59,7 @@ export function ShadowSection() {
 /** Box: none, one behind the line, or one behind each word. */
 export function BoxSection() {
     const t = useT();
-    const { view, setPatch, clear } = useCap();
+    const { view, setPatch, clear } = usePanel();
     const mode = view.boxMode();
     return (
         <>

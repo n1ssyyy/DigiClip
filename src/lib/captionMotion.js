@@ -151,6 +151,8 @@ export function buildCfg(r) {
         padY: (bx.pad_y ?? BOX_PAD_Y) * k,
         radius: bx.radius ?? 0,
         perWord: bx.per === 'word',
+        // A headline's card is one shape around every row.
+        block: !!r.headlineRows,
     };
     const ab = w.active?.box;
     const abox = ab && {
@@ -190,7 +192,10 @@ export function buildCfg(r) {
         lineGap: c.line_gap ?? 1,
         align: c.align ?? null,
         rotate: c.rotate ?? 0,
-        maxLines: c.lines ?? null,
+        // A headline has decided its rows (): one row never
+        // wraps, more are spread evenly.
+        maxLines: r.headlineRows ? (r.headlineRows === 1 ? 1 : null) : (c.lines ?? null),
+        forceRows: r.headlineRows > 1 ? r.headlineRows : null,
         strokeMax,
         shadow,
         boxfx,
@@ -540,11 +545,6 @@ export function lineBox(font, fontPx) {
  */
 export function breakRows(w, sp, avail) {
     const n = w.length;
-    const width = (a, b) => {
-        let s = 0;
-        for (let i = a; i < b; i++) s += w[i];
-        return s + sp * Math.max(b - a - 1, 0);
-    };
     let rows = 1;
     let cur = 0;
     w.forEach((x, i) => {
@@ -576,6 +576,28 @@ export function breakRows(w, sp, avail) {
         out.push([start, n]);
         return out;
     }
+    return balancedRows(w, sp, rows, avail);
+}
+
+/**
+ * Break a line's words into exactly `rows` rows: the narrowest widest row
+ * wins (rows wider than `avail` only when nothing fits), then the wider top
+ * row (`balanced_rows`). Far more words than any caption or headline has
+ * are split evenly. Returns [from, to) pairs.
+ */
+export function balancedRows(w, sp, rows, avail) {
+    const n = w.length;
+    rows = Math.min(Math.max(rows, 1), Math.max(n, 1));
+    if (rows === 1 || n < 2) return [[0, n]];
+    if (n > 22) {
+        const cuts = Array.from({ length: rows + 1 }, (_, i) => Math.floor((i * n) / rows));
+        return cuts.slice(0, -1).map((c, i) => [c, cuts[i + 1]]);
+    }
+    const width = (a, b) => {
+        let s = 0;
+        for (let i = a; i < b; i++) s += w[i];
+        return s + sp * Math.max(b - a - 1, 0);
+    };
     let best = null;
     for (let mask = 0; mask < 2 ** (n - 1); mask++) {
         let bits = 0;
@@ -691,7 +713,7 @@ export function layoutBlock(cfg, r, block, measure) {
     const looks = ws.map((w) => wordLooks(cfg, w.key));
     const slot = ws.map((w, i) => w.width * Math.max(1, ...looks[i].map((x) => x.scale)));
     const oneRow = single || cfg.maxLines === 1;
-    const rowRanges = oneRow ? [[0, ws.length]] : breakRows(slot, sp, avail);
+    const rowRanges = oneRow ? [[0, ws.length]] : cfg.forceRows ? balancedRows(slot, sp, cfg.forceRows, avail) : breakRows(slot, sp, avail);
     const nrows = single ? 1 : rowRanges.length;
     const cx = r.anchor.x;
     const blockH = (nrows - 1) * pitch + size;
@@ -786,6 +808,25 @@ export function layoutBlock(cfg, r, block, measure) {
                 const b = wordBox(i, rowBand(i), bx.padX, bx.padY, bx.radius);
                 boxes.word.push({ word: i, ...b });
             });
+        } else if (bx.block) {
+            // One card around every row: from the left-most ink to the
+            // right-most, from the top of the first row's ink to the bottom
+            // of the last row's.
+            let l = Infinity;
+            let rr = -Infinity;
+            for (const row of rows) {
+                const first = ws[row.from];
+                const last = ws[row.to - 1];
+                l = Math.min(l, pos[row.from][0] - (first.width - spc) / 2 + first.m.lsb);
+                rr = Math.max(rr, pos[row.to - 1][0] + (last.width - spc) / 2 - last.m.rsb);
+            }
+            const a = rows[0];
+            const z = rows[rows.length - 1];
+            const topInk = a.cy + (asc - desc) / 2 - bandOf(joined([a.from, a.to])).top;
+            const bottomInk = z.cy + (asc - desc) / 2 - bandOf(joined([z.from, z.to])).bottom;
+            const w = rr - l + 2 * (bx.padX + cfg.strokeMax);
+            const h = bottomInk - topInk + 2 * (bx.padY + cfg.strokeMax);
+            boxes.line.push({ row: a, cx: (l + rr) / 2, cy: (topInk + bottomInk) / 2, w, h, radius: bx.radius * Math.min(w, h) / 2 });
         } else {
             rows.forEach((row) => {
                 const bnd = bandOf(joined([row.from, row.to]));

@@ -1,6 +1,6 @@
 import { useT } from '../../../lib/i18n';
 import { Choice } from './choices';
-import { useCap } from './context';
+import { usePanel } from './context';
 import { Row } from './inputs';
 
 /** The four ease curves, in plain words. */
@@ -38,7 +38,7 @@ function Glyph({ id }) {
  */
 export default function CurveRow({ path, label, disabled = false, hint }) {
     const t = useT();
-    const { view, set, clear } = useCap();
+    const { view, set, clear } = usePanel();
     const value = view.val(path);
     const opts = easeOptions(t);
     const picked = opts.find((o) => o.id === value);

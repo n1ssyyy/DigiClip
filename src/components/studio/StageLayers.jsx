@@ -1,10 +1,8 @@
 import { Fragment, useLayoutEffect, useMemo, useRef } from 'react';
-import { ImagePlus } from 'lucide-react';
 import { fontBox, outlineRing } from '../../lib/captionStyles';
 import { blockExtent, cfgOf, planFor } from '../../lib/captionMotion';
 import { headlineMotion } from '../../lib/layers';
 import { blockAt } from '../../lib/stageTime';
-import { baseName } from '../digiclip/JobOptions';
 import { useClock, useClockPick } from './usePlayer';
 
 const STILL = { opacity: 1, scale: 1 };
@@ -25,7 +23,8 @@ function useSize(ref, onSize, deps) {
 }
 
 /**
- * The headline, drawn in engine pixels: the card (or outlined type), two
+ * The headline as it was before the Look gave it more fields (a v2 headline
+ * is drawn by `WordCaption`, see Stage), drawn in engine pixels: the card (or outlined type), two
  * balanced lines, one accent word, and the entrance and fade-out the engine
  * gives it. It is always laid out (so it can be measured and selected) and
  * only its opacity says whether it is up at this moment of the sample.
@@ -81,57 +80,6 @@ export function HeadlineLayer({ r, clock, len, reduced, onSize }) {
                     </div>
                 ))}
             </div>
-        </div>
-    );
-}
-
-/** The progress bar: the engine's dimmed track with the fill up to the
- *  playhead's place in the sample. */
-export function BarLayer({ r, clock, len }) {
-    const time = useClock(clock);
-    const fill = r.fill(len > 0 ? time / len : 0);
-    return (
-        <div aria-hidden style={{ position: 'absolute', left: 0, top: r.y, width: r.w, height: r.thickness, background: 'rgb(0 0 0 / 0.55)', pointerEvents: 'none' }}>
-            <div style={{ width: fill, height: '100%', background: r.color }} />
-        </div>
-    );
-}
-
-/** The logo. The image itself cannot be read here (the app has no
- *  permission to load a local file into the page), so a neutral box of the
- *  engine's size stands in, with the file's name. */
-export function LogoLayer({ r, file }) {
-    const { w, h } = r.box;
-    const unit = Math.min(w, h);
-    return (
-        <div
-            aria-hidden
-            style={{
-                position: 'absolute',
-                left: r.x,
-                top: r.y,
-                width: w,
-                height: h,
-                boxSizing: 'border-box',
-                opacity: r.opacity,
-                pointerEvents: 'none',
-                userSelect: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: unit * 0.06,
-                padding: unit * 0.06,
-                border: `${Math.max(2, unit * 0.02)}px dashed rgb(255 255 255 / 0.5)`,
-                background: 'rgb(255 255 255 / 0.12)',
-                color: 'rgb(255 255 255 / 0.8)',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: Math.max(10, unit * 0.1),
-                lineHeight: 1.2,
-            }}
-        >
-            <ImagePlus size={Math.max(12, unit * 0.28)} strokeWidth={1.5} />
-            <span style={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{baseName(file)}</span>
         </div>
     );
 }

@@ -60,7 +60,8 @@ export default function StageOverlay({ s, cw, ch, rects, centres, sizes, selecte
             const fy = (ev.y - frame.top) / (unit * P.ch);
             const pos = fy < 0.5 ? 'top' : 'bottom';
             P.onFlipBar(pos);
-            const y0 = pos === 'top' ? 0 : P.ch - d.rect.h;
+            // A shaped bar keeps its inset (the rect's x) from the edge it sits on.
+            const y0 = pos === 'top' ? d.rect.x : P.ch - d.rect.x - d.rect.h;
             setFx({ guideX: null, guideY: null, readout: { text: t(pos === 'top' ? 'Top' : 'Bottom'), cx: P.cw / 2, top: y0, bottom: y0 + d.rect.h } });
             return;
         }

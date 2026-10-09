@@ -231,11 +231,14 @@ export function captionsSet(look) {
 // pure state updates
 // ---------------------------------------------------------------------------
 
-/** `prev` with `patch` on top. A flat motion chosen elsewhere (the Home
- *  popover) replaces the Look's motion, so what is shown is what is sent. */
+/** `prev` with `patch` on top. A flat motion or bar colour chosen
+ *  elsewhere (the Home popover) replaces the Look's own, so what is shown is
+ *  what is sent. */
 export function applyPatch(prev, patch) {
-    const dropsAnim = 'caption_anim' in patch && !('look' in patch) && prev.look?.captions?.anim !== undefined;
-    let changed = dropsAnim;
+    const flatOnly = !('look' in patch);
+    const dropsAnim = 'caption_anim' in patch && flatOnly && prev.look?.captions?.anim !== undefined;
+    const dropsColor = 'bar_color' in patch && flatOnly && prev.look?.bar?.color !== undefined;
+    let changed = dropsAnim || dropsColor;
     for (const k of Object.keys(patch)) {
         if (prev[k] !== patch[k]) changed = true;
     }
@@ -243,7 +246,14 @@ export function applyPatch(prev, patch) {
     const next = { ...prev, ...patch };
     if (dropsAnim) {
         const { anim, ...rest } = prev.look.captions;
-        next.look = { ...prev.look, captions: rest };
+        next.look = { ...next.look, captions: rest };
+    }
+    if (dropsColor) {
+        const { color, ...rest } = prev.look.bar;
+        const look = { ...next.look };
+        if (Object.keys(rest).length) look.bar = rest;
+        else delete look.bar;
+        next.look = look;
     }
     return next;
 }

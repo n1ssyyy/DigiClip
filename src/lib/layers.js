@@ -1,18 +1,25 @@
 // The engine's headline, progress bar and logo, mirrored for the Studio stage.
 //
-// Follows digiclip-rs `src/captions/ass.rs` (the Headline style, its
-// markup, placement, clamp and entrance), `src/compose.rs` (`bar_thickness`,
-// `draw_bar_at`), `src/render.rs` (`Logo`) and `src/look.rs` (ranges). When
-// this file and the engine disagree, the engine is right. Pure functions:
-// no React, no DOM, importable from Node for the tests.
-import { canvasSize, clamp, hex, isKeyword, num } from './captionStyles.js';
+// This file holds the headline's one-event writer (the v1 fields: `src/
+// captions/ass.rs`, the Headline style, its placement, clamp and entrance),
+// its time on screen and the stage's snapping guides, and gathers the three
+// layers' pieces under one import: the word-level headline is in
+// `headlineV2.js`, the bar in `barLayer.js`, the logo in `logoLayer.js`,
+// the text in `headlineText.js` and the fields and their cleaners in
+// `layerFields.js`. When this file and the engine disagree, the engine is
+// right. Pure functions: no React, no DOM, importable from Node for the tests.
+import { canvasSize, clamp } from './captionStyles.js';
+import { HEADLINE_EDGE, HEADLINE_PAD, cleanHeadline, isPositioned } from './layerFields.js';
+import { HEADLINE_MAX, headlineMarkup, headlineText } from './headlineText.js';
+import { resolveHeadlineV2 } from './headlineV2.js';
 
-export const HEADLINE_ANIMS = ['pop', 'fade', 'none'];
-/** What the stage shows when the headline text is empty: real clips use
- *  their own title. */
-export const HEADLINE_SAMPLE = 'Why most founders quit too early';
-export const BAR_DEFAULT_COLOR = '#FFD400';
-export const CORNERS = ['tl', 'tr', 'bl', 'br'];
+export {
+    ACCENT_WORDS, BAR_POSITIONS, CASES, HEADLINE_ANIMS, HEADLINE_SPECS, BAR_SPECS, LOGO_SPECS, cleanBar, cleanHeadline, cleanLogo,
+} from './layerFields.js';
+export { HEADLINE_SAMPLE, headlineMarkup, headlineText, stageHeadline } from './headlineText.js';
+export { headlineRoom, headlineTiming } from './headlineV2.js';
+export { BAR_DEFAULT_COLOR, barThickness, resolveBar } from './barLayer.js';
+export { CORNERS, logoClear, logoInset, resolveLogo, turnedBox } from './logoLayer.js';
 
 /** Ranges of the sizes the stage resizes (look.rs). */
 export const SIZE_RANGE = {
@@ -22,195 +29,36 @@ export const SIZE_RANGE = {
 };
 
 const PLAY_W = 1080;
-const HEADLINE_MAX = 48;
 const HEADLINE_INK = '#111111';
 const HEADLINE_ACCENT = '#FF3C1E';
 const HEADLINE_PX = 64;
-const HEADLINE_PAD = 24;
-const HEADLINE_EDGE = 5;
 /** Line height of the headline face as a share of its size. */
 const HEADLINE_LINE = 1;
 const HEADLINE_FADE_IN = 200;
 const HEADLINE_FADE_OUT = 200;
 
 // ---------------------------------------------------------------------------
-// sections cleaned the way look.rs reads them
-// ---------------------------------------------------------------------------
-
-/** What the engine would make of `headline`: ranges clamped, bad values
- *  absent. `card` is `'none'` or a colour. */
-export function cleanHeadline(h) {
-    const o = h && typeof h === 'object' ? h : {};
-    const out = {};
-    for (const k of ['x', 'y']) {
-        const n = num(o[k], 0, 1);
-        if (n !== undefined) out[k] = n;
-    }
-    const size = num(o.size, 0.5, 2);
-    if (size !== undefined) out.size = size;
-    for (const k of ['ink', 'accent']) {
-        const c = hex(o[k]);
-        if (c) out[k] = c;
-    }
-    if (o.card === null || (typeof o.card === 'string' && o.card.trim().toLowerCase() === 'none')) out.card = 'none';
-    else if (typeof o.card === 'string' && hex(o.card)) out.card = hex(o.card);
-    if (typeof o.anim === 'string') {
-        const a = o.anim.trim().toLowerCase();
-        if (HEADLINE_ANIMS.includes(a)) out.anim = a;
-    }
-    const sec = num(o.seconds, 0, 3600);
-    if (sec !== undefined) out.seconds = sec;
-    return out;
-}
-
-export function cleanBar(b) {
-    const o = b && typeof b === 'object' ? b : {};
-    const out = {};
-    if (typeof o.pos === 'string') {
-        const p = o.pos.trim().toLowerCase();
-        if (p === 'top' || p === 'bottom') out.pos = p;
-    }
-    const h = num(o.height, 0.5, 3);
-    if (h !== undefined) out.height = h;
-    return out;
-}
-
-export function cleanLogo(l) {
-    const o = l && typeof l === 'object' ? l : {};
-    const out = {};
-    for (const k of ['x', 'y']) {
-        const n = num(o[k], 0, 1);
-        if (n !== undefined) out[k] = n;
-    }
-    const size = num(o.size, 0.4, 2.5);
-    if (size !== undefined) out.size = size;
-    const op = num(o.opacity, 0, 1);
-    if (op !== undefined) out.opacity = op;
-    return out;
-}
-
-// ---------------------------------------------------------------------------
-// headline text and markup (headline_text, headline_markup)
-// ---------------------------------------------------------------------------
-
-/** Words a headline never ends on. */
-const DANGLING = [
-    'a', 'an', 'the', 'and', 'or', 'but', 'so', 'to', 'of', 'in', 'on', 'at', 'for', 'with',
-    'from', 'by', 'as', 'is', 'are', 'was', 'were', 'be', 'that', 'this', 'my', 'your', 'our',
-    'their', 'his', 'her', 'its', 'if', 'when', 'than', 'then', 'because', 'about', 'into', 'i',
-    'you', 'we', 'they', 'he', 'she', 'it', 'not', 'just', 'very', 'really', 'like', 'all',
-];
-const BARE_EDGE = /^[^\p{L}\p{N}']+|[^\p{L}\p{N}']+$/gu;
-const bare = (w) => w.replace(BARE_EDGE, '').toLowerCase();
-const charLen = (s) => [...s].length;
-
-/** Headline text: clean, sentence-cased, at most `max` chars and never cut
- *  mid-thought (`headline_text`). */
-export function headlineText(raw, max = HEADLINE_MAX) {
-    const t = String(raw ?? '').replace(/[{}\\*"“”]/g, '').split(/\s+/).filter(Boolean);
-    let n = 0;
-    let len = 0;
-    for (const w of t) {
-        const l = charLen(w) + (n > 0 ? 1 : 0);
-        if (len + l > max) break;
-        len += l;
-        n += 1;
-    }
-    let keep = t.slice(0, n);
-    if (n < t.length) {
-        // Last clause break that keeps at least 3 words.
-        let cut = -1;
-        for (let i = n; i >= 3; i--) {
-            if (/[,;:.!?—]$/u.test(keep[i - 1])) {
-                cut = i;
-                break;
-            }
-        }
-        if (cut > 0) keep = keep.slice(0, cut);
-        else while (keep.length > 2 && DANGLING.includes(bare(keep[keep.length - 1]))) keep = keep.slice(0, -1);
-    }
-    const out = keep.join(' ').replace(/[,;:.\-—…]+$/u, '').trim();
-    return out ? out[0].toUpperCase() + out.slice(1) : '';
-}
-
-const filled = (v) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : '');
-
-/**
- * The text the stage draws for the headline, in the order the engine picks it:
- * the typed text (when the engine would keep something of it), else the title
- * of the sample video's first clip, else the video's own title. The fixed line
- * is only for the stand-in sample (`job` null) or a video with no title at all.
- *
- * @param {string} raw  the headline text option
- * @param {{name?: string, clips?: {title?: string}[]}|null} [job]  the sample video
- */
-export function stageHeadline(raw, job = null) {
-    if (headlineText(raw, HEADLINE_MAX)) return String(raw);
-    return filled(job?.clips?.[0]?.title) || filled(job?.name) || HEADLINE_SAMPLE;
-}
-
-/** The headline as lines of words, one word the accent: two balanced lines
- *  once it is long enough to wrap (`headline_markup`). */
-export function headlineMarkup(h) {
-    const words = h.split(' ');
-    let pick = -1;
-    for (let i = 1; i < words.length; i++) {
-        const b = bare(words[i]);
-        if (isKeyword(words[i], false) && !b.startsWith("i'") && b !== 'i') {
-            pick = i;
-            break;
-        }
-    }
-    if (pick < 0) {
-        // The longest content word; ties go to the earlier one.
-        let best = -1;
-        for (let i = 0; i < words.length; i++) {
-            const b = bare(words[i]);
-            if (charLen(b) >= 5 && !DANGLING.includes(b)) {
-                if (best < 0 || charLen(words[i]) > charLen(words[best])) best = i;
-            }
-        }
-        pick = best;
-    }
-    const total = charLen(h);
-    let brk = -1;
-    if (total > 18 && words.length > 1) {
-        let bestScore = Infinity;
-        for (let i = 1; i < words.length; i++) {
-            const a = charLen(words.slice(0, i).join(' '));
-            const score = Math.max(a, total - a - 1);
-            if (score < bestScore) {
-                bestScore = score;
-                brk = i;
-            }
-        }
-    }
-    const lines = [[]];
-    words.forEach((w, i) => {
-        if (i === brk) lines.push([]);
-        lines[lines.length - 1].push({ text: w, accent: i === pick });
-    });
-    return lines;
-}
-
-// ---------------------------------------------------------------------------
 // resolveHeadline
 // ---------------------------------------------------------------------------
 
 /**
- * The headline as the engine draws it.
+ * The headline as the engine draws it. A Look with only the v1 fields is the
+ * one-event writer's headline (`positioned: false`); any other field makes it
+ * the word-level one (`headlineV2.js`, `positioned: true`), which also needs
+ * the text `measure` and the clip's length `len` (seconds).
  *
  * @param {string} text  the typed headline (empty = nothing to draw)
  * @param {string|{w,h}} canvas
  * @param {object} look  the Look's `headline` section (may be empty)
- * @param {{clear?: {top:boolean,left:boolean,px:number}}} [opts]  a corner
- *        logo the default placement keeps clear of
+ * @param {{clear?: {top:boolean,left:boolean,px:number}, measure?: Function, len?: number}} [opts]
+ *        `clear`: a corner logo the default placement keeps clear of
  * @returns {null|object}
  */
 export function resolveHeadline(text, canvas, look, opts = {}) {
     const clean = headlineText(text, HEADLINE_MAX);
     if (!clean) return null;
     const c = cleanHeadline(look);
+    if (isPositioned(c)) return resolveHeadlineV2(clean, c, canvas, opts);
     const { w: pw, h: ph } = canvasSize(canvas);
     const k = Math.min(pw / PLAY_W, ph / 1200, 1);
     const px = (v) => Math.max(1, Math.round(v * k));
@@ -225,14 +73,15 @@ export function resolveHeadline(text, canvas, look, opts = {}) {
     const accent = c.accent ?? HEADLINE_ACCENT;
     let edge;
     let edgeW;
+    // Dark ink gets a light edge, any other a dark one.
+    let dark = !inkRgb;
+    if (inkRgb) {
+        const n = parseInt(inkRgb.slice(1), 16);
+        dark = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255) < 90;
+    }
     if (noCard) {
         // No card: a dark outline keeps the type readable (a light one when
         // the ink itself is dark).
-        let dark = false;
-        if (inkRgb) {
-            const n = parseInt(inkRgb.slice(1), 16);
-            dark = 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255) < 90;
-        }
         edge = dark ? '#FFFFFF' : '#000000';
         edgeW = px(HEADLINE_EDGE * size);
     } else {
@@ -278,6 +127,7 @@ export function resolveHeadline(text, canvas, look, opts = {}) {
     // Time on screen: the whole clip, or `seconds` of it with a short fade out.
     const seconds = c.seconds > 0 ? c.seconds : 0;
     return {
+        positioned: false,
         w: pw,
         h: ph,
         k,
@@ -291,6 +141,9 @@ export function resolveHeadline(text, canvas, look, opts = {}) {
         noCard,
         card: noCard ? null : { color: edge, pad: edgeW },
         outline: noCard ? { color: edge, width: edgeW } : null,
+        // The stroke round the letters, as a field of the Look would say it
+        // (width in px on a 1080-wide canvas).
+        stroke: { color: noCard ? edge : (dark ? '#FFFFFF' : '#000000'), width: noCard ? edgeW / k : 0 },
         edgeW,
         block,
         wrapW,
@@ -308,11 +161,13 @@ export function resolveHeadline(text, canvas, look, opts = {}) {
 
 /** When the headline's entrance has settled (ms into the clip). */
 export function headlineSettleMs(r) {
+    if (r.positioned) return r.timing.settleMs;
     return r.anim === 'pop' ? 340 : r.anim === 'fade' ? HEADLINE_FADE_IN : 0;
 }
 
 /** When the headline goes (ms into a clip `durMs` long). */
 export function headlineEndMs(r, durMs) {
+    if (r.positioned) return Math.min(r.timing.endMs, durMs);
     return r.seconds > 0 && r.seconds * 1000 < durMs ? r.seconds * 1000 : durMs;
 }
 
@@ -343,118 +198,6 @@ export function headlineMotion(r, localMs, durMs) {
     const inn = fin > 0 ? localMs / fin : 1;
     const out = fout > 0 ? (end - localMs) / fout : 1;
     return { opacity: clamp(Math.min(inn, out), 0, 1), scale };
-}
-
-// ---------------------------------------------------------------------------
-// the progress bar
-// ---------------------------------------------------------------------------
-
-/** Bar thickness in px (even): 0.65% of the height, at least 8, times the
- *  Look's height multiplier (never under 4). */
-export function barThickness(canvas, height = 1) {
-    const { h } = canvasSize(canvas);
-    const even = (v) => Math.round(v / 2) * 2;
-    return Math.min(Math.max(even(h * 0.0065 * height), even(8 * height), 4), h - (h % 2));
-}
-
-/** The bar's place on a canvas: its row, thickness, colour and where the
- *  fill ends at `progress` (0..1). */
-export function resolveBar(canvas, color, look) {
-    const c = cleanBar(look);
-    const { w, h } = canvasSize(canvas);
-    const thickness = barThickness(canvas, c.height ?? 1);
-    const top = c.pos === 'top';
-    const y = top ? 0 : h - thickness;
-    return {
-        w,
-        h,
-        top,
-        pos: top ? 'top' : 'bottom',
-        height: c.height ?? 1,
-        thickness,
-        y,
-        color: hex(color) ?? BAR_DEFAULT_COLOR,
-        center: { x: 0.5, y: (y + thickness / 2) / h },
-        fill(progress) {
-            const p = clamp(Number.isFinite(progress) ? progress : 0, 0, 1);
-            return Math.min(Math.round((p * w) / 2) * 2, w);
-        },
-    };
-}
-
-// ---------------------------------------------------------------------------
-// the logo
-// ---------------------------------------------------------------------------
-
-/** Corner insets (x, y) in px. */
-export function logoInset(canvas) {
-    const { w, h } = canvasSize(canvas);
-    return [Math.round(w * 0.04), Math.round(h * 0.035)];
-}
-
-/**
- * The logo box on a canvas.
- *
- * @param {string|{w,h}} canvas
- * @param {string} corner  the flat `logo_pos`: tl | tr | bl | br
- * @param {object} look  the Look's `logo` section
- * @param {{w:number,h:number}|null} [natural]  the image's pixel size
- *        (unknown = square)
- */
-export function resolveLogo(canvas, corner, look, natural) {
-    const c = cleanLogo(look);
-    const { w: cw, h: ch } = canvasSize(canvas);
-    const aspect = natural && natural.w > 0 && natural.h > 0 ? natural.w / natural.h : 1;
-    const scale = c.size ?? 1;
-    const s = Math.min(cw, ch);
-    const [bw, bh] = [s * 0.26 * scale, s * 0.14 * scale];
-    const wRaw = Math.min(bw, bh * aspect);
-    const even = (v) => Math.max(Math.round(v / 2) * 2, 2);
-    const w = even(wRaw);
-    const h = even(wRaw / aspect);
-    const pos = CORNERS.includes(corner) ? corner : 'tr';
-    const free = c.x !== undefined || c.y !== undefined;
-    let x;
-    let y;
-    if (free) {
-        const place = (centre, extent, room) => {
-            const lo = centre - extent / 2;
-            const e = Math.max(Math.round(lo / 2) * 2, 0);
-            return Math.min(e, Math.max(room - extent, 0) & ~1);
-        };
-        x = place((c.x ?? 0.5) * cw, w, cw);
-        y = place((c.y ?? 0.5) * ch, h, ch);
-    } else {
-        const [mx, my] = logoInset(canvas);
-        x = pos[1] === 'l' ? mx : cw - w - mx;
-        // Bottom corners sit higher: clear of the progress bar.
-        y = pos[0] === 't' ? my : ch - h - my * 2;
-    }
-    return {
-        w: cw,
-        h: ch,
-        corner: pos,
-        free,
-        aspect,
-        scale,
-        box: { w, h },
-        x,
-        y,
-        center: { x: (x + w / 2) / cw, y: (y + h / 2) / ch },
-        opacity: c.opacity !== undefined ? Math.round(c.opacity * 100) / 100 : 0.9,
-    };
-}
-
-/** What headline text a corner logo makes the default headline keep clear
- *  of: the logo's width, its inset and a gap (pipeline.rs). `null` when the
- *  logo is placed freely, which the text does not make room for. */
-export function logoClear(logo) {
-    if (!logo || logo.free) return null;
-    return {
-        top: logo.corner[0] === 't',
-        left: logo.corner[1] === 'l',
-        px: logo.box.w + logoInset({ w: logo.w, h: logo.h })[0] + Math.round(logo.w * 0.025),
-    };
 }
 
 // ---------------------------------------------------------------------------

@@ -113,9 +113,9 @@ export default function Studio() {
         [options.logo, options.logo_pos, shape, L.logo],
     );
     const headline = useMemo(
-        () => (options.headline ? resolveHeadline(stageHeadline(options.headline_text, sample.job), shape, L.headline, { clear: logoClear(logo) }) : null),
+        () => (options.headline ? resolveHeadline(stageHeadline(options.headline_text, sample.job), shape, L.headline, { clear: logoClear(logo), measure, len: sample.len }) : null),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [options.headline, options.headline_text, sample.job, shape, L.headline, logo],
+        [options.headline, options.headline_text, sample.job, shape, L.headline, logo, measure, sample.len],
     );
     const bar = useMemo(
         () => (options.progress_bar ? resolveBar(shape, options.bar_color, L.bar) : null),
@@ -267,7 +267,7 @@ export default function Studio() {
                     safe={safe}
                     notice={notice}
                 />
-                <Inspector selected={selected} look={look} job={sample.job} />
+                <Inspector selected={selected} look={look} job={sample.job} measure={measure} len={sample.len} />
             </div>
             <Transport player={player} len={sample.len} words={sample.words} loop={loop} onLoop={setLoop} safe={safe} onSafe={setSafe} />
         </div>

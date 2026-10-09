@@ -7,6 +7,7 @@
 // section, which is the section whose controls edit it. The panel builds its
 // number controls from `numSpec` / `numUi`, so a field cannot gain a range
 // here without gaining a control there.
+import { hasOverrides, keysOf, resetPatch, uiOfSpec } from './sectionKit.js';
 import { FIELD_SPECS, ALIGNS, BOX_PERS, EASES, ENTER_KINDS, EXIT_KINDS, FILLS, WORD_MODES } from './captionFields.js';
 
 export const SECTION_IDS = ['style', 'type', 'fill', 'shadow', 'box', 'words', 'motion'];
@@ -83,31 +84,12 @@ export function numSpec(path) {
     return s && s.type === 'number' ? s : undefined;
 }
 
-const decimals = (n) => {
-    const s = String(Math.round(n * 1e6) / 1e6);
-    return s.includes('.') ? s.split('.')[1].length : 0;
-};
-
 /**
- * How a number is shown to the person: the factor from the stored value, the
- * unit text and the decimals. Shares of the type size and 0..1 amounts read
- * as percent; line gap as a plain multiple.
+ * How a number is shown to the person (see `uiOfSpec`); a line gap reads as a
+ * plain multiple, the rest of the shares as percent.
  */
 export function numUi(path) {
-    const s = numSpec(path);
-    if (!s) return undefined;
-    let k = 1;
-    let unit = '';
-    if (s.unit === 'em') {
-        k = 100;
-        unit = '%';
-    } else if (s.unit === 'ratio' && path !== 'line_gap') {
-        k = 100;
-        unit = '%';
-    } else if (s.unit === 'px') unit = 'px';
-    else if (s.unit === 'deg') unit = '°';
-    else if (s.unit === 'ms') unit = 'ms';
-    return { k, unit, digits: Math.min(2, decimals(s.step * k)) };
+    return uiOfSpec(numSpec(path), path === 'line_gap');
 }
 
 // ---------------------------------------------------------------------------
@@ -115,29 +97,14 @@ export function numUi(path) {
 // ---------------------------------------------------------------------------
 
 /** The top-level fields of the captions section a section edits. */
-export function sectionKeys(section) {
-    return [...new Set(SECTION_PATHS[section].map((p) => p.split('.')[0]))];
-}
-
-/** Something real in the value: a plain value, or an object with such a value. */
-function present(v) {
-    if (v && typeof v === 'object' && !Array.isArray(v)) return Object.values(v).some(present);
-    if (typeof v === 'string') return v !== '';
-    return typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
-}
+export const sectionKeys = (section) => keysOf(SECTION_PATHS[section]);
 
 /** Does the Look change anything the section controls? */
-export function sectionHasOverrides(L, section) {
-    return sectionKeys(section).some((k) => present(L?.[k]));
-}
+export const sectionHasOverrides = (L, section) => hasOverrides(L, SECTION_PATHS[section]);
 
 /** The captions patch that puts a section back to the style's own values:
  *  every field it owns, cleared. One patch is one undo step. */
-export function sectionResetPatch(L, section) {
-    const patch = {};
-    for (const k of sectionKeys(section)) if (present(L?.[k])) patch[k] = undefined;
-    return patch;
-}
+export const sectionResetPatch = (L, section) => resetPatch(L, SECTION_PATHS[section]);
 
 /** Sections that change something, in panel order. */
 export const dirtySections = (L) => SECTION_IDS.filter((s) => sectionHasOverrides(L, s));

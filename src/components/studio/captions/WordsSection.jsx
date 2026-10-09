@@ -2,10 +2,10 @@ import { useId, useState } from 'react';
 import { activeExtraPatch, keywordGlowPatch } from '../../../lib/captionEffective';
 import { useT } from '../../../lib/i18n';
 import { CapNotice } from '../Notice';
-import { Choice, Tabs, ToggleRow } from './choices';
-import { useCap } from './context';
-import CurveRow from './CurvePicker';
-import { Colour, Num, Row, SubHead } from './inputs';
+import { Choice, Tabs, ToggleRow } from '../kit/choices';
+import { usePanel } from '../kit/context';
+import CurveRow from '../kit/CurvePicker';
+import { Colour, Num, Row, SubHead } from '../kit/inputs';
 import StickyStrip from './StickyStrip';
 import WordPreview from './WordPreview';
 
@@ -26,7 +26,7 @@ function Upcoming() {
 
 function Speaking() {
     const t = useT();
-    const { view, setPatch } = useCap();
+    const { view, setPatch } = usePanel();
     const a = view.c.words?.active ?? {};
     return (
         <>
@@ -76,7 +76,7 @@ function Spoken() {
 
 function Keyword() {
     const t = useT();
-    const { view, setPatch } = useCap();
+    const { view, setPatch } = usePanel();
     const on = !!view.c.words?.keyword?.glow;
     return (
         <>
@@ -101,7 +101,7 @@ const STATES = { upcoming: Upcoming, active: Speaking, spoken: Spoken, keyword: 
  *  a word moves from one state to the next, with a loop to watch it. */
 export default function WordsSection() {
     const t = useT();
-    const { view, set, clear } = useCap();
+    const { view, set, clear } = usePanel();
     const [which, setWhich] = useState('active');
     const uid = useId();
     const w = view.c.words ?? {};

@@ -5,8 +5,8 @@ import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
 import Field, { ResetButton } from '../Field';
 import { CapNotice } from '../Notice';
-import { useRoving } from './choices';
-import { useCap } from './context';
+import { useRoving } from '../kit/choices';
+import { usePanel } from '../kit/context';
 
 /** One style drawn in its own look: a small caption sample. */
 function StyleTile({ id, on, stop, rove, index, onPick }) {
@@ -57,7 +57,7 @@ function StyleTile({ id, on, stop, rove, index, onPick }) {
  *  own changes), the caption language, and the way back to the style. */
 export default function StyleSection({ options, update, onResetAll }) {
     const t = useT();
-    const { view, setPatch } = useCap();
+    const { view, setPatch } = usePanel();
     const rove = useRoving(CAPTION_STYLES.length, (j) => update({ style: CAPTION_STYLES[j] }));
     const current = Math.max(0, CAPTION_STYLES.indexOf(view.r.style));
     return (

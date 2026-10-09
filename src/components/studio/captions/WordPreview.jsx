@@ -5,7 +5,7 @@ import { useT } from '../../../lib/i18n';
 import { prefersReducedMotion } from '../CaptionLayer';
 import { useMeasure } from '../useMeasure';
 import WordCaption from '../WordCaption';
-import { useCap, useSectionOpen } from './context';
+import { usePanel, useSectionOpen } from '../kit/context';
 
 // The strip draws on a small virtual frame in engine pixels (the type scales
 // down with it), centred in a short window.
@@ -70,7 +70,7 @@ function usePreviewClock({ active, loopMs, stillMs, reduced }) {
  */
 export default function WordPreview() {
     const t = useT();
-    const { view } = useCap();
+    const { view } = usePanel();
     const open = useSectionOpen();
     const measure = useMeasure();
     const reduced = useMemo(prefersReducedMotion, []);

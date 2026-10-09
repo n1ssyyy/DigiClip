@@ -1,15 +1,15 @@
 import { useMemo } from 'react';
 import { aspectList } from '../../lib/look';
-import { captionView, clearPatch, editPatch, mergePatch } from '../../lib/captionEffective';
-import { sectionHasOverrides, sectionResetPatch } from '../../lib/captionSections';
+import { captionView, clearPatch, editPatch } from '../../lib/captionEffective';
+import { numSpec, numUi, sectionHasOverrides, sectionResetPatch } from '../../lib/captionSections';
 import { useT } from '../../lib/i18n';
-import Section from './captions/Section';
+import Section from './kit/Section';
 import StyleSection from './captions/StyleSection';
 import TypeSection from './captions/TypeSection';
 import { BoxSection, FillSection, ShadowSection } from './captions/DressSections';
 import WordsSection from './captions/WordsSection';
 import MotionSection from './captions/MotionSection';
-import { CapContext } from './captions/context';
+import { PanelContext, panelValue } from './kit/context';
 
 /**
  * The Captions inspector: a stack of collapsible sections (Style, Type, Fill
@@ -27,12 +27,13 @@ export default function CaptionsPanel({ options, update, setCaptions, reset, ges
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [options.style, canvas, L, options.caption_anim],
     );
-    const ctx = useMemo(() => ({
+    const ctx = useMemo(() => panelValue({
         view,
         g: gesture,
         setPatch: setCaptions,
-        set: (path, value) => setCaptions(editPatch(view, path, value)),
-        clear: (...paths) => setCaptions(paths.reduce((patch, p) => mergePatch(patch, clearPatch(p)), {})),
+        patchFor: (path, value) => editPatch(view, path, value),
+        clearFor: clearPatch,
+        num: (path) => ({ spec: numSpec(path), ui: numUi(path) }),
     }), [view, gesture, setCaptions]);
 
     const sections = [
@@ -45,7 +46,7 @@ export default function CaptionsPanel({ options, update, setCaptions, reset, ges
         ['motion', t('Motion'), <MotionSection key="motion" />],
     ];
     return (
-        <CapContext.Provider value={ctx}>
+        <PanelContext.Provider value={ctx}>
             <div className="-mx-1">
                 {sections.map(([id, title, body]) => (
                     <Section
@@ -60,6 +61,6 @@ export default function CaptionsPanel({ options, update, setCaptions, reset, ges
                     </Section>
                 ))}
             </div>
-        </CapContext.Provider>
+        </PanelContext.Provider>
     );
 }

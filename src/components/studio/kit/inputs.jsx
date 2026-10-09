@@ -1,11 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { Slider, Swatch } from '../../digiclip/controls';
 import { Kicker } from '../../digiclip/JobOptions';
-import { numSpec, numUi } from '../../../lib/captionSections';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
 import { ResetBtn } from '../Field';
-import { useCap } from './context';
+import { PanelContext, usePanel } from './context';
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 const decimals = (step) => (String(step).split('.')[1] ?? '').length;
@@ -26,6 +25,7 @@ export function SubHead({ children }) {
  * at most a one-line hint.
  */
 export function Row({ label, detail, htmlFor, set = false, onReset, hint, hintId, children }) {
+    const labels = useContext(PanelContext)?.labels;
     return (
         <div className="space-y-1">
             <div className="flex h-5 items-center justify-between gap-2">
@@ -33,7 +33,7 @@ export function Row({ label, detail, htmlFor, set = false, onReset, hint, hintId
                     <label htmlFor={htmlFor} className={cn('min-w-0 truncate text-[11px]', set ? 'text-foreground' : 'text-muted-foreground')}>{label}</label>
                     {detail && <span className={cn('shrink-0 text-[11px]', set ? 'text-foreground' : 'text-muted-foreground')}>{detail}</span>}
                 </div>
-                {set && onReset && <ResetBtn label={label} onClick={onReset} className="-mr-1" />}
+                {set && onReset && <ResetBtn label={label} tip={labels?.value} onClick={onReset} className="-mr-1" />}
             </div>
             {children}
             {hint && <p id={hintId} className="text-[11px] leading-snug text-muted-foreground">{hint}</p>}
@@ -116,10 +116,9 @@ export function useDrag(g) {
 /** A number field of the Look: a slider to drag and a box to type in, both
  *  tied to the label; shows the effective value, normal once overridden. */
 export function Num({ path, label, hint, disabled = false }) {
-    const { view, set, clear, g } = useCap();
+    const { view, set, clear, g, num } = usePanel();
     const id = useId();
-    const spec = numSpec(path);
-    const ui = numUi(path);
+    const { spec, ui } = num(path);
     const drag = useDrag(g);
     const value = view.val(path);
     const isSet = view.isSet(path);
@@ -130,8 +129,8 @@ export function Num({ path, label, hint, disabled = false }) {
                 <Slider
                     label={label}
                     value={value}
-                    min={spec.min}
-                    max={spec.max}
+                    min={spec.sliderMin ?? spec.min}
+                    max={spec.sliderMax ?? spec.max}
                     step={spec.step}
                     bigStep={spec.step * 10}
                     format={fmt}
@@ -152,10 +151,12 @@ export function Num({ path, label, hint, disabled = false }) {
 /** A colour field of the Look: its name, then the colour well (the effective
  *  colour shows quietly until the Look sets one). The name is never cut: it
  *  keeps a 96px column beside the well, and when a longer name leaves the
- *  well under 132px the well drops to a line of its own below the name. */
-export function Colour({ path, label, disabled = false }) {
+ *  well under 132px the well drops to a line of its own below the name.
+ *  `onPick` / `onBack` write somewhere other than the Look's section (the
+ *  bar's flat colour). */
+export function Colour({ path, label, disabled = false, onPick, onBack }) {
     const t = useT();
-    const { view, set, clear } = useCap();
+    const { view, set, clear } = usePanel();
     const isSet = view.isSet(path);
     const value = view.val(path);
     return (
@@ -167,8 +168,8 @@ export function Colour({ path, label, disabled = false }) {
                 value={isSet ? value : undefined}
                 fallback={value}
                 disabled={disabled}
-                onChange={(v) => set(path, v)}
-                onReset={() => clear(path)}
+                onChange={(v) => (onPick ? onPick(v) : set(path, v))}
+                onReset={() => (onBack ? onBack() : clear(path))}
                 className="min-w-0 grow basis-[132px]"
             />
         </div>

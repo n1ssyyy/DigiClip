@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../../../lib/utils';
-import { useSectionOpen } from './context';
+import { useSectionOpen } from '../kit/context';
 
 /** The nearest ancestor that scrolls vertically (the inspector's pane). */
 function scrollParent(el) {

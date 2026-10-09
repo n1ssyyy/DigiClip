@@ -1,9 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight, RotateCcw } from 'lucide-react';
 import Tip from '../../digiclip/Tooltip';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
-import { OpenContext } from './context';
+import { OpenContext, PanelContext } from './context';
 
 const KEY = 'digiclip.studio.captionSections';
 
@@ -32,6 +32,7 @@ function writeOpen(id, open) {
  */
 export default function Section({ id, title, changed, onReset, firstOpen = false, children }) {
     const t = useT();
+    const labels = useContext(PanelContext)?.labels;
     const uid = useId();
     const [open, setOpen] = useState(() => {
         const saved = readOpen()[id];
@@ -83,13 +84,13 @@ export default function Section({ id, title, changed, onReset, firstOpen = false
                         {changed && (
                             <>
                                 <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-foreground/70" />
-                                <span className="sr-only">{t('Changed from the style')}</span>
+                                <span className="sr-only">{labels?.changed ?? t('Changed from the style')}</span>
                             </>
                         )}
                     </button>
                 </h3>
                 {changed && onReset && (
-                    <Tip label={t('Back to the style’s own values')} side="left" className="absolute top-1/2 right-1 -translate-y-1/2">
+                    <Tip label={labels?.section ?? t('Back to the style’s own values')} side="left" className="absolute top-1/2 right-1 -translate-y-1/2">
                         <button
                             type="button"
                             aria-label={t('Reset {name}', { name: title })}

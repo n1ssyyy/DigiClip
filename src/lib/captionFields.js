@@ -116,19 +116,21 @@ export const EXIT_MS = { none: 0, fade: 140, slide_up: 200, slide_down: 200, zoo
 // ---------------------------------------------------------------------------
 
 const clampN = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
-const numIn = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clampN(v, lo, hi) : undefined);
+// The readers every section of the Look is cleaned with (the headline, bar
+// and logo cleaners in layerFields.js use these too).
+export const numIn = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clampN(v, lo, hi) : undefined);
 const HEX = /^#?[0-9a-f]{6}$/i;
-const hexOf = (v) => (typeof v === 'string' && HEX.test(v.trim()) ? `#${v.trim().replace('#', '').toUpperCase()}` : undefined);
-const plain = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
-const word = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : undefined);
-const oneOf = (v, list) => {
+export const hexOf = (v) => (typeof v === 'string' && HEX.test(v.trim()) ? `#${v.trim().replace('#', '').toUpperCase()}` : undefined);
+export const plain = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+export const word = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : undefined);
+export const oneOf = (v, list) => {
     const w = word(v);
     return list.includes(w) ? w : undefined;
 };
 
 /** An object's defined fields, or `undefined` when it has none (the engine
  *  drops an object that says nothing usable). */
-function some(o) {
+export function some(o) {
     const out = {};
     for (const [k, v] of Object.entries(o)) if (v !== undefined) out[k] = v;
     return Object.keys(out).length ? out : undefined;
@@ -297,24 +299,32 @@ export function fromAnim(anim) {
     }
 }
 
-/** The entrance and exit a Look ends up with: its own fields over its
- *  `anim`'s. A kind with no time is none (`effective_motion`). */
-export function effectiveMotion(c, anim) {
-    const { enter: en, exit: ex } = fromAnim(anim);
+/** An entrance and an exit given by a Look over the ones the element has by
+ *  default (`en`, `ex`): a field left out keeps the default's, a different
+ *  kind takes that kind's own time. A kind with no time is none
+ *  (`merge_motion`). */
+export function mergeMotion(lookEnter, lookExit, en, ex) {
     let enter = en;
-    if (c?.enter) {
-        const kind = c.enter.kind ?? en.kind;
+    if (lookEnter) {
+        const kind = lookEnter.kind ?? en.kind;
         const same = kind === en.kind;
-        enter = { kind, ms: c.enter.ms ?? (same ? en.ms : ENTER_MS[kind]), ease: c.enter.ease ?? (same ? en.ease : null) };
+        enter = { kind, ms: lookEnter.ms ?? (same ? en.ms : ENTER_MS[kind]), ease: lookEnter.ease ?? (same ? en.ease : null) };
     }
     let exit = ex;
-    if (c?.exit) {
-        const kind = c.exit.kind ?? ex.kind;
+    if (lookExit) {
+        const kind = lookExit.kind ?? ex.kind;
         const same = kind === ex.kind;
-        exit = { kind, ms: c.exit.ms ?? (same ? ex.ms : EXIT_MS[kind]) };
+        exit = { kind, ms: lookExit.ms ?? (same ? ex.ms : EXIT_MS[kind]) };
     }
     return {
         enter: enter.ms <= 0 ? { ...enter, kind: 'none' } : enter,
         exit: exit.ms <= 0 ? { ...exit, kind: 'none' } : exit,
     };
+}
+
+/** The entrance and exit a caption Look ends up with: its own fields over
+ *  its `anim`'s. */
+export function effectiveMotion(c, anim) {
+    const { enter, exit } = fromAnim(anim);
+    return mergeMotion(c?.enter, c?.exit, enter, exit);
 }

@@ -2362,3 +2362,8 @@ test('the preview strip loops the real timing: three words, the middle a keyword
     assert.ok(mid[0] > 0 && mid[0] < 255 && mid[1] > 0 && mid[1] < 255, `mid-fade colour ${mid}`);
     nearAll(col(950 + 500), [0, 255, 0], 1e-6);
 });
+
+// The headline, bar and logo designers (their own files, run by this command).
+import './layerfx.test.mjs';
+import './layermap.test.mjs';
+import './layergeom.test.mjs';

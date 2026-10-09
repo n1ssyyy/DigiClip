@@ -1,15 +1,11 @@
 import { useId, useRef, useState } from 'react';
-import { FIELD_SPECS } from '../../../lib/captionFields';
-import { editPatch, mergePatch } from '../../../lib/captionEffective';
-import { numUi } from '../../../lib/captionSections';
+import { mergePatch } from '../../../lib/captionEffective';
 import { useT } from '../../../lib/i18n';
 import { cn } from '../../../lib/utils';
-import { useCap } from './context';
+import { usePanel } from './context';
 import { NumBox, Row, useDrag } from './inputs';
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
-const SX = FIELD_SPECS['shadow.x'];
-const SY = FIELD_SPECS['shadow.y'];
 
 /**
  * The shadow's offset: a small square to drag a dot about (the middle is no
@@ -19,7 +15,9 @@ const SY = FIELD_SPECS['shadow.y'];
  */
 export default function OffsetPad() {
     const t = useT();
-    const { view, setPatch, clear, g } = useCap();
+    const { view, setPatch, patchFor, clear, g, num } = usePanel();
+    const { spec: SX, ui } = num('shadow.x');
+    const { spec: SY } = num('shadow.y');
     const id = useId();
     const ref = useRef(null);
     const [drag, setDrag] = useState(false);
@@ -32,7 +30,7 @@ export default function OffsetPad() {
         const vx = Math.round(clamp(nx, SX.min, SX.max));
         const vy = Math.round(clamp(ny, SY.min, SY.max));
         if (vx === x && vy === y) return;
-        setPatch(mergePatch(editPatch(view, 'shadow.x', vx), editPatch(view, 'shadow.y', vy)));
+        setPatch(mergePatch(patchFor('shadow.x', vx), patchFor('shadow.y', vy)));
     }
     function at(e) {
         const r = ref.current.getBoundingClientRect();
@@ -49,7 +47,6 @@ export default function OffsetPad() {
         e.preventDefault();
         e.stopPropagation();
     }
-    const ui = numUi('shadow.x');
     const left = ((x - SX.min) / (SX.max - SX.min)) * 100;
     const top = ((y - SY.min) / (SY.max - SY.min)) * 100;
     const label = t('Offset');

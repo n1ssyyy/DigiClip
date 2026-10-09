@@ -5,10 +5,10 @@ import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 
 /** The small "back to the style's own value" button of a control. */
-export function ResetBtn({ label, onClick, className }) {
+export function ResetBtn({ label, tip, onClick, className }) {
     const t = useT();
     return (
-        <Tip label={t('Back to the style’s own value')} side="left">
+        <Tip label={tip ?? t('Back to the style’s own value')} side="left">
             <button
                 type="button"
                 aria-label={t('Reset {name}', { name: label })}
