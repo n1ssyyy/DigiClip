@@ -63,10 +63,11 @@ export function reservedNames(starters = STARTERS, tr = (s) => s) {
 // ---------------------------------------------------------------------------
 
 /** Kept from the person's working copy when a starter is applied: how clips
- *  are picked (kind, count, lengths, tighten, focus, merge flash), the
- *  caption language, the files and the text typed beside them. */
+ *  are picked (kind, count, lengths, tighten, focus, merge flash), the shape
+ *  (where the video is posted is not design), the caption language, the files
+ *  and the text typed beside them. */
 export const KEPT_KEYS = [
-    'kind', 'count', 'dur_mode', 'dur_exact', 'dur_min', 'dur_max', 'tighten', 'merge_flash', 'focus', 'subs_lang',
+    'aspect', 'kind', 'count', 'dur_mode', 'dur_exact', 'dur_min', 'dur_max', 'tighten', 'merge_flash', 'focus', 'subs_lang',
     'logo', 'logo_pos', 'music', 'music_db', 'headline_text',
 ];
 
@@ -89,6 +90,27 @@ export function loaded(entry, working, settings) {
 export function isEdited(working, entry, settings) {
     if (!entry || entry.kind === 'untitled') return false;
     return signature(working) !== signature(loaded(entry, working, settings));
+}
+
+// ---------------------------------------------------------------------------
+// what the menu offers
+// ---------------------------------------------------------------------------
+
+/** The actions the picker's menu offers under the list, in order, for the
+ *  look the stage is on: `kind` is `mine`, `starter` or `untitled`; `edited`
+ *  whether the working copy differs from it. Save only for an own look that
+ *  changed; Rename and Delete only for an own look; Duplicate only where
+ *  there is a saved look or a starter to copy (an unsaved Untitled is
+ *  covered by Save as new). */
+export function lookActions(kind, edited = false) {
+    const own = kind === 'mine';
+    const out = [];
+    if (own && edited) out.push('save');
+    out.push('saveas');
+    if (own) out.push('rename');
+    if (own || kind === 'starter') out.push('duplicate');
+    if (own) out.push('delete');
+    return out;
 }
 
 // ---------------------------------------------------------------------------

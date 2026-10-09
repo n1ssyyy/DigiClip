@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { BookmarkPlus, Copy, Pencil, Save, Trash2, X } from 'lucide-react';
 import { inputCls } from '../digiclip/JobOptions';
 import Tip from '../digiclip/Tooltip';
-import { checkName, chooseName, nextFreeName } from '../../lib/lookNames';
+import { checkName, nameStep, nextFreeName } from '../../lib/lookNames';
+import { lookActions } from '../../lib/lookLibrary';
 import { useT } from '../../lib/i18n';
 import { cn } from '../../lib/utils';
 
@@ -15,19 +16,19 @@ export function ActionRows({ looks, setMode, run }) {
     const row = (Icon, label, onClick, extra) => (
         <button type="button" role="menuitem" data-look-item="" disabled={looks.saving} onClick={onClick} className={ROW}>
             <Icon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 flex-1 truncate">{label}</span>
+            <span className="min-w-0 flex-1 break-words">{label}</span>
             {extra}
         </button>
     );
-    return (
-        <>
-            {own && looks.edited && row(Save, t('Save'), () => run(looks.save), <kbd className="font-mono text-[10px] text-muted-foreground">Ctrl+S</kbd>)}
-            {row(BookmarkPlus, t('Save as new…'), () => setMode({ mode: 'saveas' }), !own && <kbd className="font-mono text-[10px] text-muted-foreground">Ctrl+S</kbd>)}
-            {own && row(Pencil, t('Rename…'), () => setMode({ mode: 'rename' }))}
-            {row(Copy, t('Duplicate'), () => run(looks.duplicate))}
-            {own && row(Trash2, t('Delete'), () => setMode({ mode: 'delete' }))}
-        </>
-    );
+    const kbd = <kbd className="font-mono text-[10px] text-muted-foreground">Ctrl+S</kbd>;
+    const ROWS = {
+        save: () => row(Save, t('Save'), () => run(looks.save), kbd),
+        saveas: () => row(BookmarkPlus, t('Save as new…'), () => setMode({ mode: 'saveas' }), !own && kbd),
+        rename: () => row(Pencil, t('Rename…'), () => setMode({ mode: 'rename' })),
+        duplicate: () => row(Copy, t('Duplicate'), () => run(looks.duplicate)),
+        delete: () => row(Trash2, t('Delete'), () => setMode({ mode: 'delete' })),
+    };
+    return lookActions(looks.current.kind, looks.edited).map((id) => <Fragment key={id}>{ROWS[id]()}</Fragment>);
 }
 
 /** An inline question with Yes and No; focus starts on No. */
@@ -38,39 +39,51 @@ export function Confirm({ label, onYes, onNo, busy }) {
     const btn = 'shrink-0 rounded-sm border border-x-white/10 border-b-black/60 border-t-white/20 px-2.5 py-1 text-[11px] outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
     return (
         <div role="group" aria-label={label} className="flex items-center gap-2 px-2 py-1">
-            <span className="min-w-0 flex-1 truncate text-[12px]">{label}</span>
+            <span className="min-w-0 flex-1 break-words text-[12px]">{label}</span>
             <button type="button" role="menuitem" data-look-item="" disabled={busy} onClick={onYes} className={btn}>{t('Yes')}</button>
             <button ref={no} type="button" role="menuitem" data-look-item="" onClick={onNo} className={btn}>{t('No')}</button>
         </div>
     );
 }
 
-/** The inline name field of Save as new and Rename. Enter confirms (a clash
- *  takes the next free name, the exact name of another look asks first),
- *  Escape cancels. */
+/** The inline name field of Save as new and Rename. Enter confirms. A name
+ *  that is taken (an own look's, when renaming; a starter's, always) does not
+ *  save: the field takes the next free name, selected, with one line saying
+ *  so, and the next Enter saves that. The exact name of another own look
+ *  asks before replacing it (Save as new). Escape cancels. */
 export function NameField({ kind, looks, onDone, onCancel, onReplace }) {
     const t = useT();
     const c = looks.current;
     const rename = kind === 'rename';
     const initial = rename ? c.name : (c.kind === 'untitled' ? '' : nextFreeName(c.kind === 'mine' ? c.name : t(c.name), [...looks.own, ...looks.reserved]));
     const [value, setValue] = useState(initial);
+    // The name that was refused, while its suggestion sits in the field.
+    const [refused, setRefused] = useState(null);
+    // Counts the times the field was filled for the person: focus and select again.
+    const [filled, setFilled] = useState(0);
     const ref = useRef(null);
     useEffect(() => {
         ref.current?.focus();
         ref.current?.select();
-    }, []);
+    }, [filled]);
     const opts = { reserved: looks.reserved, allowReplace: !rename, except: rename ? c.name : null };
     const check = checkName(value, looks.own, opts);
     const label = rename ? t('Rename') : t('Save');
 
     function submit() {
         if (check.kind === 'invalid' || looks.saving) return;
-        if (check.kind === 'replace') {
-            onReplace(check.name);
+        const step = nameStep(value, looks.own, opts);
+        if (step.kind === 'taken') {
+            setRefused(step.name);
+            setValue(step.suggest);
+            setFilled((n) => n + 1);
             return;
         }
-        const pick = chooseName(value, looks.own, opts);
-        (rename ? looks.rename : looks.saveAs)(pick.name).then((ok) => { if (ok) onDone(); });
+        if (step.kind === 'replace') {
+            onReplace(step.name);
+            return;
+        }
+        (rename ? looks.rename : looks.saveAs)(step.name).then((ok) => { if (ok) onDone(); });
     }
 
     return (
@@ -79,7 +92,7 @@ export function NameField({ kind, looks, onDone, onCancel, onReplace }) {
                 <input
                     ref={ref}
                     value={value}
-                    onChange={(e) => setValue(e.target.value)}
+                    onChange={(e) => { setValue(e.target.value); setRefused(null); }}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter') { e.preventDefault(); submit(); }
                         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onCancel(); }
@@ -105,7 +118,9 @@ export function NameField({ kind, looks, onDone, onCancel, onReplace }) {
                 </Tip>
             </div>
             <p aria-live="polite" className="min-h-[14px] px-1 text-[11px] leading-snug text-muted-foreground">
-                {check.kind === 'clash' ? t('Taken. Enter uses “{name}”.', { name: check.suggest }) : check.kind === 'replace' ? t('Same name as a saved look. Enter asks before replacing it.') : ''}
+                {refused !== null && check.kind === 'ok'
+                    ? t('“{name}” is taken. Press Enter again to use this one.', { name: refused })
+                    : check.kind === 'replace' ? t('Same name as a saved look. Enter asks before replacing it.') : ''}
             </p>
         </div>
     );

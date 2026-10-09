@@ -1,35 +1,41 @@
 // The looks that ship with the app. A starter is design only: the options a
-// preset would hold for the style, the shape, the overlays and the Look
-// sections, and nothing about the cut (how clips are picked, their count and
-// length, tighten, focus, caption language) and no file or typed text (logo,
-// music, headline text). Applying one leaves those as the person has them
-// (`applyStarter` in lookLibrary.js).
+// preset would hold for the style, the overlays and the Look sections, and
+// nothing about the cut (how clips are picked, their count and length,
+// tighten, focus, caption language), nothing about where the video is posted
+// (the shape) and no file or typed text (logo, music, headline text).
+// Applying one leaves those as the person has them (`applyStarter` in
+// lookLibrary.js).
 //
 // Written in the engine's option form, like a preset, so the same code reads
 // both. Every number sits inside its field's range and every colour is
 // upper-case `#RRGGBB`, so the store's own cleaning leaves a starter as it is
-// (tested). Names and one-line descriptions go through `t()` where shown.
+// (tested). Names and one-line descriptions go through `t()` where shown; a
+// description is a handful of words that says what you see, short enough for
+// one line of the picker's menu in every language (tested).
 
 /** The flat options a starter may set; everything else is the person's. */
-export const DESIGN_KEYS = ['style', 'caption_anim', 'aspect', 'headline', 'progress_bar', 'layout', 'punch', 'look'];
+export const DESIGN_KEYS = ['style', 'caption_anim', 'headline', 'progress_bar', 'layout', 'punch', 'look'];
 
 export const STARTERS = [
     {
         id: 'classic',
         name: 'Classic',
-        blurb: 'Yellow karaoke words and nothing else. What every video starts with.',
+        blurb: 'Yellow karaoke words, nothing else',
         options: { style: 'karaoke', punch: true },
     },
     {
         id: 'punch',
         name: 'Punch',
-        blurb: 'One big word at a time in yellow, a lively camera and punchy colour.',
+        blurb: 'One big yellow word at a time',
         options: {
             style: 'hormozi',
             punch: true,
             look: {
                 captions: {
-                    size: 1.1,
+                    size: 1.6,
+                    y: 0.62,
+                    box: { opacity: 0 },
+                    stroke: { width: 6 },
                     words: { mode: 'single', active: { color: '#FFE600', scale: 1.08 } },
                     enter: { kind: 'pop', ms: 120 },
                 },
@@ -41,7 +47,7 @@ export const STARTERS = [
     {
         id: 'quiet',
         name: 'Quiet',
-        blurb: 'Small soft white captions that fade in. A steady camera, no punch-ins.',
+        blurb: 'Small white words, soft fade',
         options: {
             style: 'minimal',
             punch: false,
@@ -61,7 +67,7 @@ export const STARTERS = [
     {
         id: 'neon',
         name: 'Neon',
-        blurb: 'Glowing cyan words on a cool dark frame, with a glowing progress bar.',
+        blurb: 'Glowing cyan words, dark frame',
         options: {
             style: 'neon',
             punch: true,
@@ -88,7 +94,7 @@ export const STARTERS = [
     {
         id: 'marker',
         name: 'Marker',
-        blurb: 'Lime highlighter words, a headline card on top and a progress bar.',
+        blurb: 'Lime highlighter, headline card',
         options: {
             style: 'highlight',
             punch: true,
@@ -98,6 +104,7 @@ export const STARTERS = [
                 captions: { words: { mode: 'build' } },
                 headline: {
                     case: 'upper',
+                    ink: '#FFFFFF',
                     size: 0.85,
                     width: 0.84,
                     accent: '#A3E635',
@@ -111,7 +118,7 @@ export const STARTERS = [
     {
         id: 'podcast',
         name: 'Podcast',
-        blurb: 'Two speakers stacked when they share the frame, steady camera, warm colour.',
+        blurb: 'Two speakers stacked, warm colour',
         options: {
             style: 'tiktok',
             punch: false,

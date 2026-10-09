@@ -94,9 +94,11 @@ export function useLooks({ look, settings }) {
         return true;
     }, [look, persist, t]);
 
-    /** A copy of the working copy under the next free name of the current look. */
+    /** A copy of the working copy under the next free name of the current look
+     *  (a saved one or a starter; an unsaved Untitled is Save as new). */
     const duplicate = useCallback(async () => {
         const { options: now, presets: p, reserved: res, current: c } = live.current;
+        if (c.kind === 'untitled') return false;
         const made = duplicateLook(p, c.kind === 'mine' ? c.name : t(c.name), toEngine(now), res);
         const ok = await persist(made.presets);
         if (!ok) return false;

@@ -3,13 +3,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CURRENT_KEY, createLookStore, defaults, fromEngine, sanitizeLook, toEngine } from '../src/lib/look.js';
+import { CURRENT_KEY, aspectList, createLookStore, defaults, fromEngine, sanitizeLook, toEngine } from '../src/lib/look.js';
 import { DESIGN_KEYS, STARTERS } from '../src/lib/starterLooks.js';
-import { NAME_MAX, checkName, chooseName, nextFreeName } from '../src/lib/lookNames.js';
+import { NAME_MAX, checkName, chooseName, nameStep, nextFreeName } from '../src/lib/lookNames.js';
 import {
-    KEPT_KEYS, UNTITLED, applyStarter, canon, deleteLook, duplicateLook, isEdited, lookList, renameLook, reservedNames, resolveCurrent, saveLook,
+    KEPT_KEYS, UNTITLED, applyStarter, canon, deleteLook, duplicateLook, isEdited, lookActions, lookList, renameLook, reservedNames, resolveCurrent,
+    saveLook,
 } from '../src/lib/lookLibrary.js';
-import { lookSummary, summaryParts } from '../src/lib/lookSummary.js';
+import { SUMMARY_MAX, lookSummary, summaryParts, traits } from '../src/lib/lookSummary.js';
+import { captionView } from '../src/lib/captionEffective.js';
+import { headlineView } from '../src/lib/layerEffective.js';
+import { HEADLINE_SAMPLE, resolveHeadline } from '../src/lib/layers.js';
+import { rangeOf } from '../src/lib/captionFields.js';
+import clips from '../src/i18n/clips.js';
+import home from '../src/i18n/home.js';
+import mcp from '../src/i18n/mcp.js';
+import options from '../src/i18n/options.js';
+import settings from '../src/i18n/settings.js';
+import shell from '../src/i18n/shell.js';
+import studio from '../src/i18n/studio.js';
+import tray from '../src/i18n/tray.js';
+
+// Every language's strings, merged like the app's own dictionaries.
+const studioStrings = Object.fromEntries(['sq', 'de', 'fr', 'es', 'it', 'tr'].map((l) => [l, Object.assign({}, ...[clips, home, mcp, options, settings, shell, studio, tray].map((d) => d[l]))]));
 import { FRAME_CAP, frameAvailability, frameKey, frameRequest, renderTime, warningLine } from '../src/lib/exactFrame.js';
 
 const memory = () => {
@@ -47,10 +63,68 @@ test('the six starters are all there with plain names and one line each', () => 
     assert.equal(new Set(STARTERS.map((s) => s.name.toLowerCase())).size, 6);
     for (const s of STARTERS) {
         assert.ok(s.name.length <= 12 && !/\s/.test(s.name), s.name);
-        assert.ok(s.blurb.length > 10 && s.blurb.length <= 90 && !s.blurb.includes('\n'), s.name);
+        assert.ok(s.blurb.length > 10 && s.blurb.length <= BLURB_MAX && !s.blurb.includes('\n'), s.name);
     }
     assert.equal(new Set(STARTERS.map((s) => s.options.style)).size, 6);
 });
+
+// The menu is 340 px wide and its description line 10 px mono type: about 48
+// characters between the padding and the tick. A description is a handful of
+// words and keeps well inside that, in every language.
+const BLURB_MAX = 44;
+const LANG_IDS = ['sq', 'de', 'fr', 'es', 'it', 'tr'];
+
+test('every starter description fits one line of the menu in English and in all six languages, with no ellipsis', () => {
+    for (const s of STARTERS) {
+        assert.ok(s.blurb.length <= BLURB_MAX && !/[\u2026]|\.\.\./.test(s.blurb), s.blurb);
+        assert.ok(s.blurb.split(/\s+/).length <= 7, `${s.blurb} is more than a handful of words`);
+        for (const lang of LANG_IDS) {
+            const text = studioStrings[lang][s.blurb];
+            assert.ok(text, `${lang} lacks "${s.blurb}"`);
+            assert.ok(text.length <= BLURB_MAX && !/[\u2026]|\.\.\./.test(text), `${lang}: ${text} (${text.length})`);
+        }
+    }
+});
+
+test('a summary of the person\'s own look fits one line in every language, dropping the second trait before it would pass', () => {
+    // Every trait phrase the summary can name, from looks that between them have them all.
+    const A = {
+        layout: 'split', headline: '', progress_bar: '#FFFFFF', logo: 'a.png', music: 'b.mp3', punch: false,
+        look: { captions: { show: false, words: { mode: 'single' }, glow: { size: 5 }, box: { color: '#000000' } }, camera: { feel: 'locked' }, effects: { grade: 'warm', vignette: 0.2 } },
+    };
+    const B = { layout: 'auto', look: { captions: { words: { mode: 'build' } }, camera: { feel: 'steady' }, effects: { grade: 'cool' } } };
+    const C = { look: { camera: { feel: 'lively' }, effects: { grade: 'mono' } } };
+    const D = { look: { effects: { grade: 'punchy' } } };
+    const phrases = [...new Set([A, B, C, D].flatMap((o) => traits(fromEngine(o, null))))];
+    assert.ok(phrases.length >= 18, String(phrases.length));
+    for (const lang of ['en', ...LANG_IDS]) {
+        const tr = (x) => (lang === 'en' ? x : studioStrings[lang][x] ?? x);
+        for (const x of phrases) {
+            if (lang !== 'en') assert.ok(studioStrings[lang][x], `${lang} lacks "${x}"`);
+            // The longest style name, and the phrase alone.
+            const one = lookSummary({ style: 'highlight', ...traitOptions(x) }, tr);
+            assert.ok(one.length <= 48, `${lang}: ${one}`);
+        }
+        const all = lookSummary({ ...A, style: 'highlight' }, tr);
+        assert.ok(all.length <= SUMMARY_MAX || all.split(' · ').length === 3, `${lang}: ${all}`);
+        assert.ok(all.length <= 48, `${lang}: ${all}`);
+    }
+});
+
+// Options that make exactly the trait `x` the first one named.
+function traitOptions(x) {
+    for (const o of [
+        { look: { captions: { show: false } } }, { layout: 'split' }, { layout: 'auto' }, { look: { captions: { words: { mode: 'single' } } } },
+        { look: { captions: { words: { mode: 'build' } } } }, { look: { captions: { glow: { size: 5 } } } }, { look: { captions: { box: { color: '#000000' } } } },
+        { headline: '' }, { progress_bar: '#FFFFFF' }, { look: { effects: { grade: 'warm' } } }, { look: { effects: { grade: 'cool' } } },
+        { look: { effects: { grade: 'mono' } } }, { look: { effects: { grade: 'punchy' } } }, { look: { camera: { feel: 'locked' } } },
+        { look: { camera: { feel: 'steady' } } }, { look: { camera: { feel: 'lively' } } }, { punch: false }, { look: { effects: { vignette: 0.2 } } },
+        { logo: 'a.png' }, { music: 'b.mp3' },
+    ]) {
+        if (traits(fromEngine(o, null))[0] === x) return o;
+    }
+    throw new Error(`no options for ${x}`);
+}
 
 test('a stored name finds its look: own first, then a starter; a name that is gone is an unsaved Untitled', () => {
     const list = lookList([neon]);
@@ -78,7 +152,9 @@ test('names are unique without regard to case, and a clash offers the next free 
     const own = ['Podcast', 'Podcast 2'];
     assert.deepEqual(checkName('podcast', own), { kind: 'clash', name: 'podcast', suggest: 'podcast 3' });
     assert.deepEqual(checkName('Podcast', own), { kind: 'clash', name: 'Podcast', suggest: 'Podcast 3' });
-    assert.deepEqual(chooseName('PODCAST', own), { name: 'PODCAST 3', replace: false });
+    // Nothing takes the suggestion for the person: it is only offered.
+    assert.equal(chooseName('PODCAST', own), null);
+    assert.deepEqual(chooseName('Podcast 3', own), { name: 'Podcast 3', replace: false });
     assert.equal(checkName('Podcast 3', own).kind, 'ok');
 });
 
@@ -94,6 +170,28 @@ test('save-as onto the exact name of an own look asks to replace; another case i
     assert.deepEqual(checkName('Podcast', ['Podcast'], { allowReplace: true }), { kind: 'replace', name: 'Podcast' });
     assert.deepEqual(chooseName('Podcast', ['Podcast'], { allowReplace: true }), { name: 'Podcast', replace: true });
     assert.equal(checkName('podcast', ['Podcast'], { allowReplace: true }).kind, 'clash');
+});
+
+test('a taken name is not used: the check answers with the suggestion, and the suggestion is then simply free', () => {
+    const reserved = reservedNames(STARTERS);
+    const own = ['Podcast', 'My look'];
+    // Rename to a starter's name.
+    const taken = nameStep('Neon', own, { reserved, except: 'My look' });
+    assert.deepEqual(taken, { kind: 'taken', name: 'Neon', suggest: 'Neon 2' });
+    assert.deepEqual(nameStep(taken.suggest, own, { reserved, except: 'My look' }), { kind: 'save', name: 'Neon 2' });
+    // Rename to another own look's name, whatever the case.
+    assert.deepEqual(nameStep('podcast', own, { reserved, except: 'My look' }), { kind: 'taken', name: 'podcast', suggest: 'podcast 2' });
+    assert.equal(nameStep('Podcast', own, { reserved, except: 'My look' }).kind, 'taken');
+    // Save as new onto a reserved name is taken too; onto an own look's exact name it asks to replace.
+    assert.deepEqual(nameStep('Quiet', own, { reserved, allowReplace: true }), { kind: 'taken', name: 'Quiet', suggest: 'Quiet 2' });
+    assert.deepEqual(nameStep('Podcast', own, { reserved, allowReplace: true }), { kind: 'replace', name: 'Podcast' });
+    // Its own name when renaming, and bad names.
+    assert.deepEqual(nameStep('My look', own, { reserved, except: 'My look' }), { kind: 'save', name: 'My look' });
+    assert.deepEqual(nameStep('  ', own, { reserved }), { kind: 'invalid', reason: 'empty' });
+    assert.deepEqual(nameStep('x'.repeat(NAME_MAX + 1), own, { reserved }), { kind: 'invalid', reason: 'long' });
+    // The programmatic path never renames silently either.
+    assert.equal(chooseName('Neon', own, { reserved, except: 'My look' }), null);
+    assert.equal(chooseName('Neon', own, { reserved, allowReplace: true }), null);
 });
 
 test('a look does not clash with itself when renamed, even to another case', () => {
@@ -196,8 +294,9 @@ test('a starter applied keeps the cut, the caption language, the files and the t
     const neonStarter = lookList([]).starters.find((s) => s.name === 'Neon');
     const out = applyStarter(mine, neonStarter, null);
     for (const k of KEPT_KEYS) assert.deepEqual(out[k], mine[k], k);
+    assert.ok(KEPT_KEYS.includes('aspect'));
     assert.equal(out.style, 'neon');
-    assert.equal(out.aspect, '9:16');
+    assert.equal(out.aspect, '1:1');
     assert.equal(out.caption_anim, 'pop');
     assert.equal(out.headline, false);
     assert.equal(out.progress_bar, true);
@@ -208,6 +307,21 @@ test('a starter applied keeps the cut, the caption language, the files and the t
     assert.equal(out.look.captions.size, undefined);
     assert.equal(out.look.camera, undefined);
     assert.equal(mine.style, 'beast');
+});
+
+test('applying a starter leaves the shape alone, a list of shapes included, and does not make the look edited', () => {
+    for (const aspect of ['1:1', '4:5', '16:9', '1:1,9:16', '9:16']) {
+        for (const s of lookList([]).starters) {
+            const out = applyStarter({ ...defaults(), aspect }, s, null);
+            assert.equal(out.aspect, aspect, `${s.name} in ${aspect}`);
+            assert.equal(isEdited(out, s, null), false, `${s.name} in ${aspect}`);
+        }
+    }
+    assert.ok(!DESIGN_KEYS.includes('aspect'));
+    assert.ok(STARTERS.every((s) => !('aspect' in s.options)));
+    // Changing the shape afterwards is not an edit of the starter's design either.
+    const neonS = lookList([]).starters.find((s) => s.name === 'Neon');
+    assert.equal(isEdited({ ...applyStarter(defaults(), neonS, null), aspect: '1:1' }, neonS, null), false);
 });
 
 test('Classic is today\'s defaults: applied to a fresh working copy it changes nothing', () => {
@@ -233,7 +347,7 @@ test('every starter survives the store\'s own cleaning unchanged', () => {
 });
 
 test('a starter carries design only: no file, no headline text, no focus, no cut', () => {
-    const forbidden = ['logo', 'logo_pos', 'music', 'music_db', 'headline_text', 'focus', 'kind', 'count', 'min_len', 'max_len', 'dur_mode', 'tighten', 'subs_lang', 'merge_flash', 'mode', 'framing', 'kit'];
+    const forbidden = ['aspect', 'logo', 'logo_pos', 'music', 'music_db', 'headline_text', 'focus', 'kind', 'count', 'min_len', 'max_len', 'dur_mode', 'tighten', 'subs_lang', 'merge_flash', 'mode', 'framing', 'kit'];
     for (const s of STARTERS) {
         for (const k of Object.keys(s.options)) {
             assert.ok(DESIGN_KEYS.includes(k), `${s.name} sets ${k}`);
@@ -264,7 +378,10 @@ test('the starters are clearly different from each other', () => {
 test('a summary is the style, the shape and up to two traits', () => {
     assert.equal(lookSummary({ style: 'minimal' }), 'minimal · 9:16');
     assert.equal(lookSummary({ style: 'neon', aspect: '1:1,9:16', progress_bar: '#00FFFF', headline: '', look: { effects: { grade: 'cool', vignette: 0.4 } } }), 'neon · 1:1 · Headline · Progress bar');
-    assert.equal(lookSummary({ style: 'hormozi', look: { captions: { words: { mode: 'single' }, glow: { size: 10 } }, camera: { feel: 'lively' } } }), 'hormozi · 9:16 · One word at a time · Glowing words');
+    // A second trait that would pass one line of the menu is left out.
+    assert.equal(lookSummary({ style: 'hormozi', look: { captions: { words: { mode: 'single' }, glow: { size: 10 } }, camera: { feel: 'lively' } } }), 'hormozi · 9:16 · One word at a time');
+    assert.equal(lookSummary({ style: 'neon', look: { captions: { words: { mode: 'build' }, glow: { size: 10 } } } }), 'neon · 9:16 · Words build up · Glowing words');
+    assert.ok(lookSummary({ style: 'hormozi', look: { captions: { words: { mode: 'single' }, glow: { size: 10 } } } }, (x) => x + x + x).split(' · ').length === 3);
     assert.equal(lookSummary({ style: 'tiktok', layout: 'auto', punch: false }), 'tiktok · 9:16 · Auto split · No punch-ins');
     assert.deepEqual(summaryParts({ style: 'ghost', logo: 'a.png', music: 'b.mp3', look: { effects: { vignette: 0.2 } } }).traits, ['Vignette', 'Logo']);
 });
@@ -412,4 +529,131 @@ test('the current look is kept in its own key, survives a reload, and edits stay
     b.setCurrent(null);
     assert.equal(storage.getItem(CURRENT_KEY), null);
     assert.equal(b.get().canUndo, false);
+});
+
+// ---------------------------------------------------------------------------
+// what the menu offers
+// ---------------------------------------------------------------------------
+
+test('the menu offers Duplicate for a saved look or a starter, never for an unsaved Untitled', () => {
+    assert.deepEqual(lookActions('mine', false), ['saveas', 'rename', 'duplicate', 'delete']);
+    assert.deepEqual(lookActions('mine', true), ['save', 'saveas', 'rename', 'duplicate', 'delete']);
+    assert.deepEqual(lookActions('starter', false), ['saveas', 'duplicate']);
+    assert.deepEqual(lookActions('starter', true), ['saveas', 'duplicate']);
+    assert.deepEqual(lookActions('untitled', false), ['saveas']);
+    assert.deepEqual(lookActions('untitled', true), ['saveas']);
+    for (const kind of ['starter', 'untitled']) {
+        for (const edited of [true, false]) {
+            const a = lookActions(kind, edited);
+            assert.ok(!a.includes('save') && !a.includes('rename') && !a.includes('delete'), `${kind}`);
+        }
+    }
+    assert.deepEqual(lookActions('untitled'), ['saveas']);
+});
+
+// ---------------------------------------------------------------------------
+// the starters are readable
+// ---------------------------------------------------------------------------
+
+/** WCAG relative luminance of `#RRGGBB`. */
+function luminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+/** WCAG contrast ratio of two `#RRGGBB` colours. */
+function contrast(a, b) {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+}
+const MIN_CONTRAST = 4.5;
+
+/**
+ * The colour pairs a look draws, resolved through the same effective-value
+ * helpers the inspector uses, so a field the options leave out is the style's
+ * or the engine's default: the headline's text on its card (when the headline
+ * is on and the card is visible) and the active caption word on the caption
+ * box (when the box is visible).
+ */
+function pairs(options) {
+    const o = fromEngine(options, null);
+    const shape = aspectList(o.aspect)[0];
+    const out = { headline: null, caption: null };
+    if (o.headline) {
+        const L = o.look?.headline ?? {};
+        const r = resolveHeadline(HEADLINE_SAMPLE, shape, L);
+        const v = headlineView(r, L);
+        if (v.cardOn && !r.noCard && v.val('card.opacity') > 0) out.headline = { text: v.val('ink').toUpperCase(), card: v.val('card.color').toUpperCase() };
+    }
+    const cv = captionView(o.style, shape, o.look?.captions ?? {}, { anim: o.caption_anim });
+    if (cv.val('show') !== false && cv.boxMode() !== 'off' && cv.val('box.opacity') > 0) {
+        out.caption = { text: cv.val('words.active.color').toUpperCase(), box: cv.val('box.color').toUpperCase() };
+    }
+    return out;
+}
+
+test('contrast is the WCAG ratio', () => {
+    assert.equal(Math.round(contrast('#000000', '#FFFFFF')), 21);
+    assert.equal(contrast('#123456', '#123456'), 1);
+    assert.ok(Math.abs(contrast('#777777', '#FFFFFF') - 4.48) < 0.02);
+});
+
+test('every starter is readable: headline text on its card and the active word on its box reach 4.5', () => {
+    let headlines = 0;
+    for (const s of STARTERS) {
+        const p = pairs(s.options);
+        if (p.headline) {
+            headlines += 1;
+            const c = contrast(p.headline.text, p.headline.card);
+            assert.ok(c >= MIN_CONTRAST, `${s.name}: headline ${p.headline.text} on ${p.headline.card} is ${c.toFixed(2)}`);
+        }
+        if (p.caption) {
+            const c = contrast(p.caption.text, p.caption.box);
+            assert.ok(c >= MIN_CONTRAST, `${s.name}: word ${p.caption.text} on box ${p.caption.box} is ${c.toFixed(2)}`);
+        }
+    }
+    // The guard looks at something: Marker has a visible card.
+    assert.ok(headlines >= 1);
+});
+
+test('the guard sees an unreadable starter: black text left on a black card, a yellow word on a yellow box', () => {
+    const marker = STARTERS.find((s) => s.name === 'Marker');
+    assert.equal(marker.options.look.headline.ink, '#FFFFFF');
+    const { ink, ...rest } = marker.options.look.headline;
+    const broken = pairs({ ...marker.options, look: { ...marker.options.look, headline: rest } });
+    assert.ok(broken.headline, 'the card is visible');
+    assert.ok(contrast(broken.headline.text, broken.headline.card) < MIN_CONTRAST);
+    const boxed = pairs({ style: 'hormozi', look: { captions: { words: { active: { color: '#FFE600' } }, box: { color: '#FFE600' } } } });
+    assert.ok(boxed.caption && contrast(boxed.caption.text, boxed.caption.box) < MIN_CONTRAST);
+    // Defaults are resolved, not assumed: the style's own box counts, and an invisible box does not.
+    assert.ok(pairs({ style: 'hormozi' }).caption);
+    assert.equal(pairs({ style: 'hormozi', look: { captions: { box: { opacity: 0 } } } }).caption, null);
+    assert.equal(pairs({ style: 'hormozi', look: { captions: { box: 'none' } } }).caption, null);
+    assert.equal(pairs({ style: 'karaoke' }).caption, null);
+    assert.equal(pairs({ headline: '', look: { headline: { card: 'none' } } }).headline, null);
+});
+
+test('Marker\'s headline is white on its black card, and Punch is one big yellow word with no box', () => {
+    const marker = pairs(STARTERS.find((s) => s.name === 'Marker').options);
+    assert.deepEqual(marker.headline, { text: '#FFFFFF', card: '#000000' });
+    const punch = STARTERS.find((s) => s.name === 'Punch');
+    const c = punch.options.look.captions;
+    assert.equal(c.size, 1.6);
+    assert.equal(c.y, 0.62);
+    assert.equal(c.box.opacity, 0);
+    assert.equal(c.stroke.width, 6);
+    assert.equal(c.words.mode, 'single');
+    assert.equal(c.words.active.color, '#FFE600');
+    assert.deepEqual(c.enter, { kind: 'pop', ms: 120 });
+    for (const [path, v] of [['size', c.size], ['y', c.y], ['box.opacity', c.box.opacity], ['stroke.width', c.stroke.width]]) {
+        const [lo, hi] = rangeOf(path);
+        assert.ok(v >= lo && v <= hi, path);
+    }
+    const view = captionView('hormozi', '9:16', sanitizeLook(punch.options.look).captions, {});
+    assert.equal(view.val('box.opacity'), 0);
+    assert.equal(pairs(punch.options).caption, null);
+    assert.equal(summaryParts(punch.options).traits.includes('Boxed words'), false);
 });

@@ -4,8 +4,13 @@
 // to show them in the person's language. Pure: no React.
 import { aspectList, fromEngine } from './look.js';
 
-/** How many traits follow the style and the shape. */
+/** How many traits follow the style and the shape, at most. */
 export const TRAITS_SHOWN = 2;
+
+/** The longest a summary may be, as shown: one line of the picker's menu
+ *  (340 px wide, 10 px mono type) holds about 48 characters. A trait that
+ *  would pass this is left out, so the line never needs cutting. */
+export const SUMMARY_MAX = 44;
 
 const GRADE = { warm: 'Warm colour', cool: 'Cool colour', mono: 'Mono colour', punchy: 'Punchy colour' };
 const FEEL = { locked: 'Locked camera', steady: 'Steady camera', lively: 'Lively camera' };
@@ -23,7 +28,7 @@ export function traits(o) {
     if (c.words?.mode === 'single') out.push('One word at a time');
     else if (c.words?.mode === 'build') out.push('Words build up');
     if (has(c.glow) || has(c.words?.active?.glow) || has(c.words?.keyword?.glow)) out.push('Glowing words');
-    if (has(c.box) && c.box !== 'none') out.push('Boxed words');
+    if (has(c.box) && c.box !== 'none' && c.box.opacity !== 0) out.push('Boxed words');
     if (o.headline) out.push('Headline');
     if (o.progress_bar) out.push('Progress bar');
     if (L.effects?.grade && GRADE[L.effects.grade]) out.push(GRADE[L.effects.grade]);
@@ -41,8 +46,15 @@ export function summaryParts(options) {
     return { style: o.style, shape: aspectList(o.aspect)[0], traits: traits(o).slice(0, TRAITS_SHOWN) };
 }
 
-/** `karaoke · 9:16 · Progress bar · Cool colour`. */
+/** `karaoke · 9:16 · Progress bar · Cool colour`: the style, the shape and as
+ *  many of the first traits as fit on a line (the first always stays). */
 export function lookSummary(options, tr = (s) => s) {
     const { style, shape, traits: tt } = summaryParts(options);
-    return [style, shape, ...tt.map((x) => tr(x))].join(' · ');
+    const out = [style, shape];
+    for (const x of tt) {
+        const word = tr(x);
+        if (out.length > 2 && [...out, word].join(' · ').length > SUMMARY_MAX) break;
+        out.push(word);
+    }
+    return out.join(' · ');
 }

@@ -166,7 +166,9 @@ export default function Stage({ canvas, scene, resolved, lines, measure, layers,
                 )}
             </div>
             <p className="absolute inset-x-0 bottom-0 flex items-center justify-center px-6 text-center text-[11px] leading-snug text-muted-foreground" style={{ height: NOTE }}>
-                {t('The camera follows faces when the clip is made; the stage shows the centre of the frame.')}
+                {scene.splitOn
+                    ? t('Two people are assumed, left and right; the real split follows their faces.')
+                    : t('The camera follows faces when the clip is made; the stage shows the centre of the frame.')}
             </p>
         </div>
     );

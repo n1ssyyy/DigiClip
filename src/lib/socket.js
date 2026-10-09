@@ -271,7 +271,7 @@ function armFlash() {
     }, FLASH_MS);
 }
 
-/** Hold the banner open while the pointer is on it; leaving gives it a
+/** Hold the toast open while the pointer is on it; leaving gives it a
  *  fresh full life again. */
 export function holdFlash(on) {
     if (!S.flash) return;
@@ -394,13 +394,13 @@ function apply(frame) {
 // actions (what the old router.post / fetch calls did)
 // ---------------------------------------------------------------------------
 
-/** Show the app banner line (same flash under the header). Lets UI
+/** Show the app's floating toast (the flash message). Lets UI
  *  actions surface errors that would otherwise fail silently. */
 export function flashMessage(text) {
     flash(text);
 }
 
-/** Close the banner early (its own dismiss button). */
+/** Close the toast early (its own dismiss button). */
 export function dismissFlash() {
     if (flashTimer) clearTimeout(flashTimer);
     flashTimer = null;

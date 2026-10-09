@@ -2,7 +2,8 @@
 //
 // A name is trimmed, 1 to 40 characters, and unique without regard to case
 // among the person's own looks and the starter looks (those names are
-// reserved). A name that clashes is offered the next free "Name 2".
+// reserved). A name that clashes is offered the next free "Name 2", which the
+// person confirms; it is never taken for them.
 
 export const NAME_MAX = 40;
 
@@ -57,12 +58,28 @@ export function checkName(raw, own, { reserved = [], except = null, allowReplace
     return { kind: 'ok', name };
 }
 
-/** What Enter does with the name typed: the name to use and whether it
- *  replaces a look, or `null` when the name cannot be used at all. A clash
- *  takes the suggestion. */
+/**
+ * What Enter does with the name typed. A name that is taken is never changed
+ * behind the person's back: the field gets the suggestion to look at, and a
+ * second Enter (now a free name) saves it.
+ *
+ * @returns {{kind:'invalid', reason:'empty'|'long'}
+ *          |{kind:'save', name:string}
+ *          |{kind:'replace', name:string}
+ *          |{kind:'taken', name:string, suggest:string}}
+ */
+export function nameStep(raw, own, opts) {
+    const c = checkName(raw, own, opts);
+    if (c.kind === 'ok') return { kind: 'save', name: c.name };
+    if (c.kind === 'clash') return { kind: 'taken', name: c.name, suggest: c.suggest };
+    return c;
+}
+
+/** The name to store for `raw` and whether it replaces a look, or `null`
+ *  when the name cannot be used as typed (empty, too long, or taken). */
 export function chooseName(raw, own, opts) {
     const c = checkName(raw, own, opts);
-    if (c.kind === 'invalid') return null;
-    if (c.kind === 'clash') return { name: c.suggest, replace: false };
-    return { name: c.name, replace: c.kind === 'replace' };
+    if (c.kind === 'ok') return { name: c.name, replace: false };
+    if (c.kind === 'replace') return { name: c.name, replace: true };
+    return null;
 }

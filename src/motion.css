@@ -608,6 +608,13 @@
     .toast-out {
         animation: toast-out 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
     }
+    /* The app's flash message: fades and rises in on the settling voice, fades out. */
+    .flash-in {
+        animation: rise 300ms var(--ease-out) backwards;
+    }
+    .flash-out {
+        animation: fade-out 180ms ease-in forwards;
+    }
     .life-line {
         display: block;
         animation: life-drain linear forwards;

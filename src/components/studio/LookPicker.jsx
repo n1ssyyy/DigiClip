@@ -35,8 +35,8 @@ function LookRow({ entry, on, summary, name, onPick }) {
             className={cn('flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left outline-none transition-colors hover:bg-accent focus-visible:bg-accent', on && 'bg-accent/60')}
         >
             <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px]">{name}</span>
-                <span className="block truncate font-mono text-[10px] text-muted-foreground">{summary}</span>
+                <span className="block break-words text-[12px]">{name}</span>
+                <span className="block break-words font-mono text-[10px] text-muted-foreground">{summary}</span>
             </span>
             <Check className={cn('size-3.5 shrink-0', !on && 'opacity-0')} aria-hidden />
         </button>
