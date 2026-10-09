@@ -8,6 +8,7 @@ import githubMark from '../assets/github.svg';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import Dropdown from '../components/digiclip/Dropdown';
 import ModelPicker from '../components/digiclip/ModelPicker';
 import ProviderPicker from '../components/digiclip/ProviderPicker';
 import SttModelPicker from '../components/digiclip/SttModelPicker';
@@ -183,19 +184,25 @@ function Section({ cat, note, children }) {
     );
 }
 
-function Select({ value, onChange, label, children }) {
+/** A single choice in the settings input look, opening the app's dropdown list.
+ *  `options`: `{value, text, disabled?}`. */
+function Select({ value, onChange, label, options }) {
     return (
-        <div className="relative">
-            <select
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                aria-label={label}
-                className={cn(inputCls, 'cursor-pointer appearance-none pr-9 [color-scheme:dark] hover:bg-accent/60')}
-            >
-                {children}
-            </select>
-            <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        </div>
+        <Dropdown
+            label={label}
+            value={value}
+            options={options}
+            onChange={onChange}
+            size="md"
+            className={cn(inputCls, 'items-center justify-between gap-2 text-left hover:bg-accent/60')}
+        >
+            {({ open, current }) => (
+                <>
+                    <span className="min-w-0 truncate">{current?.text}</span>
+                    <ChevronDown className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-[var(--ease-out)] motion-reduce:transition-none', open && 'rotate-180')} aria-hidden />
+                </>
+            )}
+        </Dropdown>
     );
 }
 
@@ -865,9 +872,7 @@ export default function Settings() {
 
                         <Section cat={CATS[0]}>
                             <Row title={t('App language')} desc={t('Menus and messages. Applies right away.')} search="language ui translate">
-                                <Select value={lang} onChange={setLang} label={t('App language')}>
-                                    {LANGUAGES.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-                                </Select>
+                                <Select value={lang} onChange={setLang} label={t('App language')} options={LANGUAGES.map(([id, name]) => ({ value: id, text: name }))} />
                             </Row>
                             {isTauri() && <BackgroundRows />}
                             <Row
@@ -902,9 +907,7 @@ export default function Settings() {
                                 />
                             </Row>
                             <Row title={t('Spoken language')} desc={langHint} search="language speech">
-                                <Select value={sttLang} onChange={(id) => patch({ stt_lang: id })} label={t('Spoken language')}>
-                                    {LANGS.map(([id, name]) => <option key={id} value={id}>{t(name)}</option>)}
-                                </Select>
+                                <Select value={sttLang} onChange={(id) => patch({ stt_lang: id })} label={t('Spoken language')} options={LANGS.map(([id, name]) => ({ value: id, text: t(name) }))} />
                             </Row>
                             <Row inline title={t('GPU transcription')} desc={gpuHint(t, gpu, !!v.gpu)} search="cuda nvidia graphics speed">
                                 <Tip label={!gpu || gpu.available ? null : gpuHint(t, gpu, false)}>
@@ -1060,17 +1063,18 @@ export default function Settings() {
                                 <Select
                                     value={watch.value}
                                     label={t('Look')}
+                                    options={[
+                                        { value: '', text: t('Defaults (from these settings)') },
+                                        ...watch.names.map((name) => ({ value: name, text: t('Look: {name}', { name }) })),
+                                        ...(watch.custom ? [{ value: CUSTOM, text: t('Custom (look since changed)'), disabled: true }] : []),
+                                    ]}
                                     onChange={(name) => {
                                         const p = presets.find((x) => x?.name === name);
                                         // Defaults = every field unset, shaped like the saved value.
                                         const none = Object.fromEntries(Object.keys(settings.watch_options ?? {}).map((k) => [k, null]));
                                         patch({ watch_options: p ? watchOptions(p.options, alpha) : none });
                                     }}
-                                >
-                                    <option value="">{t('Defaults (from these settings)')}</option>
-                                    {watch.names.map((name) => <option key={name} value={name}>{t('Look: {name}', { name })}</option>)}
-                                    {watch.custom && <option value={CUSTOM} disabled>{t('Custom (look since changed)')}</option>}
-                                </Select>
+                                />
                             </Row>
                         </Section>
 

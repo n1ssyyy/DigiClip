@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import Tip from './Tooltip';
+import Dropdown from './Dropdown';
 import { cn } from '../../lib/utils';
 
 /** The face of a picker on Home's add bar: a field-height control with a small
@@ -19,10 +19,9 @@ export function PickerFace({ label, text, mark = false, open = false }) {
 }
 
 /**
- * A choice on the add bar: the picker's face with a native select laid
- * invisibly over it. The select does the work (keyboard, screen reader, the
- * system's own list), so there is no popup of our own to keep in step. The full
- * value is the tooltip, for when the face cuts it. `options`: `{value, text}`.
+ * A choice on the add bar: the picker's face opening the app's dropdown list
+ * (the same menu as the Look beside it). The full value is the tooltip, for
+ * when the face cuts it. `options`: `{value, text}`.
  * `face`, when given, is what the face shows instead of `text` (a value that
  * would only repeat the label, like "5 clips" under "Clips"); the tooltip and
  * the name then say "Clips: 5", and the list of choices keeps the full wording.
@@ -30,18 +29,16 @@ export function PickerFace({ label, text, mark = false, open = false }) {
 export default function InlinePick({ label, value, text, face, options, onChange }) {
     const shown = face ?? text;
     return (
-        <Tip label={`${label}: ${shown}`} side="bottom" className="w-full">
-            <span className={cn(pickerBox, 'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring')}>
-                <PickerFace label={label} text={shown} />
-                <select
-                    value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    aria-label={face === undefined ? label : `${label}: ${face}`}
-                    className="absolute inset-0 size-full cursor-pointer appearance-none opacity-0 outline-none [color-scheme:dark]"
-                >
-                    {options.map((o) => <option key={o.value} value={o.value}>{o.text}</option>)}
-                </select>
-            </span>
-        </Tip>
+        <Dropdown
+            label={label}
+            name={`${label}: ${shown}`}
+            tip={`${label}: ${shown}`}
+            value={value}
+            options={options}
+            onChange={onChange}
+            className={pickerBox}
+        >
+            {({ open }) => <PickerFace label={label} text={shown} open={open} />}
+        </Dropdown>
     );
 }

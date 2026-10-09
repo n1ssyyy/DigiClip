@@ -33,7 +33,7 @@ const STAGE_LAYERS = ['captions', 'headline', 'bar', 'logo'];
 /** Typing somewhere: the page's own keys stay out of the way. */
 function inTextField(el) {
     if (!el || !el.closest) return false;
-    return !!el.closest('textarea, select, [contenteditable=""], [contenteditable="true"], input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="button"])');
+    return !!el.closest('textarea, [contenteditable=""], [contenteditable="true"], input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="button"])');
 }
 
 /** Space plays unless the key already means something to the focused
@@ -47,7 +47,7 @@ function spaceIsFree(el) {
 /** Controls that own the arrow keys and Delete themselves. */
 function ownsArrows(el) {
     if (!el || !el.closest) return false;
-    return !!el.closest('[role="slider"], [role="listbox"], [role="menu"], [role="radiogroup"], [role="tablist"], select');
+    return !!el.closest('[role="slider"], [role="listbox"], [role="menu"], [role="radiogroup"], [role="tablist"], [data-dropdown]');
 }
 
 const r3 = (v) => Math.round(v * 1000) / 1000;
