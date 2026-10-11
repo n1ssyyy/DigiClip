@@ -9,6 +9,7 @@ import home from '../src/i18n/home.js';
 import mcp from '../src/i18n/mcp.js';
 import options from '../src/i18n/options.js';
 import settings from '../src/i18n/settings.js';
+import setup from '../src/i18n/setup.js';
 import shell from '../src/i18n/shell.js';
 import studio from '../src/i18n/studio.js';
 import tray from '../src/i18n/tray.js';
@@ -51,18 +52,10 @@ test('health: ffmpeg without libass is a problem that says what it means and wha
     assert.deepEqual(ids(healthView(state({ health: { ...GOOD, ffmpeg_ok: null, ffmpeg_libass: false } })).problems), []);
 });
 
-test('health: missing ffmpeg says what is true for the system, never "reinstall"', () => {
-    const text = (platform) => healthView(state({ platform, health: { ...GOOD, ffmpeg_ok: false } })).problems[0].text;
-    assert.match(text('windows'), /downloads ffmpeg by itself.*80 MB.*internet/);
-    assert.doesNotMatch(text('windows'), /brew|apt/);
-    assert.match(text('macos'), /Homebrew \(brew install ffmpeg\)/);
-    assert.doesNotMatch(text('macos'), /80 MB|apt/);
-    assert.match(text('linux'), /apt install ffmpeg.*dnf install ffmpeg/);
-    assert.doesNotMatch(text('linux'), /brew|80 MB/);
-    for (const p of [undefined, '', 'plan9']) {
-        assert.match(text(p), /On Windows.*80 MB.*On macOS and Linux.*brew install ffmpeg.*apt install ffmpeg.*dnf install ffmpeg/);
-    }
-    for (const p of ['windows', 'macos', 'linux', '']) assert.doesNotMatch(text(p), /einstall/i);
+test('health: missing ffmpeg says DigiClip downloads it, on every system, never "reinstall"', () => {
+    const text = healthView(state({ health: { ...GOOD, ffmpeg_ok: false } })).problems[0].text;
+    assert.match(text, /downloads ffmpeg by itself.*100 MB.*internet/);
+    assert.doesNotMatch(text, /brew|apt|einstall/i);
 });
 
 test('health: the speech-to-text advice still says reinstall (it ships with the app)', () => {
@@ -159,7 +152,9 @@ test('health: speech model not downloaded points to Settings with a button', () 
 
 test('health: a model on its way is a note; unknown settings or models judge nothing', () => {
     const dl = healthView(state({ models: { 'base.en': { downloaded: false, downloading: true } } }));
-    assert.equal(dl.overall, 'ok');
+    // Not a problem, and not "everything is working" either: captions wait for it.
+    assert.equal(dl.overall, 'setup');
+    assert.deepEqual(dl.problems, []);
     assert.deepEqual(ids(dl.notes), ['model']);
     assert.equal(healthView(state({ settings: null })).overall, 'ok');
     assert.equal(healthView(state({ models: {} })).overall, 'ok');
@@ -198,7 +193,7 @@ test('health: it speaks through the given translator', () => {
 
 // The checking sentence, the re-check link and the graphics-card line while unknown.
 test('health: the unknown-state strings are translated', () => {
-    const merged = (l) => Object.assign({}, ...[clips, home, mcp, options, settings, shell, studio, tray].map((d) => d[l]));
+    const merged = (l) => Object.assign({}, ...[clips, home, mcp, options, settings, setup, shell, studio, tray].map((d) => d[l]));
     for (const l of ['sq', 'de', 'fr', 'es', 'it', 'tr']) {
         for (const s of ['Checking that everything DigiClip needs is working…', 'Check again', 'Checking…', 'Checking for a compatible graphics card…', "Couldn't check health: {error}"]) {
             assert.ok(merged(l)[s], `${l}: ${s}`);
@@ -209,13 +204,13 @@ test('health: the unknown-state strings are translated', () => {
 // Every sentence the page can show has a line in all six languages.
 test('health: every string it shows is translated', () => {
     const LANGS = ['sq', 'de', 'fr', 'es', 'it', 'tr'];
-    const dicts = [clips, home, mcp, options, settings, shell, studio, tray];
+    const dicts = [clips, home, mcp, options, settings, setup, shell, studio, tray];
     const spoken = new Set();
     const t = (s, vars) => { spoken.add(s); return s.replace(/\{(\w+)\}/g, (_, k) => vars?.[k]); };
     healthView(state({ conn: 'retry', health: { ...GOOD, ffmpeg_ok: false, whisper_cli: false, whisper_vulkan: false, gpu_available: false }, models: { 'base.en': { downloaded: false } } }), t);
     healthView(state({ models: { 'base.en': { downloading: true } } }), t);
     healthView(state({ health: { ...GOOD, ffmpeg_libass: false } }), t);
-    for (const platform of ['windows', 'macos', 'linux', '']) healthView(state({ platform, health: { ...GOOD, ffmpeg_ok: false } }), t);
+    healthView(state({ health: { ...GOOD, ffmpeg_ok: false } }), t);
     healthView(state({ health: { ...GOOD, gpu_reason: '', whisper_vulkan: false } }), t);
     healthView(state({ health: { ...GOOD, gpu_available: false, gpu_reason: '' } }), t);
     for (const l of LANGS) {
