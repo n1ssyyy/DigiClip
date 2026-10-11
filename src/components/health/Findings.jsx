@@ -1,9 +1,10 @@
 import { CircleAlert, Info } from 'lucide-react';
 import { Button } from '../ui/button';
-import { navigate } from '../../lib/socket';
+import { navigate, retrySetup } from '../../lib/socket';
 
 /** What is wrong, in plain words with what to do, then what merely is worth
- *  knowing. A problem may carry a button that goes where it is fixed. */
+ *  knowing. A problem may carry a button: one that goes where it is fixed, or
+ *  one that has the engine try its download again now. */
 export default function Findings({ problems, notes }) {
     if (!problems.length && !notes.length) return null;
     return (
@@ -15,6 +16,9 @@ export default function Findings({ problems, notes }) {
                         <p className="min-w-0 flex-1 basis-64 text-[13px] leading-snug [overflow-wrap:anywhere]">{p.text}</p>
                         {p.action?.kind === 'settings' && (
                             <Button size="sm" variant="secondary" onClick={() => navigate('settings')}>{p.action.label}</Button>
+                        )}
+                        {p.action?.kind === 'retry' && (
+                            <Button size="sm" variant="secondary" onClick={retrySetup}>{p.action.label}</Button>
                         )}
                     </div>
                 </li>

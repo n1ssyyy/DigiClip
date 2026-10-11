@@ -18,6 +18,7 @@ const S = {
     jobs: [],
     settings: null,
     models: {},
+    setup: null, // first-run downloads (the engine's list); null until it has looked, and on an engine without setup
     health: null, // null until a check has finished (the engine answers hello at once); the Health page reads that as "checking"
     healthAt: null, // when `health` last arrived (ms), null while unknown
     healthBusy: false, // a health_get is in flight
@@ -154,6 +155,7 @@ function openSocket() {
             S.jobs = data.jobs ?? [];
             S.settings = data.settings ?? null;
             S.models = data.models ?? {};
+            S.setup = Array.isArray(data.setup) ? data.setup : null;
             setHealth(data.health ?? null);
             S.mcp = data.mcp ?? null;
             S.caps = Array.isArray(data.caps) ? data.caps.filter((c) => typeof c === 'string') : [];
@@ -330,7 +332,9 @@ function apply(frame) {
             if (ji >= 0) {
                 const cur = S.jobs[ji].status;
                 const map = {
-                    download: 'downloading', provision: 'queued', audio: 'extracting', transcribe: 'transcribing',
+                    // 'preparing' is the app's own word for the engine checking (and, the
+                    // first time, downloading) what it needs before it touches the video.
+                    download: 'downloading', provision: 'preparing', audio: 'extracting', transcribe: 'transcribing',
                     pick: 'analyzing', track: 'analyzing', render: cur, merge: cur, kit: cur, done: cur,
                 };
                 const next = map[ev.stage] ?? cur;
@@ -385,6 +389,9 @@ function apply(frame) {
         }
         case 'models_state':
             S.models = ev.models ?? S.models;
+            break;
+        case 'setup':
+            if (Array.isArray(ev.setup)) S.setup = ev.setup;
             break;
         case 'health':
             if (ev.health != null) setHealth(ev.health);
@@ -523,6 +530,12 @@ export function installMcp(client, remove = false) {
 
 export function downloadModel(id) {
     return cmd('models_download', { model: id }).catch((e) => flash(t("Couldn't download {model}: {error}", { model: id, error: e?.message ?? e })));
+}
+
+/** Ask the engine to try its first-run downloads again now (it also tries
+ *  by itself, later). */
+export function retrySetup() {
+    return cmd('setup_retry', {}).catch(() => {});
 }
 
 export function deleteModel(id) {

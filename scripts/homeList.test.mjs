@@ -48,12 +48,12 @@ test('phase: clips picked is ready once every clip is made or failed, making unt
 });
 
 test('steps: the stage a status is on, an unknown one is the first', () => {
-    assert.deepEqual(['downloading', 'queued', 'extracting', 'transcribing', 'analyzing', 'nope'].map(stepOf), [0, 1, 1, 2, 3, 0]);
+    assert.deepEqual(['downloading', 'queued', 'preparing', 'extracting', 'transcribing', 'analyzing', 'nope'].map(stepOf), [0, 1, 1, 1, 2, 3, 0]);
     assert.equal(STEPS.length, 4);
 });
 
 test('stage text: a title, a short line and a sentence for every working status', () => {
-    for (const s of ['downloading', 'queued', 'extracting', 'transcribing', 'analyzing']) {
+    for (const s of ['downloading', 'queued', 'preparing', 'extracting', 'transcribing', 'analyzing']) {
         const x = stageText(s);
         assert.ok(x.title && x.short && x.hint, s);
     }

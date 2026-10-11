@@ -6,8 +6,16 @@
 //   facts     what is installed and where, plain name / value pairs
 // `overall` is 'checking' while `health` is null (the engine answers hello at
 // once and the first check lands a few seconds later), 'problem' when any
-// problem stands, else 'ok' (notes do not change it). Unknown judges nothing:
+// problem stands, 'setup' while the engine is still downloading something no
+// clip can be made without, else 'ok' (notes do not change it).
+//
+// The engine downloads what it needs by itself (`setup`, see setupView.js):
+// while it is at it, a missing ffmpeg or speech model is a note, not a
+// problem; when a download failed, the problem says so and offers to try
+// again now (`action.kind === 'retry'`). Unknown judges nothing:
 // no problems, no notes, no facts, whatever settings and models say.
+
+import { setupItem } from './setupView.js';
 
 const fill = (s, vars) => (vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : s);
 const plain = (s, vars) => fill(s, vars);
@@ -24,24 +32,15 @@ export function platformOf(ua) {
     return '';
 }
 
-// Why ffmpeg is missing differs by system: Windows gets it downloaded by the
-// engine on first need, macOS and Linux never do (the creator installs it).
-function ffmpegMissing(platform, t) {
-    if (platform === 'windows') {
-        return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. It downloads ffmpeg by itself the next time it needs it (about 80 MB, so it needs an internet connection).");
-    }
-    if (platform === 'macos') {
-        return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. On a Mac it isn't downloaded for you: install it with Homebrew (brew install ffmpeg).");
-    }
-    if (platform === 'linux') {
-        return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. On Linux it isn't downloaded for you: install it with your package manager (for example sudo apt install ffmpeg or sudo dnf install ffmpeg).");
-    }
-    return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. On Windows DigiClip downloads it by itself the next time it needs it (about 80 MB, needs an internet connection). On macOS and Linux you install it yourself: brew install ffmpeg, sudo apt install ffmpeg or sudo dnf install ffmpeg.");
+// What is said about a missing ffmpeg when the engine tells nothing about
+// its downloads (an engine without setup, or one that has not looked yet).
+function ffmpegMissing(t) {
+    return t("ffmpeg wasn't found, so DigiClip can't cut or render clips. It downloads ffmpeg by itself (about 100 MB, so it needs an internet connection).");
 }
 
-/** @param {{health: object|null, conn: string, settings: object|null, models: object, platform?: string}} state
+/** @param {{health: object|null, conn: string, settings: object|null, models: object, setup?: Array|null, platform?: string}} state
  *  @param {(text: string, vars?: object) => string} [t] */
-export function healthView({ health, conn, settings, models, platform = '' } = {}, t = plain) {
+export function healthView({ health, conn, settings, models, setup = null } = {}, t = plain) {
     const problems = [];
     const notes = [];
     const facts = [];
@@ -59,14 +58,26 @@ export function healthView({ health, conn, settings, models, platform = '' } = {
 
     const gpu = health.gpu_available === true;
     const stt = settings ? (settings.stt_model || DEFAULT_STT) : null;
-    const whisper = !!(health.whisper_cli || health.whisper_vulkan);
+    // Speech-to-text is part of the engine itself; the two programs are extras.
+    const whisper = !!(health.stt_embedded || health.whisper_cli || health.whisper_vulkan);
+    const retry = { kind: 'retry', label: t('Try again') };
+    let gettingReady = false;
     const onGpu = !!health.whisper_vulkan && gpu;
 
     if (health.ffmpeg_ok === false) {
-        problems.push({
-            id: 'ffmpeg',
-            text: ffmpegMissing(platform, t),
-        });
+        const own = setupItem(setup, 'ffmpeg');
+        if (own && own.state === 'failed') {
+            problems.push({
+                id: 'ffmpeg',
+                text: t("DigiClip couldn't download ffmpeg yet, so it can't cut or render clips. It tries again by itself; check the internet connection."),
+                action: retry,
+            });
+        } else if (own && own.state !== 'ready') {
+            gettingReady = true;
+            notes.push({ id: 'ffmpeg', text: t('ffmpeg is downloading. DigiClip can cut and render clips as soon as it is here.') });
+        } else {
+            problems.push({ id: 'ffmpeg', text: ffmpegMissing(t) });
+        }
     } else if (health.ffmpeg_ok === true && health.ffmpeg_libass === false) {
         problems.push({
             id: 'libass',
@@ -81,8 +92,19 @@ export function healthView({ health, conn, settings, models, platform = '' } = {
     }
     if (stt && models && Object.keys(models).length) {
         const m = models[stt];
+        const own = m?.downloaded ? null : setupItem(setup, 'stt', stt);
         if (m?.downloading) {
+            gettingReady = true;
             notes.push({ id: 'model', text: t('The speech model {model} is still downloading.', { model: stt }) });
+        } else if (own && own.state === 'failed') {
+            problems.push({
+                id: 'model',
+                text: t("DigiClip couldn't download the speech model {model} yet, so it can't write captions. It tries again by itself; check the internet connection.", { model: stt }),
+                action: retry,
+            });
+        } else if (own && own.state !== 'ready') {
+            gettingReady = true;
+            notes.push({ id: 'model', text: t('The speech model {model} downloads by itself in a moment.', { model: stt }) });
         } else if (!m?.downloaded) {
             problems.push({
                 id: 'model',
@@ -120,5 +142,5 @@ export function healthView({ health, conn, settings, models, platform = '' } = {
     if (health.jobs_dir) facts.push({ id: 'storage', label: t('Videos are stored in'), value: String(health.jobs_dir) });
     if (!down && conn === 'live') facts.push({ id: 'connection', label: t('Connection'), value: t('live, on this computer') });
 
-    return { overall: problems.length ? 'problem' : 'ok', problems, notes, facts: facts.filter((f) => f.value !== '') };
+    return { overall: problems.length ? 'problem' : gettingReady ? 'setup' : 'ok', problems, notes, facts: facts.filter((f) => f.value !== '') };
 }

@@ -18,7 +18,9 @@ export default function Status({ overall, count, live, updatedAt }) {
         ? t('Checking that everything DigiClip needs is working…')
         : overall === 'ok'
             ? t('Everything DigiClip needs is working.')
-            : count === 1
+            : overall === 'setup'
+                ? t('DigiClip is downloading what it needs. It will be ready in a moment.')
+                : count === 1
                 ? t('One thing needs your attention.')
                 : t('{n} things need your attention.', { n: count });
 
@@ -28,6 +30,7 @@ export default function Status({ overall, count, live, updatedAt }) {
                 {overall === 'ok' && <CheckCircle2 className="size-5 shrink-0 text-foreground" aria-hidden />}
                 {overall === 'problem' && <CircleAlert className="size-5 shrink-0 text-destructive" aria-hidden />}
                 {overall === 'checking' && <Loader2 className="size-5 shrink-0 animate-spin text-muted-foreground" aria-hidden />}
+                {overall === 'setup' && <Loader2 className="size-5 shrink-0 animate-spin text-orange-500" aria-hidden />}
                 <h2 className="text-[15px] leading-snug font-semibold">{sentence}</h2>
             </div>
             {overall !== 'checking' && updatedAt != null && (

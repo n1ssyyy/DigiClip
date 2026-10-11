@@ -13,6 +13,7 @@ import useAddVideo from '../components/home/useAddVideo';
 import VideoHeader from '../components/home/VideoHeader';
 import VideoList from '../components/home/VideoList';
 import WorkingPanel from '../components/home/WorkingPanel';
+import SetupBanner from '../components/home/SetupBanner';
 import { fmtDur, listModel, neighbour, newcomer, phaseOf } from '../lib/homeList';
 import { useT } from '../lib/i18n';
 
@@ -160,6 +161,7 @@ export default function Home() {
                 <p className="max-w-[460px] text-center text-[12px] leading-snug text-muted-foreground">
                     {t('Then DigiClip picks the best moments and cuts them into captioned clips. They appear here.')}
                 </p>
+                <SetupBanner className="w-[min(560px,100%)]" />
                 {dialogs}
                 <DropOverlay show={add.dragging} />
             </div>
@@ -169,6 +171,7 @@ export default function Home() {
     return (
         <div className="relative flex h-full min-h-[420px] flex-col gap-[5px]" {...add.dropHandlers}>
             <AddVideo add={add} />
+            <SetupBanner />
             <Card className="stagger-2 flex min-h-0 flex-1 overflow-hidden">
                 <VideoList
                     rows={model.rows}

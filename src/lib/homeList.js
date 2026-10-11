@@ -29,6 +29,7 @@ export function phaseOf(job) {
 export function stepOf(status) {
     switch (status) {
         case 'queued':
+        case 'preparing':
         case 'extracting':
             return 1;
         case 'transcribing':
@@ -46,6 +47,8 @@ export function stageText(status, tr = (s) => s) {
     switch (status) {
         case 'queued':
             return { title: tr('Waiting for its turn'), short: tr('Waiting…'), hint: tr('It starts as soon as the engine is free.') };
+        case 'preparing':
+            return { title: tr('Getting things ready'), short: tr('Getting ready…'), hint: tr('Checking that everything DigiClip needs is here. The first time, it downloads a few things.') };
         case 'extracting':
             return { title: tr('Getting the audio'), short: tr('Getting audio…'), hint: tr('Pulling the sound out of the video.') };
         case 'transcribing':
